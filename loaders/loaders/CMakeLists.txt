@@ -14,8 +14,10 @@ add_library(${PROJECT_NAME} SHARED
 			./include/loaders/internal/module.h
       )
 			
-target_link_libraries(${PROJECT_NAME} PRIVATE libpng)
+target_link_libraries(${PROJECT_NAME} 
+      PUBLIC library
+      PRIVATE libpng)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
-							"${PROJECT_SOURCE_DIR}/include"
-							)
+      "${PROJECT_SOURCE_DIR}/include"
+      )

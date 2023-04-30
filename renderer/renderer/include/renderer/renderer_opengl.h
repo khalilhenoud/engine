@@ -53,12 +53,19 @@ draw_grid(
   int32_t lines_per_axis);
 
 RENDERER_API
-void 
+void
+draw_points(
+  const float* vertices,
+  uint32_t vertices_count,
+  color_t color,
+  float size,
+  pipeline_t* pipeline);
+
+RENDERER_API
+void
 draw_lines(
   const float* vertices,
   uint32_t vertices_count,
-  const uint32_t* indices,
-  uint32_t indices_count,
   color_t color,
   float width,
   pipeline_t* pipeline);
@@ -69,6 +76,15 @@ draw_unit_quads(
   const unit_quad_t* uvs,
   uint32_t uvs_count,
   int32_t texture_id,
+  pipeline_t* pipeline);
+
+RENDERER_API
+void
+draw_meshes_wireframe(
+  const mesh_render_data_t* mesh,
+  uint32_t mesh_count,
+  color_t color,
+  float width,
   pipeline_t* pipeline);
 
 RENDERER_API

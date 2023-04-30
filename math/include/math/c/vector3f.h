@@ -67,9 +67,9 @@ inline
 void
 vector3f_set_diff_v3f(vector3f* dst, const vector3f* lhs, const vector3f* rhs)
 {
-  dst->data[0] = lhs->data[0] - rhs->data[0];
-  dst->data[1] = lhs->data[1] - rhs->data[1];
-  dst->data[2] = lhs->data[2] - rhs->data[2];
+  dst->data[0] = rhs->data[0] - lhs->data[0];
+  dst->data[1] = rhs->data[1] - lhs->data[1];
+  dst->data[2] = rhs->data[2] - lhs->data[2];
 }
 
 ////////////////////////////////////////////////////////////////////////////////

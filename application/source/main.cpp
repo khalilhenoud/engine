@@ -92,7 +92,7 @@ WinMain(
 	UpdateWindow(g_hWnd);
 
 	input_parameters_t input_params{ &g_hWnd };
-	::input_set_client(&input_params);
+	input_set_client(&input_params);
 
 	g_hWindowDC = GetDC(g_hWnd);
   opengl_parameters_t params{&g_hWindowDC};

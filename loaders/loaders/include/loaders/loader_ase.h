@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 #include <loaders/internal/module.h>
-#include <loaders/allocator.h>
+#include <library/allocator/allocator.h>
 #include <loaders/loader_ase_mesh_data.h>
 
 

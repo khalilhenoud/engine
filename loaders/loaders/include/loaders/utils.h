@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 #include <loaders/internal/module.h>
-#include <loaders/allocator.h>
+#include <library/allocator/allocator.h>
 
 
 LOADERS_API

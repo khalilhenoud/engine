@@ -12,15 +12,11 @@
 #define LOADER_ASE_MESH_DATA_H
 
 #include <stdint.h>
+#include <library/string/fixed_string.h>
 
 
 typedef
-struct fixed_str_t {
-  char data[512];
-} fixed_str_t;
-
-typedef
-struct loader_texture_data_t {
+struct {
   fixed_str_t name;
   fixed_str_t path;
   fixed_str_t type;
@@ -30,18 +26,18 @@ struct loader_texture_data_t {
 } loader_texture_data_t;
 
 typedef
-struct loader_texture_data_array_t {
+struct {
   uint32_t used;
   loader_texture_data_t data[8];
 } loader_texture_data_array_t;
 
 typedef 
-struct loader_color_data_t {
+struct {
   float data[4];
 } loader_color_data_t;
 
 typedef 
-struct loader_material_data_t {
+struct {
   fixed_str_t name;
   loader_color_data_t ambient;
   loader_color_data_t diffuse;
@@ -52,13 +48,13 @@ struct loader_material_data_t {
 } loader_material_data_t;
 
 typedef
-struct fixed_idx_to_target_t {
+struct {
   uint32_t used;
   uint32_t indices[1024];
 } fixed_idx_to_target_t; 
 
 typedef 
-struct loader_mesh_data_t {
+struct {
   fixed_str_t name;
   float *vertices;   // 3
   float *normals;    // 3
@@ -70,32 +66,32 @@ struct loader_mesh_data_t {
 } loader_mesh_data_t;
 
 typedef 
-struct loader_model_data_t {
+struct {
   fixed_str_t name;
   fixed_idx_to_target_t meshes;
   fixed_idx_to_target_t models;
 } loader_model_data_t;
 
 typedef 
-struct loader_material_repo_t {
+struct {
   uint32_t used;
   loader_material_data_t *data;
 } loader_material_repo_t;
 
 typedef
-struct loader_mesh_repo_t {
+struct {
   uint32_t used;
   loader_mesh_data_t *data;
 } loader_mesh_repo_t;
 
 typedef
-struct loader_model_repo_t {
+struct {
   uint32_t used;
   loader_model_data_t *data;
 } loader_model_repo_t;
 
 typedef
-struct loader_ase_data_t {
+struct {
   loader_model_repo_t model_repo;   // root = model_repo.data[0]
   loader_mesh_repo_t mesh_repo;
   loader_material_repo_t material_repo;

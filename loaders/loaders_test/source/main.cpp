@@ -11,7 +11,7 @@
 #include <loaders/loader_csv.h>
 #include <loaders/loader_ase.h>
 #include <loaders/loader_png.h>
-#include <loaders/allocator.h>
+#include <library/allocator/allocator.h>
 #include <malloc.h>
 #include <cassert>
 #include <iostream>

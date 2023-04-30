@@ -30,6 +30,7 @@ renderer_initialize()
 
   // enabling lighting, setting ambient color, etc...
   glEnable(GL_LIGHTING);
+  glEnable(GL_NORMALIZE);
   glLightModelfv(GL_LIGHT_MODEL_AMBIENT, vec);
 
   // setting the texture blending mode.
@@ -136,11 +137,36 @@ draw_grid(
 }
 
 void
+draw_points(
+  const float* vertices,
+  uint32_t vertices_count,
+  color_t color,
+  float size,
+  pipeline_t* pipeline)
+{
+  set_pipeline_transform(pipeline);
+  
+  glDisable(GL_LIGHTING);
+  glColor4f(color.data[0], color.data[1], color.data[2], color.data[3]);
+  glPointSize(size);
+  glBegin(GL_POINTS);
+
+  {
+    for (uint32_t i = 0ull; i < vertices_count; ++i)
+      glVertex3f(vertices[i * 3 + 0], vertices[i * 3 + 1], vertices[i * 3 + 2]);
+  }
+
+  glEnd();
+  glPointSize(1.f);
+  glEnable(GL_LIGHTING);
+
+  clear_pipeline_transform(pipeline);
+}
+
+void
 draw_lines(
   const float* vertices,
   uint32_t vertices_count,
-  const uint32_t* indices,
-  uint32_t indices_count,
   color_t color,
   float width,
   pipeline_t* pipeline)
@@ -156,17 +182,12 @@ draw_lines(
     const float* v1 = NULL;
     const float* v2 = NULL;
     const float* v3 = NULL;
-    for (uint32_t i = 0ull; i < indices_count; i += 3) {
-      v1 = vertices + indices[i + 0] * 3;
-      v2 = vertices + indices[i + 1] * 3;
-      v3 = vertices + indices[i + 2] * 3;
-      
+    for (uint32_t i = 0ull; i < vertices_count - 1; i++) {
+      v1 = vertices + i * 3;
+      v2 = vertices + (i + 1) * 3;
+
       glVertex3f(v1[0], v1[1], v1[2]);
       glVertex3f(v2[0], v2[1], v2[2]);
-      glVertex3f(v1[0], v1[1], v1[2]);
-      glVertex3f(v3[0], v3[1], v3[2]);
-      glVertex3f(v2[0], v2[1], v2[2]);
-      glVertex3f(v3[0], v3[1], v3[2]);
     }
   }
 
@@ -246,6 +267,46 @@ draw_unit_quads(
   glEnable(GL_CULL_FACE);
   glEnable(GL_LIGHTING);
   glDisable(GL_TEXTURE_2D);
+
+  clear_pipeline_transform(pipeline);
+}
+
+void
+draw_meshes_wireframe(
+  const mesh_render_data_t* mesh,
+  uint32_t mesh_count,
+  color_t color,
+  float width,
+  pipeline_t* pipeline)
+{
+  set_pipeline_transform(pipeline);
+
+  glDisable(GL_LIGHTING);
+  glColor4f(color.data[0], color.data[1], color.data[2], color.data[3]);
+  glLineWidth(width);
+  glBegin(GL_LINES);
+
+  for (uint32_t mesh_index = 0; mesh_index < mesh_count; ++mesh_index) {
+    const float* v1 = NULL;
+    const float* v2 = NULL;
+    const float* v3 = NULL;
+    for (uint32_t i = 0ull; i < mesh[mesh_index].indices_count; i += 3) {
+      v1 = mesh[mesh_index].vertices + mesh[mesh_index].indices[i + 0] * 3;
+      v2 = mesh[mesh_index].vertices + mesh[mesh_index].indices[i + 1] * 3;
+      v3 = mesh[mesh_index].vertices + mesh[mesh_index].indices[i + 2] * 3;
+
+      glVertex3f(v1[0], v1[1], v1[2]);
+      glVertex3f(v2[0], v2[1], v2[2]);
+      glVertex3f(v1[0], v1[1], v1[2]);
+      glVertex3f(v3[0], v3[1], v3[2]);
+      glVertex3f(v2[0], v2[1], v2[2]);
+      glVertex3f(v3[0], v3[1], v3[2]);
+    }
+  }
+
+  glEnd();
+  glLineWidth(1.f);
+  glEnable(GL_LIGHTING);
 
   clear_pipeline_transform(pipeline);
 }

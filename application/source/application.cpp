@@ -28,6 +28,10 @@
 #include <loaders/loader_ase.h>
 #include <loaders/loader_png.h>
 #include <loaders/loader_csv.h>
+#include <data_format/mesh_format/data_format.h>
+#include <data_format/mesh_format/utils.h>
+#include <collision/simple_primitives.h>
+#include <collision/simple_primitives_collision.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -131,8 +135,7 @@ load_ase_model(
       material_data.specular.data[3] };
     target.m_opacity = material_data.opacity;
     target.m_shininess = material_data.shininess;
-    for (uint32_t i = 0; i < material_data.textures.used; ++i)
-    {
+    for (uint32_t i = 0; i < material_data.textures.used; ++i) {
       target.m_textures.push_back(entity::texture());
       copy_textures(material_data.textures.data[i], target.m_textures.back());
     }
@@ -197,8 +200,7 @@ load_ase_model(
     }
   };
 
-  for (uint32_t i = 0; i < ase_data->model_repo.used; ++i)
-  {
+  for (uint32_t i = 0; i < ase_data->model_repo.used; ++i) {
     copy_models(
       ase_data, 
       i, 
@@ -295,6 +297,27 @@ load_font(
 
 
 ////////////////////////////////////////////////////////////////////////////////
+static 
+mesh_render_data_t
+load_mesh_renderer_data(mesh_t* mesh, color_t color)
+{
+  mesh_render_data_t render_mesh = {
+    &mesh->vertices[0], 
+    &mesh->normals[0], 
+    &mesh->uvs[0],
+    mesh->vertices_count,
+    &mesh->indices[0],
+    mesh->indices_count,
+    color,
+    color,
+    color
+  };
+
+  return render_mesh;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 framerate_controller controller;
 pipeline_t pipeline;
 entity::camera m_camera;
@@ -305,7 +328,10 @@ std::unordered_map<std::string, uint32_t> texture_id;
 std::vector<mesh_render_data_t> mesh_render_data;
 std::vector<const char*> texture_render_data;
 std::vector<uint32_t> texture_render_id;
-
+mesh_t* meshes[2] = { nullptr };
+std::vector<mesh_render_data_t> collision_render_data;
+sphere_t sphere_0, sphere_1;
+allocator_t allocator;
 
 application::application(
   int32_t width, 
@@ -315,12 +341,22 @@ application::application(
 {
   ::renderer_initialize();
 
-  allocator_t allocator;
   allocator.mem_alloc = allocate;
   allocator.mem_cont_alloc = container_allocate;
   allocator.mem_free = free_block;
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
+
+  {
+    sphere_0.center = { -100.f, 0.f, -300.f };
+    sphere_0.radius = 50;
+    meshes[0] = ::create_unit_sphere(30, &allocator);
+    collision_render_data.push_back(load_mesh_renderer_data(meshes[0], color_t{ 0.f, 0.5f, 0.f, 1.f }));
+    sphere_1.center = { 0.f, 0.f, -300.f };
+    sphere_1.radius = 30;
+    meshes[1] = ::create_unit_sphere(30, &allocator);
+    collision_render_data.push_back(load_mesh_renderer_data(meshes[1], color_t{ 1.f, 0.f, 0.f, 1.f }));
+  }
 
   auto datafile = std::string("media\\font\\FontData2.csv");
   auto imagefile = std::string("media\\font\\ExportedFont2.png");
@@ -349,8 +385,12 @@ application::application(
       static_cast<image_format_t>(image.m_format));
   }
 
-  for (auto path : texture_render_data)
-    texture_render_id.push_back(texture_id[std::string(path)]);
+  for (auto path : texture_render_data) {
+    if (texture_id.find(std::string(path)) != texture_id.end()) 
+      texture_render_id.push_back(texture_id[std::string(path)]);
+    else
+      texture_render_id.push_back(0);
+  }
 
   ::pipeline_set_default(&pipeline);
   ::set_viewport(&pipeline, 0.f, 0.f, float(width), float(height));
@@ -370,10 +410,15 @@ application::application(
 
 application::~application()
 {
+  ::free_mesh(meshes[0], &allocator);
+  ::free_mesh(meshes[1], &allocator);
+
   for (auto& entry : texture_id)
     ::evict_from_gpu(entry.second);
   
   ::renderer_cleanup(); 
+
+  assert(allocated.size() == 0);
 }
 
 uint64_t 
@@ -394,23 +439,77 @@ application::update()
       prev_mouse_x = prev_mouse_y = -1;
   }
   
-  if (!m_disable_input)
+  if (!m_disable_input) {
     update_camera();
+
+    if (::is_key_pressed('H'))
+      sphere_0.center.data[0] -= 2.f;
+    if (::is_key_pressed('K'))
+      sphere_0.center.data[0] += 2.f;
+    if (::is_key_pressed('U'))
+      sphere_0.center.data[1] += 2.f;
+    if (::is_key_pressed('J'))
+      sphere_0.center.data[1] -= 2.f;
+    if (::is_key_pressed('Y'))
+      sphere_0.center.data[2] += 2.f;
+    if (::is_key_pressed('I'))
+      sphere_0.center.data[2] -= 2.f;
+  }
 
   ::set_matrix_mode(&pipeline, MODELVIEW);
   ::load_identity(&pipeline);
   ::post_multiply(&pipeline, &m_camera.get_view_transformation().data);
 
   // render the scene.
-  if (m_scene) {
+  // if (m_scene) {
+  //  ::push_matrix(&pipeline);
+  //  ::pre_translate(&pipeline, 0, -120, -300);
+  //  ::pre_scale(&pipeline, 3, 3, 3);
+  //  ::draw_meshes(&mesh_render_data[0], &texture_render_id[0], (uint32_t)mesh_render_data.size(), &pipeline);
+  //  ::pop_matrix(&pipeline);
+  // }
+
+  // draw sphere.
+  {
+    uint32_t sphere_texture_render_id[1] = { 0 };
     ::push_matrix(&pipeline);
-    ::pre_translate(&pipeline, 0, -120, -300);
-    ::pre_scale(&pipeline, 3, 3, 3);
-    ::draw_meshes(&mesh_render_data[0], &texture_render_id[0], (uint32_t)mesh_render_data.size(), &pipeline);
+    ::pre_translate(&pipeline, sphere_0.center.data[0], sphere_0.center.data[1], sphere_0.center.data[2]);
+    ::pre_scale(&pipeline, sphere_0.radius, sphere_0.radius, sphere_0.radius);
+    ::draw_meshes(&collision_render_data[0], sphere_texture_render_id, 1, &pipeline);
+    ::pop_matrix(&pipeline);
+
+    
+    {
+      ::push_matrix(&pipeline);
+      ::pre_translate(&pipeline, sphere_0.center.data[0], sphere_0.center.data[1], sphere_0.center.data[2]);
+
+      collision_result_t result = collision_spheres(&sphere_0, &sphere_1);
+      if (result.penetration > 0) {
+        float direction[6];
+        direction[0] = result.direction.data[0] * sphere_0.radius;
+        direction[1] = result.direction.data[1] * sphere_0.radius;
+        direction[2] = result.direction.data[2] * sphere_0.radius;
+        direction[3] = direction[0] + result.direction.data[0] * result.penetration;
+        direction[4] = direction[1] + result.direction.data[1] * result.penetration;
+        direction[5] = direction[2] + result.direction.data[2] * result.penetration;
+        ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
+      }
+
+      ::pop_matrix(&pipeline);
+    }
+  }
+
+  // draw capsule
+  {
+    uint32_t sphere_texture_render_id[1] = { 0 };
+    ::push_matrix(&pipeline);
+    ::pre_translate(&pipeline, sphere_1.center.data[1], sphere_1.center.data[1], sphere_1.center.data[2]);
+    ::pre_scale(&pipeline, sphere_1.radius, sphere_1.radius, sphere_1.radius);
+    ::draw_meshes(&collision_render_data[1], sphere_texture_render_id, 1, &pipeline);
     ::pop_matrix(&pipeline);
   }
 
-  // disable simple instructions.
+  // display simple instructions.
   if (m_font) {
     std::vector<std::string> strvec;
     strvec.push_back("[C] RESET CAMERA");
@@ -451,10 +550,14 @@ application::update()
     }
   }
 
-  ::push_matrix(&pipeline);
-  ::pre_translate(&pipeline, 0, -100, 0);
-  ::draw_grid(&pipeline, 5000.f, 100);
-  ::pop_matrix(&pipeline);
+  // draw grid.
+  {
+    ::push_matrix(&pipeline);
+    ::pre_translate(&pipeline, 0, -100, 0);
+    ::draw_grid(&pipeline, 5000.f, 100);
+    ::pop_matrix(&pipeline);
+  }
+
   ::flush_operations();
 
   return controller.end();

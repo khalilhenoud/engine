@@ -15,8 +15,11 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/platform/input_platform_win32.c)
 			
 target_link_libraries(${PROJECT_NAME}
+						PUBLIC library
 						PUBLIC math
-            PRIVATE entity
+            PRIVATE collision
+            PRIVATE data_format
+						PRIVATE entity
 						PRIVATE loaders
 						PRIVATE renderer
 						PRIVATE winmm)

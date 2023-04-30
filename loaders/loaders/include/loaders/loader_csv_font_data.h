@@ -17,18 +17,18 @@
 
 
 typedef
-struct glyph_data_t {
+struct {
   uint32_t x, y;
   uint32_t width, offset;
 } glyph_data_t;
 
 typedef
-struct bounds_t {
+struct {
   float data[6];
 } bounds_t;
 
 typedef
-struct loader_csv_font_data_t {
+struct {
   uint32_t image_width, image_height;
   uint32_t cell_width, cell_height;
   uint32_t font_height, font_width;

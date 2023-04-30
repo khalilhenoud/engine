@@ -19,7 +19,7 @@ extern "C" {
 
 
 typedef
-enum loader_image_format_t {
+enum {
   LOADER_PNG_RGBA,
   LOADER_PNG_BGRA,
   LOADER_PNG_RGB,
@@ -30,7 +30,7 @@ enum loader_image_format_t {
 } loader_image_format_t;
 
 typedef
-struct loader_png_data_t {
+struct {
   uint32_t width;
   uint32_t height;
   loader_image_format_t format;

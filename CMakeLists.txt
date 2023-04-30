@@ -9,8 +9,11 @@ set(ENGINE_BUILD True)
 
 project(engine)
 
+add_subdirectory(library)
 add_subdirectory(math)
+add_subdirectory(collision)
 add_subdirectory(entity)
+add_subdirectory(data_format)
 add_subdirectory(loaders/loaders)
 add_subdirectory(renderer/renderer)
 add_subdirectory(application)

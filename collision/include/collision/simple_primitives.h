@@ -13,7 +13,25 @@
 
 #include <math/c/vector3f.h>
 
+typedef 
+struct {
+  point3f points[2];
+} segment_t;
 
+typedef
+enum {
+  CLASSIFIED_IDENTICAL,
+  CLASSIFIED_PARALLEL,
+  CLASSIFIED_COLINEAR_NO_OVERLAP,
+  CLASSIFIED_COLINEAR_FULL_OVERLAP,
+  CLASSIFIED_COLINEAR_OVERLAPPING,
+  CLASSIFIED_COPLANAR_INTERSECT,
+  CLASSIFIED_COPLANAR_NO_INTERSECT,
+  CLASSIFIED_DISTINCT,
+  CLASSIFIED_COUNT
+} primitives_classification_t;
+
+// transforms should be part of these structures.
 typedef
 struct {
   vector3f direction;
@@ -29,7 +47,7 @@ struct {
 typedef
 struct {
   point3f center;
-  float height;
+  float half_height; // direction is (0, 1, 0) in all cases, rotation is needed to make this rotate.
   float radius;
 } capsule_t;
 

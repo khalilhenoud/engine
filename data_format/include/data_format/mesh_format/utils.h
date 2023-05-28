@@ -28,7 +28,7 @@ DATA_FORMAT_API
 mesh_t*
 create_unit_capsule(
   const int32_t factor, 
-  const float height_to_radius_ratio,
+  const float half_height_to_radius_ratio,
   const allocator_t* allocator);
 
 DATA_FORMAT_API

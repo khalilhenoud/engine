@@ -328,9 +328,11 @@ std::unordered_map<std::string, uint32_t> texture_id;
 std::vector<mesh_render_data_t> mesh_render_data;
 std::vector<const char*> texture_render_data;
 std::vector<uint32_t> texture_render_id;
-mesh_t* meshes[2] = { nullptr };
+mesh_t* meshes[4] = { nullptr };
 std::vector<mesh_render_data_t> collision_render_data;
 sphere_t sphere_0, sphere_1;
+capsule_t capsule_0, capsule_1;
+face_t face_0, face_1;
 allocator_t allocator;
 
 application::application(
@@ -348,14 +350,33 @@ application::application(
   allocator.mem_realloc = nullptr;
 
   {
-    sphere_0.center = { -100.f, 0.f, -300.f };
-    sphere_0.radius = 50;
+    sphere_0.center = { -100.f, 0.f, -200.f };
+    sphere_0.radius = 20;
     meshes[0] = ::create_unit_sphere(30, &allocator);
-    collision_render_data.push_back(load_mesh_renderer_data(meshes[0], color_t{ 0.f, 0.5f, 0.f, 1.f }));
-    sphere_1.center = { 0.f, 0.f, -300.f };
+    collision_render_data.push_back(load_mesh_renderer_data(meshes[0], color_t{ 0.f, 1.f, 0.f, 0.5f }));
+    sphere_1.center = { 0.f, 0.f, -200.f };
     sphere_1.radius = 30;
     meshes[1] = ::create_unit_sphere(30, &allocator);
-    collision_render_data.push_back(load_mesh_renderer_data(meshes[1], color_t{ 1.f, 0.f, 0.f, 1.f }));
+    collision_render_data.push_back(load_mesh_renderer_data(meshes[1], color_t{ 1.f, 0.f, 0.f, 0.5f }));
+    capsule_0.center = { 100.f, 0.f, -200.f };
+    capsule_0.half_height = 30;
+    capsule_0.radius = 15;
+    meshes[2] = ::create_unit_capsule(30, capsule_0.half_height / capsule_0.radius, &allocator);
+    collision_render_data.push_back(load_mesh_renderer_data(meshes[2], color_t{ 1.f, 1.f, 0.f, 0.5f }));
+    capsule_1.center = { 170.f, 0.f, -200.f };
+    capsule_1.half_height = 20;
+    capsule_1.radius = 10;
+    // TODO: This needs fixing (the scaling is off).
+    meshes[3] = ::create_unit_capsule(30, capsule_1.half_height / capsule_1.radius, &allocator);
+    collision_render_data.push_back(load_mesh_renderer_data(meshes[3], color_t{ 1.f, 0.f, 1.f, 0.5f }));
+
+    face_0.points[0] = { 0.f, -100.f, -200.f};
+    face_0.points[1] = { 50.f, -100.f, -200.f};
+    face_0.points[2] = { 50.f, -100.f, -250.f};
+
+    face_1.points[0] = { 200.f, -100.f, -200.f};
+    face_1.points[1] = { 200.f, -50.f, -200.f};
+    face_1.points[2] = { 200.f, -50.f, -250.f};
   }
 
   auto datafile = std::string("media\\font\\FontData2.csv");
@@ -364,11 +385,11 @@ application::application(
   m_images.emplace_back(imagefile);
 
   auto model_path = std::string("media\\test\\test01.ASE");
-  m_scene = load_ase_model(m_dataset, model_path, &allocator);
+ /* m_scene = load_ase_model(m_dataset, model_path, &allocator);
   std::tie(mesh_render_data, texture_render_data) = load_renderer_data(*m_scene);
 
   for (auto& entry : m_scene->get_textures_paths())
-    m_images.emplace_back(entry.c_str());
+    m_images.emplace_back(entry.c_str());*/
 
   for (auto& image : m_images)
     load_image(m_dataset, image, &allocator);
@@ -412,6 +433,8 @@ application::~application()
 {
   ::free_mesh(meshes[0], &allocator);
   ::free_mesh(meshes[1], &allocator);
+  ::free_mesh(meshes[2], &allocator);
+  ::free_mesh(meshes[3], &allocator);
 
   for (auto& entry : texture_id)
     ::evict_from_gpu(entry.second);
@@ -438,27 +461,35 @@ application::update()
     if (m_disable_input)
       prev_mouse_x = prev_mouse_y = -1;
   }
-  
+
   if (!m_disable_input) {
     update_camera();
 
-    if (::is_key_pressed('H'))
-      sphere_0.center.data[0] -= 2.f;
-    if (::is_key_pressed('K'))
-      sphere_0.center.data[0] += 2.f;
-    if (::is_key_pressed('U'))
-      sphere_0.center.data[1] += 2.f;
-    if (::is_key_pressed('J'))
-      sphere_0.center.data[1] -= 2.f;
-    if (::is_key_pressed('Y'))
-      sphere_0.center.data[2] += 2.f;
-    if (::is_key_pressed('I'))
-      sphere_0.center.data[2] -= 2.f;
+    // if (::is_key_pressed('H'))
+    //   capsule_0.center.data[0] -= 2.f;
+    // if (::is_key_pressed('K'))
+    //   capsule_0.center.data[0] += 2.f;
+    // if (::is_key_pressed('U'))
+    //   capsule_0.center.data[1] += 2.f;
+    // if (::is_key_pressed('J'))
+    //   capsule_0.center.data[1] -= 2.f;
+    // if (::is_key_pressed('Y'))
+    //   capsule_0.center.data[2] += 2.f;
+    // if (::is_key_pressed('I'))
+    //   capsule_0.center.data[2] -= 2.f;
   }
 
   ::set_matrix_mode(&pipeline, MODELVIEW);
   ::load_identity(&pipeline);
   ::post_multiply(&pipeline, &m_camera.get_view_transformation().data);
+
+  // draw grid.
+  {
+    ::push_matrix(&pipeline);
+    ::pre_translate(&pipeline, 0, -100, 0);
+    ::draw_grid(&pipeline, 5000.f, 100);
+    ::pop_matrix(&pipeline);
+  }
 
   // render the scene.
   // if (m_scene) {
@@ -469,7 +500,89 @@ application::update()
   //  ::pop_matrix(&pipeline);
   // }
 
-  // draw sphere.
+  {
+    ::push_matrix(&pipeline);
+    ::pre_translate(&pipeline, sphere_0.center.data[0], sphere_0.center.data[1], sphere_0.center.data[2]);
+
+    {
+      collision_result_t results[5];
+      results[0] = collision_spheres(&sphere_0, &sphere_1);
+      results[1] = collision_sphere_face(&sphere_0, &face_0);
+      results[2] = collision_sphere_face(&sphere_0, &face_1);
+      results[3] = collision_sphere_capsule(&sphere_0, &capsule_0);
+      results[4] = collision_sphere_capsule(&sphere_0, &capsule_1);
+      for (int32_t i = 0; i < 5; ++i) {
+        collision_result_t result = results[i];
+        if (result.penetration > 0) {
+          float direction[6];
+          direction[0] = result.direction.data[0] * -(sphere_0.radius - result.penetration);
+          direction[1] = result.direction.data[1] * -(sphere_0.radius - result.penetration);
+          direction[2] = result.direction.data[2] * -(sphere_0.radius - result.penetration);
+          direction[3] = direction[0] + result.direction.data[0] * result.penetration;
+          direction[4] = direction[1] + result.direction.data[1] * result.penetration;
+          direction[5] = direction[2] + result.direction.data[2] * result.penetration;
+          ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
+        }
+      }
+    }
+
+    ::pop_matrix(&pipeline);
+  }
+
+  {
+    ::push_matrix(&pipeline);
+    ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
+
+    {
+      collision_result_t result = collision_capsules(&capsule_0, &capsule_1);
+      if (result.penetration > 0) {
+        float direction[6];
+        direction[0] = result.direction.data[0] * -(capsule_0.radius - result.penetration);
+        direction[1] = result.direction.data[1] * -(capsule_0.radius - result.penetration);
+        direction[2] = result.direction.data[2] * -(capsule_0.radius - result.penetration);
+        direction[3] = direction[0] + result.direction.data[0] * result.penetration;
+        direction[4] = direction[1] + result.direction.data[1] * result.penetration;
+        direction[5] = direction[2] + result.direction.data[2] * result.penetration;
+        ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
+      }
+    }
+
+    ::pop_matrix(&pipeline);
+  }
+
+  // draw faces.
+  {
+    float vertices[12];
+    vertices[0 * 3 + 0] = face_0.points[0].data[0];
+    vertices[0 * 3 + 1] = face_0.points[0].data[1];
+    vertices[0 * 3 + 2] = face_0.points[0].data[2];
+    vertices[1 * 3 + 0] = face_0.points[1].data[0];
+    vertices[1 * 3 + 1] = face_0.points[1].data[1];
+    vertices[1 * 3 + 2] = face_0.points[1].data[2];
+    vertices[2 * 3 + 0] = face_0.points[2].data[0];
+    vertices[2 * 3 + 1] = face_0.points[2].data[1];
+    vertices[2 * 3 + 2] = face_0.points[2].data[2];
+    vertices[3 * 3 + 0] = face_0.points[0].data[0];
+    vertices[3 * 3 + 1] = face_0.points[0].data[1];
+    vertices[3 * 3 + 2] = face_0.points[0].data[2];
+    ::draw_lines(vertices, 4, { 0.f, 1.f, 0.f, 1.f }, 2, &pipeline);
+
+    vertices[0 * 3 + 0] = face_1.points[0].data[0];
+    vertices[0 * 3 + 1] = face_1.points[0].data[1];
+    vertices[0 * 3 + 2] = face_1.points[0].data[2];
+    vertices[1 * 3 + 0] = face_1.points[1].data[0];
+    vertices[1 * 3 + 1] = face_1.points[1].data[1];
+    vertices[1 * 3 + 2] = face_1.points[1].data[2];
+    vertices[2 * 3 + 0] = face_1.points[2].data[0];
+    vertices[2 * 3 + 1] = face_1.points[2].data[1];
+    vertices[2 * 3 + 2] = face_1.points[2].data[2];
+    vertices[3 * 3 + 0] = face_1.points[0].data[0];
+    vertices[3 * 3 + 1] = face_1.points[0].data[1];
+    vertices[3 * 3 + 2] = face_1.points[0].data[2];
+    ::draw_lines(vertices, 4, { 0.f, 1.f, 0.f, 1.f }, 2, &pipeline);
+  }
+
+  // draw sphere 00.
   {
     uint32_t sphere_texture_render_id[1] = { 0 };
     ::push_matrix(&pipeline);
@@ -477,36 +590,71 @@ application::update()
     ::pre_scale(&pipeline, sphere_0.radius, sphere_0.radius, sphere_0.radius);
     ::draw_meshes(&collision_render_data[0], sphere_texture_render_id, 1, &pipeline);
     ::pop_matrix(&pipeline);
-
-    
-    {
-      ::push_matrix(&pipeline);
-      ::pre_translate(&pipeline, sphere_0.center.data[0], sphere_0.center.data[1], sphere_0.center.data[2]);
-
-      collision_result_t result = collision_spheres(&sphere_0, &sphere_1);
-      if (result.penetration > 0) {
-        float direction[6];
-        direction[0] = result.direction.data[0] * sphere_0.radius;
-        direction[1] = result.direction.data[1] * sphere_0.radius;
-        direction[2] = result.direction.data[2] * sphere_0.radius;
-        direction[3] = direction[0] + result.direction.data[0] * result.penetration;
-        direction[4] = direction[1] + result.direction.data[1] * result.penetration;
-        direction[5] = direction[2] + result.direction.data[2] * result.penetration;
-        ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
-      }
-
-      ::pop_matrix(&pipeline);
-    }
   }
 
-  // draw capsule
+  // draw sphere 01
   {
     uint32_t sphere_texture_render_id[1] = { 0 };
     ::push_matrix(&pipeline);
-    ::pre_translate(&pipeline, sphere_1.center.data[1], sphere_1.center.data[1], sphere_1.center.data[2]);
+    ::pre_translate(&pipeline, sphere_1.center.data[0], sphere_1.center.data[1], sphere_1.center.data[2]);
     ::pre_scale(&pipeline, sphere_1.radius, sphere_1.radius, sphere_1.radius);
     ::draw_meshes(&collision_render_data[1], sphere_texture_render_id, 1, &pipeline);
     ::pop_matrix(&pipeline);
+  }
+
+  // draw capsule 01
+  {
+    uint32_t capsule_texture_render_id[1] = { 0 };
+    ::push_matrix(&pipeline);
+    ::pre_translate(&pipeline, capsule_1.center.data[0], capsule_1.center.data[1], capsule_1.center.data[2]);
+    float scale = (capsule_1.half_height + capsule_1.radius);
+    ::pre_scale(&pipeline, scale, scale, scale);
+    ::draw_meshes(&collision_render_data[3], capsule_texture_render_id, 1, &pipeline);
+    ::pop_matrix(&pipeline);
+  }
+
+  // draw capsule 00
+  {
+    uint32_t capsule_texture_render_id[1] = { 0 };
+    ::push_matrix(&pipeline);
+    ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
+    // TODO: add a pre_scale uniform.
+    float scale = (capsule_0.half_height + capsule_0.radius);
+    ::pre_scale(&pipeline, scale, scale, scale);
+    ::draw_meshes(&collision_render_data[2], capsule_texture_render_id, 1, &pipeline);
+    ::pop_matrix(&pipeline);
+  }
+
+  // draw line segments and intersections
+  if (0) {
+    static float slide_y = 0;
+    static float slide_x = 0;
+    static float slide_x_delta = 0;
+     if (!m_disable_input) {
+      if (::is_key_pressed('H'))
+        slide_x -= 2.f;
+      if (::is_key_pressed('K'))
+        slide_x += 2.f;
+      if (::is_key_pressed('U'))
+        slide_y += 2.f;
+      if (::is_key_pressed('J'))
+        slide_y -= 2.f;
+      if (::is_key_pressed('Y'))
+        slide_x_delta += 2.f;
+      if (::is_key_pressed('I'))
+        slide_x_delta -= 2.f;
+    }
+
+    segment_t segments[3];
+    segments[0].points[0] = { 30 + slide_x, -50 + slide_y, -100 };
+    segments[0].points[1] = { 30 + slide_x + slide_x_delta, 0 + slide_y, -100 };
+    segments[1].points[0] = { 0, -50, -100 };
+    segments[1].points[1] = { 0 - slide_x_delta, 25, -100 };
+    ::draw_lines(segments[0].points[0].data, 2, color_t {1, 0, 0, 1}, 1, &pipeline);
+    ::draw_lines(segments[1].points[0].data, 2, color_t {0, 0, 1, 1}, 2, &pipeline);
+    ::classify_segments(segments + 0, segments + 1, segments + 2);
+    ::draw_points(segments[2].points[0].data, 2, color_t{ 0, 1, 0, 1 }, 10, &pipeline);
+    ::draw_lines(segments[2].points[0].data, 2, color_t {0, 1, 0, 1}, 5, &pipeline);
   }
 
   // display simple instructions.
@@ -548,14 +696,6 @@ application::update()
       ::set_perspective(&pipeline, left, right, bottom, top, nearz, farz);
       ::update_projection(&pipeline);
     }
-  }
-
-  // draw grid.
-  {
-    ::push_matrix(&pipeline);
-    ::pre_translate(&pipeline, 0, -100, 0);
-    ::draw_grid(&pipeline, 5000.f, 100);
-    ::pop_matrix(&pipeline);
   }
 
   ::flush_operations();

@@ -322,6 +322,16 @@ draw_meshes(
 
   {
     for (uint32_t i = 0; i < mesh_count; ++i) {
+      if (
+        mesh[i].ambient.data[3] < 1.f ||
+        mesh[i].diffuse.data[3] < 1.f ||
+        mesh[i].specular.data[3] < 1.f) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      } else {
+        glDisable(GL_BLEND);
+      }
+
       glColorMaterial(GL_FRONT, GL_AMBIENT);
       glColor4f(mesh[i].ambient.data[0], mesh[i].ambient.data[1], mesh[i].ambient.data[2], mesh[i].ambient.data[3]);
       glColorMaterial(GL_FRONT, GL_DIFFUSE);

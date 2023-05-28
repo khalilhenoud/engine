@@ -140,10 +140,9 @@ inline
 int32_t
 equal_to_v3f(const vector3f* lhs, const vector3f* rhs)
 {
-  return 
-    K_EQUAL_TO(lhs->data[0], rhs->data[0], (2 * FLT_MIN)) && 
-    K_EQUAL_TO(lhs->data[1], rhs->data[1], (2 * FLT_MIN)) && 
-    K_EQUAL_TO(lhs->data[2], rhs->data[2], (2 * FLT_MIN));
+  vector3f vec;
+  vector3f_set_diff_v3f(&vec, lhs, rhs);
+  return nextafterf(length_squared_v3f(&vec), 0.f) == 0.f;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

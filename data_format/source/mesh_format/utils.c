@@ -126,7 +126,7 @@ create_unit_sphere(const int32_t factor, const allocator_t* allocator)
 mesh_t*
 create_unit_capsule(
   const int32_t factor, 
-  const float height_to_radius_ratio,
+  const float half_height_to_radius_ratio,
   const allocator_t* allocator)
 {
   const double half_pi = K_PI / 2.;
@@ -140,11 +140,13 @@ create_unit_capsule(
   uint32_t ribbon_face_count = factor * 4 * 2;
   uint32_t faces_count = fan_faces_count * 2 + (factor - 1) * 2 * ribbon_face_count + ribbon_face_count;
   uint32_t indices_count = faces_count * 3;
-  float height_to_add = height_to_radius_ratio / 2.f;
+  float total_sections = half_height_to_radius_ratio + 1.f;
+  float height_to_add = (1.f / total_sections) * half_height_to_radius_ratio;
+  float radius_ratio = height_to_add * 1.f / half_height_to_radius_ratio;
 
   mesh_t* mesh = (mesh_t*)allocator->mem_alloc(sizeof(mesh_t));
   assert(mesh != NULL);
-  assert(height_to_radius_ratio > 0.f);
+  assert(half_height_to_radius_ratio > 0.f);
   assert(factor >= 1);
 
   {
@@ -166,14 +168,14 @@ create_unit_capsule(
 
   // push the top and bottom vertices (0, 1, 0), (0, -1, 0) respectively.
   mesh->vertices[0 * 3 + 0] = 0.f;
-  mesh->vertices[0 * 3 + 1] = 1.f + height_to_add;
+  mesh->vertices[0 * 3 + 1] = 1.f;// + height_to_add;
   mesh->vertices[0 * 3 + 2] = 0.f;
   mesh->normals[0 * 3 + 0] = 0.f;
   mesh->normals[0 * 3 + 1] = 1.f;
   mesh->normals[0 * 3 + 2] = 0.f;
 
   mesh->vertices[(vertices_count - 1) * 3 + 0] = 0.f;
-  mesh->vertices[(vertices_count - 1) * 3 + 1] = -1.f - height_to_add;
+  mesh->vertices[(vertices_count - 1) * 3 + 1] = -1.f;// - height_to_add;
   mesh->vertices[(vertices_count - 1) * 3 + 2] = 0.f;
   mesh->normals[(vertices_count - 1) * 3 + 0] = 0.f;
   mesh->normals[(vertices_count - 1) * 3 + 1] = -1.f;
@@ -186,8 +188,8 @@ create_unit_capsule(
     // top half of the mesh.
     for (int32_t level = 1; level <= factor; ++level) {
       double height_angle_total = height_angle_increment * level;
-      double height = cos(height_angle_total);        // y
-      double radius = sin(height_angle_total);
+      double height = cos(height_angle_total) * radius_ratio;        // y
+      double radius = sin(height_angle_total) * radius_ratio;
 
       for (int32_t ring_vertex = 0, total = factor * 4; ring_vertex < total; ++ring_vertex) {
         double ring_angle = ring_vertex * ring_increment;
@@ -207,8 +209,8 @@ create_unit_capsule(
     // bottom half of the capule.
     for (int32_t level = 0; level < factor; ++level) {
       double height_angle_total = half_pi + height_angle_increment * level;
-      double height = cos(height_angle_total);        // y
-      double radius = sin(height_angle_total);
+      double height = cos(height_angle_total) * radius_ratio;        // y
+      double radius = sin(height_angle_total) * radius_ratio;
 
       for (int32_t ring_vertex = 0, total = factor * 4; ring_vertex < total; ++ring_vertex) {
         double ring_angle = ring_vertex * ring_increment;

@@ -18,6 +18,8 @@ struct {
   point3f points[2];
 } segment_t;
 
+// TODO: Remake, redo...
+
 typedef
 enum {
   CLASSIFIED_IDENTICAL,
@@ -25,11 +27,22 @@ enum {
   CLASSIFIED_COLINEAR_NO_OVERLAP,
   CLASSIFIED_COLINEAR_FULL_OVERLAP,
   CLASSIFIED_COLINEAR_OVERLAPPING,
+  CLASSIFIED_COLINEAR_OVERLAPPING_AT_POINT,
   CLASSIFIED_COPLANAR_INTERSECT,
   CLASSIFIED_COPLANAR_NO_INTERSECT,
   CLASSIFIED_DISTINCT,
   CLASSIFIED_COUNT
 } primitives_classification_t;
+
+typedef 
+enum {
+  CAPSULES_AXIS_IDENTICAL,
+  CAPSULES_AXIS_COLINEAR_PARTIAL_OVERLAP,
+  CAPSULES_AXIS_COLINEAR_PARTIAL_OVERLAP_AT_POINT,
+  CAPSULES_AXIS_COLINEAR_FULL_OVERLAP,
+  CAPSULES_DISTINCT,  // no distincation between parallel or not.
+  CAPSULES_COUNT
+} capsules_classification_t;
 
 // transforms should be part of these structures.
 typedef

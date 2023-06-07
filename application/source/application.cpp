@@ -465,18 +465,18 @@ application::update()
   if (!m_disable_input) {
     update_camera();
 
-    // if (::is_key_pressed('H'))
-    //   capsule_0.center.data[0] -= 2.f;
-    // if (::is_key_pressed('K'))
-    //   capsule_0.center.data[0] += 2.f;
-    // if (::is_key_pressed('U'))
-    //   capsule_0.center.data[1] += 2.f;
-    // if (::is_key_pressed('J'))
-    //   capsule_0.center.data[1] -= 2.f;
-    // if (::is_key_pressed('Y'))
-    //   capsule_0.center.data[2] += 2.f;
-    // if (::is_key_pressed('I'))
-    //   capsule_0.center.data[2] -= 2.f;
+    if (::is_key_pressed('H'))
+      capsule_0.center.data[0] -= 2.f;
+    if (::is_key_pressed('K'))
+      capsule_0.center.data[0] += 2.f;
+    if (::is_key_pressed('U'))
+      capsule_0.center.data[1] += 2.f;
+    if (::is_key_pressed('J'))
+      capsule_0.center.data[1] -= 2.f;
+    if (::is_key_pressed('Y'))
+      capsule_0.center.data[2] += 2.f;
+    if (::is_key_pressed('I'))
+      capsule_0.center.data[2] -= 2.f;
   }
 
   ::set_matrix_mode(&pipeline, MODELVIEW);
@@ -534,8 +534,20 @@ application::update()
     ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
 
     {
-      collision_result_t result = collision_capsules(&capsule_0, &capsule_1);
-      if (result.penetration > 0) {
+      collision_result_t result; 
+      capsules_classification_t classification = collision_capsules(&capsule_0, &capsule_1, &result);
+
+      // draw the axis overlap.
+      if (classification != CAPSULES_DISTINCT) {
+        segment_t debug;
+        collision_capsules_debug(&capsule_0, &capsule_1, &debug);
+
+        ::pop_matrix(&pipeline);
+        ::draw_points(debug.points[0].data, 2, color_t{ 0, 1, 0.2, 1 }, 10, &pipeline);
+        ::draw_lines(debug.points[0].data, 2, color_t{ 0, 1, 0.2, 1 }, 5, &pipeline);
+        ::push_matrix(&pipeline);
+        ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
+      } else if (result.penetration > 0) {
         float direction[6];
         direction[0] = result.direction.data[0] * -(capsule_0.radius - result.penetration);
         direction[1] = result.direction.data[1] * -(capsule_0.radius - result.penetration);

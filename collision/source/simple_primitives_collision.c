@@ -17,6 +17,8 @@
 // TODO: Change this, this should follow the segments intersection, with a 
 // classification and minimal connecting segment, or an out param.
 // Do the same for all remaining segments.
+// This is to give client code the opportunity to handle the special case
+// where centers overlap.
 collision_result_t
 collision_spheres(
   const sphere_t *source, 
@@ -184,20 +186,21 @@ collision_sphere_face(
   return result;
 }
 
-collision_result_t
-collision_sphere_faces(
-  const sphere_t* source, 
-  const faces_t* face)
-{
-  collision_result_t result;
-  memset(&result, 0, sizeof(result));
-  result.penetration = -1.f;
+//collision_result_t
+//collision_sphere_faces(
+//  const sphere_t* source, 
+//  const faces_t* face)
+//{
+//  collision_result_t result;
+//  memset(&result, 0, sizeof(result));
+//  result.penetration = -1.f;
+//
+//  // TODO: Implement this.
+//
+//  return result;
+//}
 
-  // TODO: Implement this.
-
-  return result;
-}
-
+// SAME thing with the classification, special cases should be handled by client code.
 collision_result_t
 collision_sphere_capsule(
   const sphere_t *source, 
@@ -211,21 +214,22 @@ collision_sphere_capsule(
   vector3f_set_diff_v3f(&b_capsule, &direction, &capsule->center); // b is in the +y
   on_capsule = closest_point_on_segment(&source->center, &a_capsule, &b_capsule);
 
-  // TODO: Deal with the case where both sphere share the same origin.
+  // TODO: Deal with the case where both spheres share the same origin.
   {
     sphere_t sphere_on_capsule = { on_capsule, capsule->radius };
     return collision_spheres(source, &sphere_on_capsule);
   } 
 }
 
-collision_result_t
-collision_capsules(
+void
+collision_capsules_debug(
   const capsule_t *source, 
-  const capsule_t *target)
+  const capsule_t *target, 
+  segment_t *debug)
 {
-  vector3f direction_source = { 0.f, 1.f, 0.f };
+vector3f direction_source = { 0.f, 1.f, 0.f };
   vector3f direction_target = direction_source;
-  vector3f a_source, b_source, a_target, b_target, on_source, on_target; 
+  vector3f a_source, b_source, a_target, b_target; 
   
   // compute the source capsule endpoints.
   {
@@ -245,23 +249,72 @@ collision_capsules(
   
   // find the closest points on the capsules.
   {
-    vector3f on_target_a, a_closest, on_target_b, b_closest;
-    on_target_a = closest_point_on_segment(&a_source, &a_target, &b_target);
-    vector3f_set_diff_v3f(&a_closest, &a_source, &on_target_a);
-    on_target_b = closest_point_on_segment(&b_source, &a_target, &b_target);
-    vector3f_set_diff_v3f(&b_closest, &b_source, &on_target_b);
-    on_target = (length_v3f(&a_closest) < length_v3f(&b_closest)) ? on_target_a : on_target_b;
-    on_source = closest_point_on_segment(&on_target, &a_source, &b_source);
-  
-    // TODO: Deal with the case where both sphere share the same origin.
-    {
-      sphere_t sphere_source = { on_source, source->radius };
-      sphere_t sphere_target = { on_target, target->radius };
-      return collision_spheres(&sphere_source, &sphere_target);
-    }
+    segment_t segments[3] = {{ a_source, b_source }, { a_target, b_target }};
+    classify_segments(segments + 0, segments + 1, segments + 2);
+    *debug = segments[2];
   }
 }
 
+// NOTE: This allows the user code to decide how to handle special cases.
+capsules_classification_t
+collision_capsules(
+  const capsule_t *source, 
+  const capsule_t *target,
+  collision_result_t* result)
+{
+  capsules_classification_t capsules_classification = CAPSULES_DISTINCT;
+  vector3f direction_source = { 0.f, 1.f, 0.f };
+  vector3f direction_target = direction_source;
+  vector3f a_source, b_source, a_target, b_target; 
+  
+  // compute the source capsule endpoints.
+  {
+    mult_set_v3f(&direction_source, source->half_height);
+    vector3f_set_diff_v3f(&a_source, &direction_source, &source->center); // a is in the -y.
+    mult_set_v3f(&direction_source, -1.f);
+    vector3f_set_diff_v3f(&b_source, &direction_source, &source->center); // b is in the +y
+  }
+
+  // compute the target capsule endpoints.
+  {
+    mult_set_v3f(&direction_target, target->half_height);
+    vector3f_set_diff_v3f(&a_target, &direction_target, &target->center); // a is in the -y.
+    mult_set_v3f(&direction_target, -1.f);
+    vector3f_set_diff_v3f(&b_target, &direction_target, &target->center); // b is in the +y
+  }
+  
+  // find the closest points on the capsules.
+  {
+    segment_t segments[3] = {{ a_source, b_source }, { a_target, b_target }};
+    primitives_classification_t segment_classification = classify_segments(segments + 0, segments + 1, segments + 2);
+
+    switch (segment_classification) {
+    case CLASSIFIED_IDENTICAL:
+      capsules_classification = CAPSULES_AXIS_IDENTICAL;
+      break;
+    case CLASSIFIED_COLINEAR_OVERLAPPING:
+      capsules_classification = CAPSULES_AXIS_COLINEAR_PARTIAL_OVERLAP;
+      break;
+    case CLASSIFIED_COLINEAR_OVERLAPPING_AT_POINT:
+      capsules_classification = CAPSULES_AXIS_COLINEAR_PARTIAL_OVERLAP_AT_POINT;
+      break;
+    case CLASSIFIED_COLINEAR_FULL_OVERLAP:
+      capsules_classification = CAPSULES_AXIS_COLINEAR_FULL_OVERLAP;
+      break;
+    }
+  
+    // TODO: Deal with the case where both sphere share the same origin.
+    {
+      sphere_t sphere_source = { segments[2].points[0], source->radius };
+      sphere_t sphere_target = { segments[2].points[1], target->radius };
+      *result = collision_spheres(&sphere_source, &sphere_target);
+    }
+  }
+
+  return capsules_classification;
+}
+
+// TODO: THis next.
 collision_result_t
 collision_capsule_face(
   const capsule_t *source, 
@@ -286,8 +339,10 @@ find_coplanar_segments_bridge(
   assert(out != NULL);
 
   // TODO: add asserts making sure the lines are coplanar, but not parallel.
-  // better still separate the classification from the intersection code, that 
-  // way we can generalize the code and use it where we need.
+  // better still separate the classification from the intersection code, that
+  // way we can generalize the code and use it where we need. Since right now we
+  // are only using this with the classify_segments function the asserts can be
+  // omitted.
   {
     vector3f 
         ab, ab_normalized, 
@@ -433,6 +488,8 @@ find_coplanar_segments_bridge(
   return result;
 }
 
+// NOTE: we guarantee in every case (except full overlap for obvious reasons)
+// that the first point in 'out' belongs to 'first' and vice versa.
 primitives_classification_t
 classify_segments(
   const segment_t *first, 
@@ -453,7 +510,7 @@ classify_segments(
   // test if both segments are identical.
   if ((equal_to_v3f(first->points + 0, second->points + 0) && equal_to_v3f(first->points + 1, second->points + 1)) || 
       (equal_to_v3f(first->points + 0, second->points + 1) && equal_to_v3f(first->points + 1, second->points + 0))) {
-      *out= *first;
+      *out = *first;
       return CLASSIFIED_IDENTICAL;
     }
 
@@ -514,40 +571,51 @@ classify_segments(
         } else if (ac_cb * ad_db < 0.f) {
           result = CLASSIFIED_COLINEAR_OVERLAPPING;
           if (ac_cb > 0.f) {
-            out->points[0] = second->points[0];
-            out->points[1] = (ac_cd > 0.f) ? first->points[1] : first->points[0];
+            out->points[0] = (ac_cd > 0.f) ? first->points[1] : first->points[0];
+            out->points[1] = second->points[0];
           } else {
-            out->points[0] = second->points[1];
-            out->points[1] = (ad_dc > 0.f) ? first->points[1] : first->points[0];
+            out->points[0] = (ad_dc > 0.f) ? first->points[1] : first->points[0];
+            out->points[1] = second->points[1];
           }
         } else {
-          result = CLASSIFIED_COLINEAR_NO_OVERLAP;
-          // we set the out to the closest gap.
-          vector3f vec[4] = { ac, ad, bc, bd };
-          segment_t seg[4] = { 
-            {first->points[0], second->points[0]}, 
-            {first->points[0], second->points[1]}, 
-            {first->points[1], second->points[0]}, 
-            {first->points[1], second->points[1]} };
-          float min = length_v3f(&vec[0]);
-          float new_min;
-          int32_t index = 0;
+          result = CLASSIFIED_COLINEAR_OVERLAPPING_AT_POINT;
+          if (
+            equal_to_v3f(first->points + 0, second->points + 0) ||
+            equal_to_v3f(first->points + 0, second->points + 1)) {
+            out->points[0] = out->points[1] = first->points[0];
+          } else if (
+            equal_to_v3f(first->points + 1, second->points + 0) ||
+            equal_to_v3f(first->points + 1, second->points + 1)) {
+            out->points[0] = out->points[1] = first->points[1];
+          } else {
+            result = CLASSIFIED_COLINEAR_NO_OVERLAP;
+            // we set the out to the closest gap.
+            vector3f vec[4] = { ac, ad, bc, bd };
+            segment_t seg[4] = {
+              {first->points[0], second->points[0]},
+              {first->points[0], second->points[1]},
+              {first->points[1], second->points[0]},
+              {first->points[1], second->points[1]} };
+            float min = length_v3f(&vec[0]);
+            float new_min;
+            int32_t index = 0;
 
-          for (int32_t i = 1; i < 4; ++i) {
-            new_min = length_v3f(&vec[i]);
-            if (new_min < min) {
-              min = new_min;
-              index = i;
+            for (int32_t i = 1; i < 4; ++i) {
+              new_min = length_v3f(&vec[i]);
+              if (new_min < min) {
+                min = new_min;
+                index = i;
+              }
             }
+            *out = seg[index];
           }
-          *out = seg[index];
         }
       } else {
         // parallel segments, find minimal connecting segment.
         vector3f a_proj = closest_point_on_segment(&first->points[0], &second->points[0], &second->points[1]);
         vector3f b_proj = closest_point_on_segment(&a_proj, &first->points[0], &first->points[1]);
-        out->points[0] = a_proj;
-        out->points[1] = b_proj;
+        out->points[0] = b_proj;
+        out->points[1] = a_proj;
         result = CLASSIFIED_PARALLEL;
       }
     } else {

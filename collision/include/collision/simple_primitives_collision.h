@@ -34,6 +34,8 @@ extern "C" {
  *  non-uniform scale (these are vqs for all intent and purposes).
  */
 
+// TODO: This needs a full refactoring, in both style and functionality.
+
 // TODO: Provide a transform variant of these apis
 COLLISION_API
 collision_result_t
@@ -43,17 +45,21 @@ COLLISION_API
 collision_result_t
 collision_sphere_face(const sphere_t *source, const face_t *face);
 
-COLLISION_API
-collision_result_t
-collision_sphere_faces(const sphere_t* source, const faces_t* face);
+//COLLISION_API
+//collision_result_t
+//collision_sphere_faces(const sphere_t* source, const faces_t* face);
  
 COLLISION_API
 collision_result_t
 collision_sphere_capsule(const sphere_t *source, const capsule_t *capsule);
 
 COLLISION_API
-collision_result_t
-collision_capsules(const capsule_t *source, const capsule_t *target);
+void
+collision_capsules_debug(const capsule_t *source, const capsule_t *target, segment_t *debug);
+
+COLLISION_API
+capsules_classification_t
+collision_capsules(const capsule_t *source, const capsule_t *target, collision_result_t* result);
 
 COLLISION_API
 collision_result_t

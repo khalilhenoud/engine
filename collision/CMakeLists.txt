@@ -5,7 +5,10 @@ project(collision VERSION 1.0)
 
 # add the executable
 add_library(${PROJECT_NAME} SHARED
-      ./source/simple_primitives_collision.c
+      ./source/segment.c
+      ./source/sphere.c
+      ./source/capsule.c
+      ./source/face.c
       ./include/collision/internal/module.h)
 
 target_link_libraries(${PROJECT_NAME} 

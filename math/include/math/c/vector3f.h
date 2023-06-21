@@ -171,9 +171,9 @@ vector3f
 diff_v3f(const vector3f* lhs, const vector3f* rhs)
 {
   vector3f dst;
-  dst.data[0] = lhs->data[0] - rhs->data[0];
-  dst.data[1] = lhs->data[1] - rhs->data[1];
-  dst.data[2] = lhs->data[2] - rhs->data[2];
+  dst.data[0] = rhs->data[0] - lhs->data[0];
+  dst.data[1] = rhs->data[1] - lhs->data[1];
+  dst.data[2] = rhs->data[2] - lhs->data[2];
   return dst;
 }
 

@@ -30,8 +30,10 @@
 #include <loaders/loader_csv.h>
 #include <data_format/mesh_format/data_format.h>
 #include <data_format/mesh_format/utils.h>
-#include <collision/simple_primitives.h>
-#include <collision/simple_primitives_collision.h>
+#include <collision/capsule.h>
+#include <collision/segment.h>
+#include <collision/face.h>
+#include <collision/sphere.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -465,18 +467,39 @@ application::update()
   if (!m_disable_input) {
     update_camera();
 
-    if (::is_key_pressed('H'))
-      capsule_0.center.data[0] -= 2.f;
-    if (::is_key_pressed('K'))
-      capsule_0.center.data[0] += 2.f;
-    if (::is_key_pressed('U'))
-      capsule_0.center.data[1] += 2.f;
-    if (::is_key_pressed('J'))
-      capsule_0.center.data[1] -= 2.f;
-    if (::is_key_pressed('Y'))
-      capsule_0.center.data[2] += 2.f;
-    if (::is_key_pressed('I'))
-      capsule_0.center.data[2] -= 2.f;
+    static bool m = true;
+
+    if (::is_key_triggered('T'))
+      m = !m;
+
+    if (m) {
+      if (::is_key_pressed('H'))
+        capsule_0.center.data[0] -= 2.f;
+      if (::is_key_pressed('K'))
+        capsule_0.center.data[0] += 2.f;
+      if (::is_key_pressed('U'))
+        capsule_0.center.data[1] += 2.f;
+      if (::is_key_pressed('J'))
+        capsule_0.center.data[1] -= 2.f;
+      if (::is_key_pressed('Y'))
+        capsule_0.center.data[2] += 2.f;
+      if (::is_key_pressed('I'))
+        capsule_0.center.data[2] -= 2.f;
+    }
+    else {
+      if (::is_key_pressed('H'))
+        sphere_0.center.data[0] -= 2.f;
+      if (::is_key_pressed('K'))
+        sphere_0.center.data[0] += 2.f;
+      if (::is_key_pressed('U'))
+        sphere_0.center.data[1] += 2.f;
+      if (::is_key_pressed('J'))
+        sphere_0.center.data[1] -= 2.f;
+      if (::is_key_pressed('Y'))
+        sphere_0.center.data[2] += 2.f;
+      if (::is_key_pressed('I'))
+        sphere_0.center.data[2] -= 2.f;
+    }
   }
 
   ::set_matrix_mode(&pipeline, MODELVIEW);
@@ -505,22 +528,29 @@ application::update()
     ::pre_translate(&pipeline, sphere_0.center.data[0], sphere_0.center.data[1], sphere_0.center.data[2]);
 
     {
-      collision_result_t results[5];
-      results[0] = collision_spheres(&sphere_0, &sphere_1);
-      results[1] = collision_sphere_face(&sphere_0, &face_0);
-      results[2] = collision_sphere_face(&sphere_0, &face_1);
-      results[3] = collision_sphere_capsule(&sphere_0, &capsule_0);
-      results[4] = collision_sphere_capsule(&sphere_0, &capsule_1);
+      vector3f results[5];
+      vector3f normals[2];
+      memset(results, 0, sizeof(results));
+      classify_spheres(&sphere_0, &sphere_1, results + 0);
+      get_faces_normals(&face_0, 1, normals + 0);
+      get_faces_normals(&face_1, 1, normals + 1);
+      classify_sphere_face(&sphere_0, &face_0, normals + 0, results + 1);
+      classify_sphere_face(&sphere_0, &face_1, normals + 1, results + 2);
+      classify_sphere_capsule(&sphere_0, &capsule_0, results + 3);
+      classify_sphere_capsule(&sphere_0, &capsule_1, results + 4);
       for (int32_t i = 0; i < 5; ++i) {
-        collision_result_t result = results[i];
-        if (result.penetration > 0) {
+        vector3f result = results[i];
+        if (::length_squared_v3f(&result) != 0.f) {
           float direction[6];
-          direction[0] = result.direction.data[0] * -(sphere_0.radius - result.penetration);
-          direction[1] = result.direction.data[1] * -(sphere_0.radius - result.penetration);
-          direction[2] = result.direction.data[2] * -(sphere_0.radius - result.penetration);
-          direction[3] = direction[0] + result.direction.data[0] * result.penetration;
-          direction[4] = direction[1] + result.direction.data[1] * result.penetration;
-          direction[5] = direction[2] + result.direction.data[2] * result.penetration;
+          float length0 = ::length_v3f(&result);
+          float length1 = -(sphere_0.radius - length0);
+          result = normalize_v3f(&result);
+          direction[0] = result.data[0] * length1;
+          direction[1] = result.data[1] * length1;
+          direction[2] = result.data[2] * length1;
+          direction[3] = direction[0] + result.data[0] * length0;
+          direction[4] = direction[1] + result.data[1] * length0;
+          direction[5] = direction[2] + result.data[2] * length0;
           ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
         }
       }
@@ -534,27 +564,30 @@ application::update()
     ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
 
     {
-      collision_result_t result; 
-      capsules_classification_t classification = collision_capsules(&capsule_0, &capsule_1, &result);
+      vector3f result; 
+      capsules_classification_t classification = classify_capsules(&capsule_0, &capsule_1, &result);
 
       // draw the axis overlap.
-      if (classification != CAPSULES_DISTINCT) {
+      if (classification != CAPSULES_COLLIDE && classification != CAPSULES_DISTINCT) {
         segment_t debug;
-        collision_capsules_debug(&capsule_0, &capsule_1, &debug);
+        classify_capsules_segments(&capsule_0, &capsule_1, &debug);
 
         ::pop_matrix(&pipeline);
         ::draw_points(debug.points[0].data, 2, color_t{ 0, 1, 0.2, 1 }, 10, &pipeline);
         ::draw_lines(debug.points[0].data, 2, color_t{ 0, 1, 0.2, 1 }, 5, &pipeline);
         ::push_matrix(&pipeline);
         ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
-      } else if (result.penetration > 0) {
+      } else if (::length_squared_v3f(&result) > 0) {
         float direction[6];
-        direction[0] = result.direction.data[0] * -(capsule_0.radius - result.penetration);
-        direction[1] = result.direction.data[1] * -(capsule_0.radius - result.penetration);
-        direction[2] = result.direction.data[2] * -(capsule_0.radius - result.penetration);
-        direction[3] = direction[0] + result.direction.data[0] * result.penetration;
-        direction[4] = direction[1] + result.direction.data[1] * result.penetration;
-        direction[5] = direction[2] + result.direction.data[2] * result.penetration;
+        float length0 = ::length_v3f(&result);
+        float length1 = -(capsule_0.radius - length0);
+        result = normalize_v3f(&result);
+        direction[0] = result.data[0] * length1;
+        direction[1] = result.data[1] * length1;
+        direction[2] = result.data[2] * length1;
+        direction[3] = direction[0] + result.data[0] * length0;
+        direction[4] = direction[1] + result.data[1] * length0;
+        direction[5] = direction[2] + result.data[2] * length0;
         ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
       }
     }

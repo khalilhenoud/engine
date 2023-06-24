@@ -53,22 +53,20 @@ get_point_projection(
 typedef
 enum segment_plane_classification_t {
   SEGMENT_PLANE_PARALLEL,
-  SEGMENT_PLANE_COLINEAR,
+  SEGMENT_PLANE_COPLANAR,
   SEGMENT_PLANE_INTERSECT_ON_SEGMENT,
   SEGMENT_PLANE_INTERSECT_OFF_SEGMENT,
   SEGMENT_PLANE_COUNT
 } segment_plane_classification_t;
 
-/*
 COLLISION_API
 segment_plane_classification_t
-get_segment_intersection(
+classify_segment_face(
   const face_t *face, 
   const vector3f *normal, 
   const segment_t *segment,
   point3f *intersection,
   float *t);
-*/
 
 typedef
 enum coplanar_point_classification_t {

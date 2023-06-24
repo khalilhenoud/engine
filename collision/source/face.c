@@ -60,24 +60,57 @@ get_point_projection(
   }
 }
 
-/*
 segment_plane_classification_t
-get_segment_intersection(
+classify_segment_face(
   const face_t *face, 
   const vector3f *normal, 
   const segment_t *segment,
   point3f *intersection,
   float *t)
 {
-  // SEGMENT_PLANE_PARALLEL,
-  // SEGMENT_PLANE_COLINEAR,
-  // SEGMENT_PLANE_INTERSECT_ON_SEGMENT,
-  // SEGMENT_PLANE_INTERSECT_OFF_SEGMENT,
   assert(intersection != NULL);
   assert(t != NULL);
+
+  vector3f delta = diff_v3f(segment->points + 0, segment->points + 1);
+  const point3f *A = segment->points + 0;
+
+  {
+    float dotproduct = dot_product_v3f(&delta, normal);
+    if (nextafterf(dotproduct, 0.f) == 0.f) {
+      // colinear or parallel.
+      float distance = get_point_distance(face, normal, A);
+      return (nextafterf(distance, 0.f) == 0.f) ? 
+        SEGMENT_PLANE_COPLANAR : 
+        SEGMENT_PLANE_PARALLEL;
+    }
+  }
+
+  {
+    float D = 
+      - normal->data[0] * face->points[0].data[0] 
+      - normal->data[1] * face->points[0].data[1] 
+      - normal->data[2] * face->points[0].data[2];
+    
+    float denom = 
+      normal->data[0] * delta.data[0] + 
+      normal->data[1] * delta.data[1] + 
+      normal->data[2] * delta.data[2];
+    assert(nextafterf(denom, 0.f) != 0.f);
+    *t = (
+      - normal->data[0] * A->data[0] 
+      - normal->data[1] * A->data[1] 
+      - normal->data[2] * A->data[2] - D) / denom;
+
+    // scale the delta by t, and add it to A to get the intersection.
+    mult_set_v3f(&delta, *t);
+    *intersection = add_v3f(A, &delta);
+    return (*t <= 1.f && *t >= 0.f) ? 
+      SEGMENT_PLANE_INTERSECT_ON_SEGMENT : 
+      SEGMENT_PLANE_INTERSECT_OFF_SEGMENT;
+  }
+
   return SEGMENT_PLANE_PARALLEL;
 }
-*/
 
 coplanar_point_classification_t
 classify_coplanar_point_face(

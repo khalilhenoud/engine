@@ -464,15 +464,16 @@ application::update()
       prev_mouse_x = prev_mouse_y = -1;
   }
 
+  static int32_t input_static = 0;
   if (!m_disable_input) {
-    update_camera();
+    update_camera();    
 
-    static bool m = true;
+    if (::is_key_triggered('T')) {
+      ++input_static;
+      input_static %= 3;
+    }
 
-    if (::is_key_triggered('T'))
-      m = !m;
-
-    if (m) {
+    if (input_static == 0) {
       if (::is_key_pressed('H'))
         capsule_0.center.data[0] -= 2.f;
       if (::is_key_pressed('K'))
@@ -486,7 +487,7 @@ application::update()
       if (::is_key_pressed('I'))
         capsule_0.center.data[2] -= 2.f;
     }
-    else {
+    else if (input_static == 1) {
       if (::is_key_pressed('H'))
         sphere_0.center.data[0] -= 2.f;
       if (::is_key_pressed('K'))
@@ -671,11 +672,11 @@ application::update()
   }
 
   // draw line segments and intersections
-  if (0) {
+  if (1) {
     static float slide_y = 0;
     static float slide_x = 0;
     static float slide_x_delta = 0;
-     if (!m_disable_input) {
+     if (input_static == 2) {
       if (::is_key_pressed('H'))
         slide_x -= 2.f;
       if (::is_key_pressed('K'))
@@ -700,6 +701,24 @@ application::update()
     ::classify_segments(segments + 0, segments + 1, segments + 2);
     ::draw_points(segments[2].points[0].data, 2, color_t{ 0, 1, 0, 1 }, 10, &pipeline);
     ::draw_lines(segments[2].points[0].data, 2, color_t {0, 1, 0, 1}, 5, &pipeline);
+
+    {
+      vector3f normals[2];
+      get_faces_normals(&face_0, 1, normals + 0);
+      get_faces_normals(&face_1, 1, normals + 1);
+      float t[4];
+      point3f intersection[4];
+      segment_plane_classification_t classification[4];
+      classification[0] = ::classify_segment_face(&face_0, normals + 0, segments + 0, intersection + 0, t + 0);
+      classification[1] = ::classify_segment_face(&face_0, normals + 0, segments + 1, intersection + 1, t + 1);
+      classification[2] = ::classify_segment_face(&face_1, normals + 1, segments + 0, intersection + 2, t + 2);
+      classification[3] = ::classify_segment_face(&face_1, normals + 1, segments + 1, intersection + 3, t + 3);
+      for (int32_t i = 0; i < 4; ++i) {
+        if (classification[i] != SEGMENT_PLANE_PARALLEL && classification[i] != SEGMENT_PLANE_COPLANAR) {
+          ::draw_points(intersection[i].data, 1, color_t{ 1, 1, 0, 1 }, 10, &pipeline);
+        }
+      }
+    }
   }
 
   // display simple instructions.
@@ -707,6 +726,12 @@ application::update()
     std::vector<std::string> strvec;
     strvec.push_back("[C] RESET CAMERA");
     strvec.push_back("[~] CAMERA UNLOCK/LOCK");
+    if (input_static == 0) 
+      strvec.push_back("[INPUT] CAPSULE");
+    else if (input_static == 1)
+      strvec.push_back("[INPUT] SPHERE");
+    else if (input_static == 2)
+      strvec.push_back("[INPUT] LINE");
 
     for (uint32_t i = 0, count = strvec.size(); i < count; ++i) {
       std::vector<unit_quad_t> bounds;

@@ -21,15 +21,11 @@ classify_sphere_capsule(
   const capsule_t *capsule,
   vector3f* penetration)
 {
-  vector3f direction = { 0.f, 1.f, 0.f };
   vector3f a_capsule, b_capsule, on_capsule; 
   
   assert(penetration != NULL);
 
-  mult_set_v3f(&direction, capsule->half_height);
-  vector3f_set_diff_v3f(&a_capsule, &direction, &capsule->center); // a is in the -y.
-  mult_set_v3f(&direction, -1.f);
-  vector3f_set_diff_v3f(&b_capsule, &direction, &capsule->center); // b is in the +y
+  get_capsule_segment_loose(capsule, &a_capsule, &b_capsule);
   on_capsule = closest_point_on_segment_loose(
     &source->center, 
     &a_capsule, 
@@ -70,27 +66,12 @@ classify_capsules_segments(
   const capsule_t *target, 
   segment_t *result)
 {
-  vector3f direction_source = { 0.f, 1.f, 0.f };
-  vector3f direction_target = direction_source;
   vector3f a_source, b_source, a_target, b_target; 
 
   assert(result != NULL);
   
-  {
-    // compute the source capsule endpoints.
-    mult_set_v3f(&direction_source, source->half_height);
-    vector3f_set_diff_v3f(&a_source, &direction_source, &source->center); // a is in the -y.
-    mult_set_v3f(&direction_source, -1.f);
-    vector3f_set_diff_v3f(&b_source, &direction_source, &source->center); // b is in the +y
-  }
-
-  {
-    // compute the target capsule endpoints.
-    mult_set_v3f(&direction_target, target->half_height);
-    vector3f_set_diff_v3f(&a_target, &direction_target, &target->center); // a is in the -y.
-    mult_set_v3f(&direction_target, -1.f);
-    vector3f_set_diff_v3f(&b_target, &direction_target, &target->center); // b is in the +y
-  }
+  get_capsule_segment_loose(source, &a_source, &b_source);
+  get_capsule_segment_loose(target, &a_target, &b_target);
   
   {
     // find the closest points on the capsules.
@@ -104,7 +85,6 @@ classify_capsules_segments(
   }
 }
 
-COLLISION_API
 capsules_classification_t
 classify_capsules(
   const capsule_t *source, 
@@ -160,4 +140,40 @@ classify_capsules(
   }
 
   return CAPSULES_DISTINCT;
+}
+
+void
+get_capsule_segment(
+  const capsule_t *source,
+  segment_t *segment)
+{
+  assert(segment != NULL);
+
+  {
+    vector3f direction_source = { 0.f, 1.f, 0.f };
+
+    mult_set_v3f(&direction_source, source->half_height);
+    vector3f_set_diff_v3f(segment->points + 0, &direction_source, &source->center); // a is in the -y.
+    mult_set_v3f(&direction_source, -1.f);
+    vector3f_set_diff_v3f(segment->points + 1, &direction_source, &source->center); // b is in the +y
+  }
+}
+
+void
+get_capsule_segment_loose(
+  const capsule_t *source,
+  point3f *a,
+  point3f *b)
+{
+  assert(a != NULL);
+  assert(b != NULL);
+
+   {
+    vector3f direction_source = { 0.f, 1.f, 0.f };
+
+    mult_set_v3f(&direction_source, source->half_height);
+    vector3f_set_diff_v3f(a, &direction_source, &source->center); // a is in the -y.
+    mult_set_v3f(&direction_source, -1.f);
+    vector3f_set_diff_v3f(b, &direction_source, &source->center); // b is in the +y
+  }
 }

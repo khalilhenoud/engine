@@ -565,31 +565,93 @@ application::update()
     ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
 
     {
-      vector3f result; 
-      capsules_classification_t classification = classify_capsules(&capsule_0, &capsule_1, &result);
+      {
+        vector3f result; 
+        capsules_classification_t classification = classify_capsules(&capsule_0, &capsule_1, &result);
 
-      // draw the axis overlap.
-      if (classification != CAPSULES_COLLIDE && classification != CAPSULES_DISTINCT) {
-        segment_t debug;
-        classify_capsules_segments(&capsule_0, &capsule_1, &debug);
+        // draw the axis overlap.
+        if (classification != CAPSULES_COLLIDE && classification != CAPSULES_DISTINCT) {
+          segment_t debug;
+          classify_capsules_segments(&capsule_0, &capsule_1, &debug);
 
-        ::pop_matrix(&pipeline);
-        ::draw_points(debug.points[0].data, 2, color_t{ 0, 1, 0.2, 1 }, 10, &pipeline);
-        ::draw_lines(debug.points[0].data, 2, color_t{ 0, 1, 0.2, 1 }, 5, &pipeline);
-        ::push_matrix(&pipeline);
-        ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
-      } else if (::length_squared_v3f(&result) > 0) {
-        float direction[6];
-        float length0 = ::length_v3f(&result);
-        float length1 = -(capsule_0.radius - length0);
-        result = normalize_v3f(&result);
-        direction[0] = result.data[0] * length1;
-        direction[1] = result.data[1] * length1;
-        direction[2] = result.data[2] * length1;
-        direction[3] = direction[0] + result.data[0] * length0;
-        direction[4] = direction[1] + result.data[1] * length0;
-        direction[5] = direction[2] + result.data[2] * length0;
-        ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
+          ::pop_matrix(&pipeline);
+          ::draw_points(debug.points[0].data, 2, color_t{ 0, 1, 0.2, 1 }, 10, &pipeline);
+          ::draw_lines(debug.points[0].data, 2, color_t{ 0, 1, 0.2, 1 }, 5, &pipeline);
+          ::push_matrix(&pipeline);
+          ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
+        } else if (::length_squared_v3f(&result) > 0) {
+          float direction[6];
+          float length0 = ::length_v3f(&result);
+          float length1 = -(capsule_0.radius - length0);
+          result = normalize_v3f(&result);
+          direction[0] = result.data[0] * length1;
+          direction[1] = result.data[1] * length1;
+          direction[2] = result.data[2] * length1;
+          direction[3] = direction[0] + result.data[0] * length0;
+          direction[4] = direction[1] + result.data[1] * length0;
+          direction[5] = direction[2] + result.data[2] * length0;
+          ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
+        }
+      }
+
+      {
+        vector3f result;
+        vector3f normals[2];
+        get_faces_normals(&face_0, 1, normals + 0);
+        get_faces_normals(&face_1, 1, normals + 1);
+        segment_t coplanar_overlap;
+        capsule_face_classification_t classification = 
+          classify_capsule_face(&capsule_0, &face_0, normals, &result, &coplanar_overlap);
+        if (classification != CAPSULE_FACE_NO_COLLISION) {
+          float direction[6];
+          float length0 = ::length_v3f(&result);
+          float length1 = -(capsule_0.radius - length0);
+          result = normalize_v3f(&result);
+          direction[0] = result.data[0] * length1;
+          direction[1] = result.data[1] * length1;
+          direction[2] = result.data[2] * length1;
+          direction[3] = direction[0] + result.data[0] * length0;
+          direction[4] = direction[1] + result.data[1] * length0;
+          direction[5] = direction[2] + result.data[2] * length0;
+          ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
+
+          if (classification == CAPSULE_FACE_COLLIDES_CAPSULE_AXIS_COPLANAR_FACE) {
+            ::pop_matrix(&pipeline);
+            ::draw_lines(coplanar_overlap.points[0].data, 2, color_t{ 0, 1, 0, 1 }, 5, &pipeline);
+            ::push_matrix(&pipeline);
+            ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
+          }
+        }
+      }
+
+      {
+        vector3f result;
+        vector3f normals[2];
+        get_faces_normals(&face_0, 1, normals + 0);
+        get_faces_normals(&face_1, 1, normals + 1);
+        segment_t coplanar_overlap;
+        capsule_face_classification_t classification = 
+          classify_capsule_face(&capsule_0, &face_1, normals + 1, &result, &coplanar_overlap);
+        if (classification != CAPSULE_FACE_NO_COLLISION) {
+          float direction[6];
+          float length0 = ::length_v3f(&result);
+          float length1 = -(capsule_0.radius - length0);
+          result = normalize_v3f(&result);
+          direction[0] = result.data[0] * length1;
+          direction[1] = result.data[1] * length1;
+          direction[2] = result.data[2] * length1;
+          direction[3] = direction[0] + result.data[0] * length0;
+          direction[4] = direction[1] + result.data[1] * length0;
+          direction[5] = direction[2] + result.data[2] * length0;
+          ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
+
+          if (classification == CAPSULE_FACE_COLLIDES_CAPSULE_AXIS_COPLANAR_FACE) {
+            ::pop_matrix(&pipeline);
+            ::draw_lines(coplanar_overlap.points[0].data, 2, color_t{ 0, 1, 0, 1 }, 5, & pipeline);
+            ::push_matrix(&pipeline);
+            ::pre_translate(&pipeline, capsule_0.center.data[0], capsule_0.center.data[1], capsule_0.center.data[2]);
+          }
+        }
       }
     }
 

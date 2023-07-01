@@ -13,34 +13,62 @@
 #include <collision/segment.h>
 
 
-vector3f 
+float
+get_point_distance_to_line(
+  const point3f* point,
+  const line_t* target)
+{
+  float ab_length, a_point_length, dot, sin_radian;
+  vector3f a_point, a_b, a_point_normalized, a_b_normalized;
+  vector3f_set_diff_v3f(&a_point, target->points + 0, point);
+  vector3f_set_diff_v3f(&a_b, target->points + 0, target->points + 1);
+  ab_length = length_v3f(&a_b);
+  assert(
+    nextafterf(ab_length, 0.f) != 0.f &&
+    "We do not support collapsed segments!");
+
+  a_point_length = length_v3f(&a_point);
+  if (nextafterf(a_point_length, 0.f) == 0.f)
+    return 0.f;
+  
+  a_b_normalized = div_v3f(&a_b, ab_length);
+  a_point_normalized = div_v3f(&a_point, a_point_length);
+  dot = dot_product_v3f(&a_b_normalized, &a_point_normalized);
+  sin_radian = sinf(acosf(dot));
+  return sin_radian * a_point_length;
+}
+
+point3f 
 closest_point_on_segment(
-  const vector3f* point, 
+  const point3f* point, 
   const segment_t* target)
 {
   float proj_length, ab_length;
   vector3f a_point, a_b, a_b_normalized, result;
-  const vector3f *a = target->points + 0;
-  const vector3f *b = target->points + 1;
-  vector3f_set_diff_v3f(&a_point, a, point);
-  vector3f_set_diff_v3f(&a_b, a, b);
+  vector3f_set_diff_v3f(&a_point, target->points + 0, point);
+  vector3f_set_diff_v3f(&a_b, target->points + 0, target->points + 1);
+  ab_length = length_v3f(&a_b);
+  assert(
+    nextafterf(ab_length, 0.f) != 0.f &&
+    "We do not support collapsed segments!");
   a_b_normalized = normalize_v3f(&a_b);
-  proj_length = dot_product_v3f(&a_point, &a_b_normalized) / length_v3f(&a_b);
+  proj_length = dot_product_v3f(&a_point, &a_b_normalized) / ab_length;
   proj_length = proj_length < 0.f ? 0.f : proj_length;
   proj_length = proj_length > 1.f ? 1.f : proj_length;
+
   {
     vector3f ab_scaled = mult_v3f(&a_b, proj_length);
     // TODO: These functions needs a variant that does not take a pointer.
-    result = add_v3f(a, &ab_scaled);
+    result = add_v3f(target->points + 0, &ab_scaled);
   }
   return result;
 }
 
-vector3f 
+point3f 
 closest_point_on_segment_loose(
-  const vector3f* point, 
-  const vector3f* a,
-  const vector3f* b)
+  const point3f* point, 
+  const point3f* a,
+  const point3f* b)
 {
   segment_t target;
   target.points[0] = *a;

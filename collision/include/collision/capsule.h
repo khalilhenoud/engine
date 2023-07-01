@@ -73,6 +73,21 @@ classify_capsules(
   const capsule_t *target, 
   vector3f* penetration);
 
+// TODO: Provide a variant with transform.
+COLLISION_API
+void
+get_capsule_segment(
+  const capsule_t *source,
+  segment_t *segment);
+
+// TODO: Provide a variant with transform.
+COLLISION_API
+void
+get_capsule_segment_loose(
+  const capsule_t *source,
+  point3f *a,
+  point3f *b);
+
 #ifdef __cplusplus
 }
 #endif

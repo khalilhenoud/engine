@@ -21,6 +21,7 @@ extern "C" {
 
 typedef struct sphere_t sphere_t;
 typedef struct segment_t segment_t;
+typedef struct capsule_t capsule_t;
 
 typedef
 struct face_t {
@@ -100,9 +101,8 @@ classify_point_halfspace(
 
 typedef
 enum sphere_face_classification_t {
-  SPHERE_FACE_COLLIDES_CENTER_IN_POSITIVE_SPACE,
-  SPHERE_FACE_COLLIDES_CENTER_COPLANAR_TO_FACE,
-  SPHERE_FACE_COLLIDES_CENTER_IN_NEGATIVE_SPACE,
+  SPHERE_FACE_COLLIDES,
+  SPHERE_FACE_COLLIDES_SPHERE_CENTER_IN_FACE,
   SPHERE_FACE_NO_COLLISION,
   SPHERE_FACE_COUNT
 } sphere_face_classification_t;
@@ -114,6 +114,24 @@ classify_sphere_face(
   const face_t* face,
   const vector3f* normal,
   vector3f* penetration);
+
+typedef
+enum capsule_face_classification_t {
+  CAPSULE_FACE_COLLIDES,
+  CAPSULE_FACE_COLLIDES_CAPSULE_AXIS_INTERSECTS_FACE,
+  CAPSULE_FACE_COLLIDES_CAPSULE_AXIS_COPLANAR_FACE,
+  CAPSULE_FACE_NO_COLLISION,
+  CAPSULE_FACE_COUNT
+} capsule_face_classification_t;
+
+COLLISION_API
+capsule_face_classification_t
+classify_capsule_face(
+  const capsule_t* capsule,
+  const face_t* face,
+  const vector3f* normal,
+  vector3f* penetration,
+  segment_t* partial_overlap);
 
 
 #ifdef __cplusplus

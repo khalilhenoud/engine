@@ -105,6 +105,15 @@ classify_segment_face(
     // scale the delta by t, and add it to A to get the intersection.
     mult_set_v3f(&delta, *t);
     *intersection = add_v3f(A, &delta);
+    
+    {
+      // nudge to plane, basically error correction.
+      float distance = get_point_distance(face, normal, intersection);
+      vector3f scaled_normal = *normal;
+      scaled_normal = mult_v3f(&scaled_normal, -distance);
+      add_set_v3f(intersection, &scaled_normal);
+    }
+
     return (*t <= 1.f && *t >= 0.f) ? 
       SEGMENT_PLANE_INTERSECT_ON_SEGMENT : 
       SEGMENT_PLANE_INTERSECT_OFF_SEGMENT;

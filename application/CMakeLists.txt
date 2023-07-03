@@ -9,6 +9,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # add the executable
 add_executable(${PROJECT_NAME} WIN32 
+      ./source/converters/ase_to_entity.cpp
+      ./source/converters/entity_to_render_data.cpp
+      ./source/converters/mesh_to_render_data.cpp
+      ./source/converters/png_to_image.cpp
+      ./source/converters/csv_to_font.cpp
 			./source/application.cpp
 			./source/main.cpp
       ./source/input.c

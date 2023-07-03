@@ -22,12 +22,14 @@
 #include <application/application.h>
 #include <application/framerate_controller.h>
 #include <application/input.h>
+#include <application/converters/ase_to_entity.h>
+#include <application/converters/entity_to_render_data.h>
+#include <application/converters/mesh_to_render_data.h>
+#include <application/converters/png_to_image.h>
+#include <application/converters/csv_to_font.h>
 #include <math/vector3f.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
-#include <loaders/loader_ase.h>
-#include <loaders/loader_png.h>
-#include <loaders/loader_csv.h>
 #include <data_format/mesh_format/data_format.h>
 #include <data_format/mesh_format/utils.h>
 #include <collision/capsule.h>
@@ -63,261 +65,6 @@ void free_block(void* block)
     allocated.end());
   free(block);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////
-static 
-bool
-load_image(
-  std::string& dataset, 
-  entity::image& image, 
-  const allocator_t* allocator)
-{
-  if (image.get_extension() != ".png")
-    assert(false && "image type not supported!");
-
-  auto fullpath = dataset + image.m_path;
-  loader_png_data_t* data = load_png(fullpath.c_str(), allocator);
-  assert(data);
-
-  image.m_buffer.insert(
-    std::end(image.m_buffer), 
-    &data->buffer[0], 
-    &data->buffer[data->total_buffer_size]);
-  image.m_width = data->width;
-  image.m_height = data->height;
-  image.m_format = static_cast<entity::image::format>(data->format);
-
-  free_png(data, allocator);
-  return true;
-}
-
-static 
-std::unique_ptr<entity::node> 
-load_ase_model(
-  std::string& dataset, 
-  std::string& path, 
-  const allocator_t* allocator)
-{
-  auto fullpath = dataset + path;
-  loader_ase_data_t* ase_data = load_ase(fullpath.c_str(), allocator);
-  std::unique_ptr<entity::node> entity_model = std::make_unique<entity::node>();
-
-  auto copy_textures = 
-  [&](loader_texture_data_t& source, entity::texture& target) {
-      target.m_name = source.name.data;
-      target.m_path = source.path.data;
-      target.m_type = source.type.data;
-      target.m_u = source.u;
-      target.m_v = source.v;
-      target.m_u_scale = source.u_scale;
-      target.m_v_scale = source.v_scale;
-      target.m_angle = source.angle;
-  };
-
-  auto copy_materials = 
-  [&](loader_ase_data_t* source, uint32_t material_index, entity::material& target) {
-    assert(material_index < source->material_repo.used);
-    auto material_data = source->material_repo.data[material_index];
-    target.m_name = material_data.name.data;
-    target.m_ambient = { 
-      material_data.ambient.data[0], 
-      material_data.ambient.data[1], 
-      material_data.ambient.data[2], 
-      material_data.ambient.data[3] };
-    target.m_diffuse = { 
-      material_data.diffuse.data[0], 
-      material_data.diffuse.data[1], 
-      material_data.diffuse.data[2], 
-      material_data.diffuse.data[3] };
-    target.m_specular = { 
-      material_data.specular.data[0], 
-      material_data.specular.data[1], 
-      material_data.specular.data[2], 
-      material_data.specular.data[3] };
-    target.m_opacity = material_data.opacity;
-    target.m_shininess = material_data.shininess;
-    for (uint32_t i = 0; i < material_data.textures.used; ++i) {
-      target.m_textures.push_back(entity::texture());
-      copy_textures(material_data.textures.data[i], target.m_textures.back());
-    }
-  };
-
-  auto copy_meshes = 
-  [&](loader_ase_data_t* source, uint32_t mesh_index, entity::node* target) {
-    assert(mesh_index < source->mesh_repo.used);
-    auto mesh_data = source->mesh_repo.data[mesh_index];
-    auto target_mesh = target->m_meshes.emplace_back(std::make_shared<entity::mesh>()).get();
-    target_mesh->m_name = mesh_data.name.data;
-    target_mesh->m_vertices.insert(
-      target_mesh->m_vertices.end(), 
-      &mesh_data.vertices[0],
-      &mesh_data.vertices[mesh_data.vertices_count * 3]);
-    target_mesh->m_normals.insert(
-      target_mesh->m_normals.end(), 
-      &mesh_data.normals[0],
-      &mesh_data.normals[mesh_data.vertices_count * 3]);
-    target_mesh->m_uvCoords.emplace_back(std::vector<float>());
-    target_mesh->m_uvCoords[0].insert(
-      target_mesh->m_uvCoords[0].end(), 
-      &mesh_data.uvs[0],
-      &mesh_data.uvs[mesh_data.vertices_count * 3]);
-    target_mesh->m_indices.insert(
-      target_mesh->m_indices.end(), 
-      &mesh_data.indices[0],
-      &mesh_data.indices[mesh_data.faces_count * 3]);
-    for (uint32_t i = 0; i < mesh_data.materials.used; ++i) {
-      uint32_t material_id = mesh_data.materials.indices[i];
-      assert(material_id < source->material_repo.used);
-      target_mesh->m_materials.push_back(entity::material());
-      copy_materials(source, material_id, target_mesh->m_materials.back());
-    }
-  };
-
-  using ftype = std::function<void(loader_ase_data_t* source, uint32_t model_index, entity::node*)>;
-  ftype copy_models = 
-  [&](loader_ase_data_t* source, uint32_t model_index, entity::node* target) {
-    // this always starts with model_index = 0;
-    assert(model_index < source->model_repo.used);
-    auto model_data = source->model_repo.data[model_index];
-    
-    target->m_name = model_data.name.data;
-
-    for (uint32_t i = 0; i < model_data.meshes.used; ++i) {
-      uint32_t mesh_index = model_data.meshes.indices[i];
-      assert(mesh_index < source->mesh_repo.used);
-      copy_meshes(
-        source, 
-        mesh_index, 
-        target);
-    }
-
-    for (uint32_t i = 0; i < model_data.models.used; ++i) {
-      uint32_t model_index = model_data.models.indices[i];
-      assert(model_index < source->model_repo.used);
-      copy_models(
-        source, 
-        model_index, 
-        target->m_children.emplace_back(std::make_shared<entity::node>()).get());
-    }
-  };
-
-  for (uint32_t i = 0; i < ase_data->model_repo.used; ++i) {
-    copy_models(
-      ase_data, 
-      i, 
-      entity_model->m_children.emplace_back(std::make_shared<entity::node>()).get());
-  }
-  
-  free_ase(ase_data, allocator);
-  return entity_model;
-}
-
-static 
-std::pair<std::vector<mesh_render_data_t>, std::vector<const char*>>
-load_renderer_data(entity::node& model)
-{
-  std::vector<mesh_render_data_t> render_meshes;
-  std::vector<const char*> texture_paths;
-  auto entity_meshes = model.get_meshes();
-
-  for (auto& mesh : entity_meshes)
-  {
-    if (mesh->m_materials.size())
-    {
-      auto& material = mesh->m_materials[0];
-      mesh_render_data_t render_mesh = {
-        &mesh->m_vertices[0], 
-        &mesh->m_normals[0], 
-        &(mesh->m_uvCoords[0])[0],
-        (uint32_t)mesh->m_vertices.size()/3,
-        &mesh->m_indices[0],
-        (uint32_t)mesh->m_indices.size(),
-        { material.m_ambient[0], material.m_ambient[1], material.m_ambient[2], material.m_ambient[3] },
-        { material.m_diffuse[0], material.m_diffuse[1], material.m_diffuse[2], material.m_diffuse[3] },
-        { material.m_specular[0], material.m_specular[1], material.m_specular[2], material.m_specular[3] }
-      };
-      render_meshes.emplace_back(render_mesh);
-      texture_paths.push_back(material.m_textures.size() ? material.m_textures[0].m_path.c_str() : nullptr);
-    }
-    else
-    {
-      mesh_render_data_t render_mesh = {
-        &mesh->m_vertices[0], 
-        &mesh->m_normals[0], 
-        &(mesh->m_uvCoords[0])[0],
-        (uint32_t)mesh->m_vertices.size()/3,
-        &mesh->m_indices[0],
-        (uint32_t)mesh->m_indices.size(),
-      };
-      render_meshes.emplace_back(render_mesh);
-      texture_paths.push_back(nullptr);
-    }
-  }
-
-  return std::make_pair(render_meshes, texture_paths);
-}
-
-static
-std::unique_ptr<entity::font>
-load_font(
-  std::string& data_set,
-  std::string& image_file, 
-  std::string& data_file, 
-  const allocator_t* allocator)
-{
-  auto file = data_set + data_file;
-  loader_csv_font_data_t* data_font = load_csv(file.c_str(), allocator);
-  std::unique_ptr<entity::font> font = std::make_unique<entity::font>(image_file, data_file);
-  font->m_imagewidth  = data_font->image_width;
-  font->m_imageheight = data_font->image_height;
-  font->m_cellwidth   = data_font->cell_width;
-  font->m_cellheight  = data_font->cell_height;
-  font->m_fontheight  = data_font->font_height;
-  font->m_fontwidth   = data_font->font_width;
-  font->m_startchar   = data_font->start_char;
-
-  for (uint32_t i = 0; i < entity::font::s_gliphcount; ++i)
-  {
-    font->m_glyphs[i] = { 
-      data_font->glyphs[i].x, 
-      data_font->glyphs[i].y,
-      data_font->glyphs[i].width,
-      data_font->glyphs[i].offset};
-
-    font->m_bounds[i][0] = data_font->bounds[i].data[0];
-    font->m_bounds[i][1] = data_font->bounds[i].data[1];
-    font->m_bounds[i][2] = data_font->bounds[i].data[2];
-    font->m_bounds[i][3] = data_font->bounds[i].data[3];
-    font->m_bounds[i][4] = data_font->bounds[i].data[4];
-    font->m_bounds[i][5] = data_font->bounds[i].data[5];
-  }
-
-  free_csv(data_font, allocator);
-  return font;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////
-static 
-mesh_render_data_t
-load_mesh_renderer_data(mesh_t* mesh, color_t color)
-{
-  mesh_render_data_t render_mesh = {
-    &mesh->vertices[0], 
-    &mesh->normals[0], 
-    &mesh->uvs[0],
-    mesh->vertices_count,
-    &mesh->indices[0],
-    mesh->indices_count,
-    color,
-    color,
-    color
-  };
-
-  return render_mesh;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////
 framerate_controller controller;
@@ -387,11 +134,11 @@ application::application(
   m_images.emplace_back(imagefile);
 
   auto model_path = std::string("media\\test\\test01.ASE");
- /* m_scene = load_ase_model(m_dataset, model_path, &allocator);
+  m_scene = load_ase_model(m_dataset, model_path, &allocator);
   std::tie(mesh_render_data, texture_render_data) = load_renderer_data(*m_scene);
 
   for (auto& entry : m_scene->get_textures_paths())
-    m_images.emplace_back(entry.c_str());*/
+    m_images.emplace_back(entry.c_str());
 
   for (auto& image : m_images)
     load_image(m_dataset, image, &allocator);
@@ -516,13 +263,13 @@ application::update()
   }
 
   // render the scene.
-  // if (m_scene) {
-  //  ::push_matrix(&pipeline);
-  //  ::pre_translate(&pipeline, 0, -120, -300);
-  //  ::pre_scale(&pipeline, 3, 3, 3);
-  //  ::draw_meshes(&mesh_render_data[0], &texture_render_id[0], (uint32_t)mesh_render_data.size(), &pipeline);
-  //  ::pop_matrix(&pipeline);
-  // }
+  if (m_scene) {
+   ::push_matrix(&pipeline);
+   ::pre_translate(&pipeline, 0, -120, -300);
+   ::pre_scale(&pipeline, 3, 3, 3);
+   ::draw_meshes(&mesh_render_data[0], &texture_render_id[0], (uint32_t)mesh_render_data.size(), &pipeline);
+   ::pop_matrix(&pipeline);
+  }
 
   {
     ::push_matrix(&pipeline);

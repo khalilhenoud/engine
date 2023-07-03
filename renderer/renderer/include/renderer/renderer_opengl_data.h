@@ -15,17 +15,17 @@
 
 
 typedef
-struct {
+struct unit_quad_t {
   float data[6];
 } unit_quad_t;
 
 typedef
-struct {
+struct color_t {
   float data[4];
 } color_t;
 
 typedef
-enum {
+enum image_format_t {
   RENDERER_OPENGL_RGBA,
   RENDERER_OPENGL_BGRA,
   RENDERER_OPENGL_RGB,
@@ -37,7 +37,7 @@ enum {
 } image_format_t;
 
 typedef
-struct {
+struct mesh_render_data_t {
   const float* vertices;    // 3 floats per vertex.
   const float* normals;     // 3 floats per vertex.
   const float* uv_coords;   // 3 floats per vertex.

@@ -13,7 +13,7 @@
 
 
 typedef
-struct {
+struct mesh_t {
   float* vertices;
   float* normals;
   float* uvs;

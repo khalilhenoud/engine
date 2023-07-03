@@ -13,7 +13,7 @@
 
 
 typedef
-struct {
+struct fixed_str_t {
   char data[512];
 } fixed_str_t;
 

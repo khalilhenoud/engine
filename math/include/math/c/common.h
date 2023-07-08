@@ -29,6 +29,9 @@ extern "C" {
 
 #define K_EQUAL_TO(A, B, EPSI)  (fabs((A) - (B)) <= EPSI)
 
+#define TO_RADIANS(degrees) ((degrees) / 180.f * K_PI)
+#define TO_DEGREES(radians) ((radians) / K_PI * 180.f)
+
 
 #ifdef __cplusplus
 }

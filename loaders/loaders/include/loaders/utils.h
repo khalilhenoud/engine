@@ -8,8 +8,8 @@
  * @copyright Copyright (c) 2023
  * 
  */
-#ifndef UTILS_INCLUDED_H
-#define UTILS_INCLUDED_H
+#ifndef LOADERS_UTILS_INCLUDED_H
+#define LOADERS_UTILS_INCLUDED_H
 
 #ifdef __cpluscplus
 extern "C" {

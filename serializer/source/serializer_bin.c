@@ -22,7 +22,7 @@ serialize_bin(
   assert(scene != NULL && "'scene' params are NULL!");
 
   file = open_file(path, FILE_OPEN_MODE_WRITE);
-  assert(file != NULL);
+  assert((void *)file != NULL);
 
   // serialize texture data.
   write_buffer(file, &scene->texture_repo.used, sizeof(uint32_t), 1);
@@ -37,7 +37,6 @@ serialize_bin(
         file,
         data->path.data,
         sizeof(data->path.data[0]), sizeof(data->path.data));
-      )
     }
   }
   
@@ -106,7 +105,7 @@ serialize_bin(
         file, data->uvs, sizeof(float), data->vertices_count * 3);
       // serialize faces data.
       write_buffer(file, &data->faces_count, sizeof(uint32_t), 1);
-      write_buffer(file, data->indices, sizeof(uint32_t), faces_count * 3);
+      write_buffer(file, data->indices, sizeof(uint32_t), data->faces_count * 3);
 
       // serializing material indices.
       write_buffer(file, &data->materials.used, sizeof(uint32_t), 1);
@@ -152,8 +151,8 @@ deserialize_bin(
   file_handle_t file;
   assert(allocator != NULL && "allocator is NULL!");
 
-  file = file_open(path, FILE_OPEN_MODE_READ | FILE_OPEN_MODE_BINARY);
-  assert(file != NULL);
+  file = open_file(path, FILE_OPEN_MODE_READ | FILE_OPEN_MODE_BINARY);
+  assert((void *)file != NULL);
 
   {
     serializer_scene_data_t* scene = NULL;
@@ -178,7 +177,6 @@ deserialize_bin(
           file,
           data->path.data,
           sizeof(data->path.data[0]), sizeof(data->path.data));
-        )
       }
     }
 
@@ -267,7 +265,7 @@ deserialize_bin(
         data->indices = 
           (uint32_t*)allocator->mem_cont_alloc(
             data->faces_count * 3, sizeof(uint32_t));
-        read_buffer(file, data->indices, sizeof(uint32_t), faces_count * 3);
+        read_buffer(file, data->indices, sizeof(uint32_t), data->faces_count * 3);
 
         // deserialize material indices.
         read_buffer(file, &data->materials.used, sizeof(uint32_t), 1);

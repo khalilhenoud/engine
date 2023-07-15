@@ -20,7 +20,7 @@ open_file(
   file_open_flags_t flags)
 {
   FILE* file = NULL;
-  char flags[8];
+  char cstr_flags[8];
   int32_t read = flags & FILE_OPEN_MODE_READ;
   int32_t write = flags & FILE_OPEN_MODE_WRITE;
   int32_t write_no_overwrite = flags & FILE_OPEN_MODE_WRITE_NO_OVERWRITE;
@@ -32,29 +32,29 @@ open_file(
     (read + write + write_no_overwrite + append) == 1 &&
     "Do not combine read/write/writenooverwrite/append flags! Choose one!");
 
-  memset(flags, 0, sizeof(flags));
+  memset(cstr_flags, 0, sizeof(cstr_flags));
   if (read)
-    sprintf(flags, "r");
+    sprintf(cstr_flags, "r");
   else if (write || write_no_overwrite)
-    sprintf(flags, "w");
+    sprintf(cstr_flags, "w");
   else if (append)
-    sprintf(flags, "a");
+    sprintf(cstr_flags, "a");
 
   if (flags & FILE_OPEN_MODE_BINARY)
-    sprintf(flags + strlen(flags), "b");
+    sprintf(cstr_flags + strlen(cstr_flags), "b");
 
   if (flags & FILE_OPEN_MODE_UPDATE)
-    sprintf(flags + strlen(flags), "+");
+    sprintf(cstr_flags + strlen(cstr_flags), "+");
 
   if (write_no_overwrite)
-    sprintf(flags + strlen(flags), "x");
+    sprintf(cstr_flags + strlen(cstr_flags), "x");
 
-  file = fopen(path, flags);
+  file = fopen(path, cstr_flags);
   return (file_handle_t)file;
 }
 
 size_t
-write_data(
+write_buffer(
   file_handle_t file,
   const void* data,
   size_t elem_size,
@@ -72,7 +72,7 @@ read_buffer(
   size_t count)
 {
   assert((FILE *)file != NULL);
-  return fread(data, elem_size, count, (FILE*)file);
+  return fread(data, elem_size, count, (FILE *)file);
 }
 
 SERIALIZER_API

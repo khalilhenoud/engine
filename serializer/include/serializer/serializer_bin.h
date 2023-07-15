@@ -17,7 +17,7 @@ extern "C" {
 
 #include <library/allocator/allocator.h>
 #include <serializer/internal/module.h>
-#include <serializer/serializer_mesh_data.h>
+#include <serializer/serializer_scene_data.h>
 
 
 SERIALIZER_API

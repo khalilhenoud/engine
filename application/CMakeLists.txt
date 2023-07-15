@@ -27,7 +27,8 @@ target_link_libraries(${PROJECT_NAME}
 						PRIVATE entity
 						PRIVATE loaders
 						PRIVATE renderer
-						PRIVATE winmm)
+						PRIVATE winmm
+            PRIVATE serializer)
 
 # TODO: add the math library
 target_include_directories(${PROJECT_NAME} PUBLIC 

@@ -52,7 +52,7 @@ size_t
 read_buffer(
   file_handle_t file,
   void* data,
-  size_t elemt_size,
+  size_t elem_size,
   size_t count);
 
 SERIALIZER_API

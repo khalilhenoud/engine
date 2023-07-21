@@ -27,6 +27,7 @@
 #include <application/converters/mesh_to_render_data.h>
 #include <application/converters/png_to_image.h>
 #include <application/converters/csv_to_font.h>
+#include <application/converters/entity_to_bin.h>
 #include <math/vector3f.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
@@ -36,6 +37,7 @@
 #include <collision/segment.h>
 #include <collision/face.h>
 #include <collision/sphere.h>
+#include <serializer/serializer_bin.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -135,6 +137,13 @@ application::application(
 
   auto model_path = std::string("media\\test\\test01.ASE");
   m_scene = load_ase_model(m_dataset, model_path, &allocator);
+
+  {
+    auto fullpath = m_dataset + "media\\cooked\\test01.bin";
+    auto scene_bin = convert_to_bin_format(*m_scene, &allocator);
+    ::serialize_bin(fullpath.c_str(), scene_bin);
+    ::free_bin(scene_bin, &allocator);
+  }
   std::tie(mesh_render_data, texture_render_data) = load_renderer_data(*m_scene);
 
   for (auto& entry : m_scene->get_textures_paths())

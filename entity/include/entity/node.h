@@ -59,6 +59,23 @@ node {
     return meshes;
   }
 
+  std::vector<node*>
+  get_nodes()
+  {
+    std::vector<node*> nodes;
+    std::vector<node*> tmp;
+
+    for (uint32_t i = 0; i < m_children.size(); ++i)
+      nodes.push_back(m_children[i].get());
+
+    for (uint32_t i = 0; i < m_children.size(); ++i) {
+      tmp = m_children[i]->get_nodes();
+      nodes.insert(nodes.end(), tmp.begin(), tmp.end());
+    }
+
+    return nodes;
+  }
+
   //////////////////////////////////////////////////////////////////////////////
   std::string m_name;
   std::vector<std::shared_ptr<mesh>> m_meshes;

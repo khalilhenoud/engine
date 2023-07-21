@@ -1,5 +1,5 @@
 /**
- * @file entity_to_bin_data.h
+ * @file entity_to_bin.h
  * @author khalilhenoud@gmail.com
  * @brief acts as glue between the entity and the serializer bin code.
  * @version 0.1
@@ -13,7 +13,7 @@
 
 
 struct allocator_t;
-struct serializer_scene_data_t;
+typedef struct serializer_scene_data_t serializer_scene_data_t;
 
 namespace entity {
   struct node;

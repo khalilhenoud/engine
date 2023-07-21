@@ -21,7 +21,7 @@ serialize_bin(
   file_handle_t file;
   assert(scene != NULL && "'scene' params are NULL!");
 
-  file = open_file(path, FILE_OPEN_MODE_WRITE);
+  file = open_file(path, FILE_OPEN_MODE_WRITE | FILE_OPEN_MODE_BINARY);
   assert((void *)file != NULL);
 
   // serialize texture data.
@@ -29,10 +29,6 @@ serialize_bin(
   {
     serializer_texture_data_t *data = scene->texture_repo.data;
     for (uint32_t i = 0; i < scene->texture_repo.used; ++i, ++data) {
-      write_buffer(
-        file, 
-        data->name.data, 
-        sizeof(data->name.data[0]), sizeof(data->name.data));
       write_buffer(
         file,
         data->path.data,
@@ -66,6 +62,11 @@ serialize_bin(
         for (uint32_t j = 0; j < data->textures.used; ++j, ++texture_data) {
           // index into the texture repo.
           write_buffer(file, &texture_data->index, sizeof(uint32_t), 1);
+          write_buffer(
+            file, 
+            texture_data->name.data,
+            sizeof(texture_data->name.data[0]), 
+            sizeof(texture_data->name.data));
           write_buffer(
             file, 
             texture_data->type.data,
@@ -170,10 +171,6 @@ deserialize_bin(
       serializer_texture_data_t* data = scene->texture_repo.data;
       for (uint32_t i = 0; i < scene->texture_repo.used; ++i, ++data) {
         read_buffer(
-          file, 
-          data->name.data, 
-          sizeof(data->name.data[0]), sizeof(data->name.data));
-        read_buffer(
           file,
           data->path.data,
           sizeof(data->path.data[0]), sizeof(data->path.data));
@@ -210,6 +207,11 @@ deserialize_bin(
           for (uint32_t j = 0; j < data->textures.used; ++j, ++texture_data) {
             // index into the texture repo.
             read_buffer(file, &texture_data->index, sizeof(uint32_t), 1);
+            read_buffer(
+              file, 
+              texture_data->name.data,
+              sizeof(texture_data->name.data[0]), 
+              sizeof(texture_data->name.data));
             read_buffer(
               file, 
               texture_data->type.data,

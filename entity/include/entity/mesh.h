@@ -40,6 +40,7 @@ material {
   color m_specular;
   float m_shininess = 0.f;
   float m_opacity = 1.f;
+  // maximum 8.
   std::vector<texture> m_textures;
 };
 

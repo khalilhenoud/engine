@@ -18,13 +18,13 @@
 
 typedef
 struct {
-  fixed_str_t name;
   fixed_str_t path;
 } serializer_texture_data_t;
 
 typedef
 struct {
   uint32_t index;               // index into texture repo.
+  fixed_str_t name;
   fixed_str_t type;
   float u, v;       // TODO: Consider replacing this with a 3 x 3 matrix.
   float u_scale, v_scale;
@@ -106,7 +106,7 @@ struct {
 } serializer_model_repo_t;
 
 typedef
-struct {
+struct serializer_scene_data_t {
   serializer_model_repo_t model_repo;   // root = model_repo.data[0]
   serializer_mesh_repo_t mesh_repo;
   serializer_material_repo_t material_repo;

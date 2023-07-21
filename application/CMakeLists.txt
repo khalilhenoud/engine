@@ -11,6 +11,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 add_executable(${PROJECT_NAME} WIN32 
       ./source/converters/ase_to_entity.cpp
       ./source/converters/entity_to_render_data.cpp
+      ./source/converters/entity_to_bin.cpp
+      ./source/converters/bin_to_entity.cpp
       ./source/converters/mesh_to_render_data.cpp
       ./source/converters/png_to_image.cpp
       ./source/converters/csv_to_font.cpp

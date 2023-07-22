@@ -13,12 +13,13 @@
 #include <string>
 #include <unordered_map>
 #include <entity/node.h>
+#include <application/converters/entity_to_bin.h>
 #include <library/allocator/allocator.h>
 #include <serializer/serializer_scene_data.h>
 
 
 serializer_scene_data_t*
-convert_to_bin_format(
+scene_to_bin(
   entity::node& root, 
   const allocator_t* allocator)
 {
@@ -101,9 +102,9 @@ convert_to_bin_format(
         material.m_name.c_str(),
         material.m_name.length());
 
-      memcpy(current.ambient.data, &material.m_ambient[0], 4);
-      memcpy(current.diffuse.data, &material.m_diffuse[0], 4);
-      memcpy(current.specular.data, &material.m_specular[0], 4);
+      memcpy(current.ambient.data, &material.m_ambient[0], sizeof(float) * material.m_ambient.size());
+      memcpy(current.diffuse.data, &material.m_diffuse[0], sizeof(float) * material.m_diffuse.size());
+      memcpy(current.specular.data, &material.m_specular[0], sizeof(float) * material.m_specular.size());
       current.opacity = material.m_opacity;
       current.shininess = material.m_shininess;
 

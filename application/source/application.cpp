@@ -28,6 +28,7 @@
 #include <application/converters/png_to_image.h>
 #include <application/converters/csv_to_font.h>
 #include <application/converters/entity_to_bin.h>
+#include <application/converters/bin_to_entity.h>
 #include <math/vector3f.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
@@ -117,7 +118,7 @@ application::application(
     capsule_1.center = { 170.f, 0.f, -200.f };
     capsule_1.half_height = 20;
     capsule_1.radius = 10;
-    // TODO: This needs fixing (the scaling is off).
+    // TODO: This needs fixing (the scaling is off), is this still relevant.
     meshes[3] = ::create_unit_capsule(30, capsule_1.half_height / capsule_1.radius, &allocator);
     collision_render_data.push_back(load_mesh_renderer_data(meshes[3], color_t{ 1.f, 0.f, 1.f, 0.5f }));
 
@@ -136,12 +137,21 @@ application::application(
   m_images.emplace_back(imagefile);
 
   auto model_path = std::string("media\\test\\test01.ASE");
-  m_scene = load_ase_model(m_dataset, model_path, &allocator);
+  //m_scene = load_ase_model(m_dataset, model_path, &allocator);
 
+  //{
+  //  // save to bin format.
+  //  auto fullpath = m_dataset + "media\\cooked\\test01.bin";
+  //  auto scene_bin = scene_to_bin(*m_scene, &allocator);
+  //  ::serialize_bin(fullpath.c_str(), scene_bin);
+  //  ::free_bin(scene_bin, &allocator);
+  //}
   {
+    // load from bin
     auto fullpath = m_dataset + "media\\cooked\\test01.bin";
-    auto scene_bin = convert_to_bin_format(*m_scene, &allocator);
-    ::serialize_bin(fullpath.c_str(), scene_bin);
+    serializer_scene_data_t *scene_bin = ::deserialize_bin(
+      fullpath.c_str(), &allocator);
+    m_scene = bin_to_scene(scene_bin);
     ::free_bin(scene_bin, &allocator);
   }
   std::tie(mesh_render_data, texture_render_data) = load_renderer_data(*m_scene);

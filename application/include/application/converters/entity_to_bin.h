@@ -12,7 +12,7 @@
 #define ENTITY_TO_BIN_DATA_H
 
 
-struct allocator_t;
+typedef struct allocator_t allocator_t;
 typedef struct serializer_scene_data_t serializer_scene_data_t;
 
 namespace entity {
@@ -20,7 +20,7 @@ namespace entity {
 }
 
 serializer_scene_data_t*
-convert_to_bin_format(
+scene_to_bin(
   entity::node& root, 
   const allocator_t* allocator);
 

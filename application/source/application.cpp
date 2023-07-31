@@ -137,7 +137,6 @@ application::application(
   m_images.emplace_back(imagefile);
 
   auto model_path = std::string("media\\test\\test01.ASE");
-  //m_scene = load_ase_model(m_dataset, model_path, &allocator);
 
   //{
   //  // save to bin format.
@@ -148,7 +147,7 @@ application::application(
   //}
   {
     // load from bin
-    auto fullpath = m_dataset + "media\\cooked\\test01.bin";
+    auto fullpath = m_dataset + "media\\cooked\\LionKeystone.bin";
     serializer_scene_data_t *scene_bin = ::deserialize_bin(
       fullpath.c_str(), &allocator);
     m_scene = bin_to_scene(scene_bin);
@@ -175,7 +174,7 @@ application::application(
   }
 
   for (auto path : texture_render_data) {
-    if (texture_id.find(std::string(path)) != texture_id.end()) 
+    if (path && (texture_id.find(std::string(path)) != texture_id.end())) 
       texture_render_id.push_back(texture_id[std::string(path)]);
     else
       texture_render_id.push_back(0);

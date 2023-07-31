@@ -137,6 +137,7 @@ application::application(
   m_images.emplace_back(imagefile);
 
   auto model_path = std::string("media\\test\\test01.ASE");
+  //m_scene = load_ase_model(m_dataset, model_path, &allocator);
 
   //{
   //  // save to bin format.

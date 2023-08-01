@@ -285,7 +285,7 @@ application::update()
   if (m_scene) {
    ::push_matrix(&pipeline);
    ::pre_translate(&pipeline, 0, -120, -300);
-   ::pre_scale(&pipeline, 3, 3, 3);
+   ::pre_scale(&pipeline, 1, 1, 1);
    ::draw_meshes(&mesh_render_data[0], &texture_render_id[0], (uint32_t)mesh_render_data.size(), &pipeline);
    ::pop_matrix(&pipeline);
   }

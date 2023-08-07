@@ -70,6 +70,12 @@ void free_block(void* block)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+// TODO: Move all of this stuff into a collision app/unit test. It is useful but
+// not here.
+#define OLD_COLLISION_STUFF 0
+#define COLLISION_LOGIC 1
+
 framerate_controller controller;
 pipeline_t pipeline;
 entity::camera m_camera;
@@ -80,12 +86,28 @@ std::unordered_map<std::string, uint32_t> texture_id;
 std::vector<mesh_render_data_t> mesh_render_data;
 std::vector<const char*> texture_render_data;
 std::vector<uint32_t> texture_render_id;
+allocator_t allocator;
+
+#if OLD_COLLISION_STUFF
 mesh_t* meshes[4] = { nullptr };
 std::vector<mesh_render_data_t> collision_render_data;
-sphere_t sphere_0, sphere_1;
-capsule_t capsule_0, capsule_1;
-face_t face_0, face_1;
-allocator_t allocator;
+sphere_t sphere_0;
+sphere_t sphere_1;
+capsule_t capsule_0;
+capsule_t capsule_1;
+face_t face_0;
+face_t face_1;
+#endif
+
+#if COLLISION_LOGIC
+bool draw_debug = false;
+capsule_t capsule;
+mesh_t* capsule_mesh;
+mesh_render_data_t capsule_render_data;
+std::vector<face_t> collision_faces;
+std::vector<vector3f> collision_normals;
+#endif
+
 
 application::application(
   int32_t width, 
@@ -101,6 +123,7 @@ application::application(
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
 
+#if OLD_COLLISION_STUFF
   {
     sphere_0.center = { -100.f, 0.f, -200.f };
     sphere_0.radius = 20;
@@ -118,7 +141,6 @@ application::application(
     capsule_1.center = { 170.f, 0.f, -200.f };
     capsule_1.half_height = 20;
     capsule_1.radius = 10;
-    // TODO: This needs fixing (the scaling is off), is this still relevant.
     meshes[3] = ::create_unit_capsule(30, capsule_1.half_height / capsule_1.radius, &allocator);
     collision_render_data.push_back(load_mesh_renderer_data(meshes[3], color_t{ 1.f, 0.f, 1.f, 0.5f }));
 
@@ -130,6 +152,7 @@ application::application(
     face_1.points[1] = { 200.f, -50.f, -200.f};
     face_1.points[2] = { 200.f, -50.f, -250.f};
   }
+#endif
 
   auto datafile = std::string("media\\font\\FontData2.csv");
   auto imagefile = std::string("media\\font\\ExportedFont2.png");
@@ -148,9 +171,13 @@ application::application(
   //}
   {
     // load from bin
-    auto fullpath = m_dataset + "media\\cooked\\LionKeystone.bin";
+    auto fullpath = m_dataset + "media\\cooked\\map.bin";
     serializer_scene_data_t *scene_bin = ::deserialize_bin(
       fullpath.c_str(), &allocator);
+    scene_bin->material_repo.data[0].ambient.data[0] = 0.2f;
+    scene_bin->material_repo.data[0].ambient.data[1] = 0.2f;
+    scene_bin->material_repo.data[0].ambient.data[2] = 0.2f;
+    scene_bin->material_repo.data[0].ambient.data[3] = 1.f;
     m_scene = bin_to_scene(scene_bin);
     ::free_bin(scene_bin, &allocator);
   }
@@ -181,6 +208,42 @@ application::application(
       texture_render_id.push_back(0);
   }
 
+#if COLLISION_LOGIC
+  {
+    capsule.center = m_camera.m_position.data;
+    capsule.half_height = 30;
+    capsule.radius = 15;
+    capsule_mesh = ::create_unit_capsule(30, capsule.half_height / capsule.radius, &allocator);
+    capsule_render_data = load_mesh_renderer_data(capsule_mesh, color_t{ 1.f, 1.f, 0.f, 0.5f });
+
+    // use the scene mesh_faces.
+    auto meshes = m_scene->get_meshes();
+    for (auto * mesh : meshes) {
+      for (uint32_t i = 0; i < mesh->m_indices.size(); i+=3) {
+        face_t face;
+        uint32_t indices[3] = { 
+          mesh->m_indices[i + 0], 
+          mesh->m_indices[i + 1], 
+          mesh->m_indices[i + 2] };
+        
+        for (uint32_t k = 0; k < 3; ++k) {
+          face.points[k].data[0] = mesh->m_vertices[indices[k] * 3 + 0];
+          face.points[k].data[1] = mesh->m_vertices[indices[k] * 3 + 1];
+          face.points[k].data[2] = mesh->m_vertices[indices[k] * 3 + 2];
+        }
+        
+        collision_faces.push_back(face);
+      }
+    }
+
+    collision_normals.resize(collision_faces.size());
+    get_faces_normals(
+      &collision_faces[0], 
+      collision_faces.size(), 
+      &collision_normals[0]);
+  }
+#endif
+
   ::pipeline_set_default(&pipeline);
   ::set_viewport(&pipeline, 0.f, 0.f, float(width), float(height));
   ::update_viewport(&pipeline);
@@ -199,10 +262,18 @@ application::application(
 
 application::~application()
 {
+#if OLD_COLLISION_STUFF
   ::free_mesh(meshes[0], &allocator);
   ::free_mesh(meshes[1], &allocator);
   ::free_mesh(meshes[2], &allocator);
   ::free_mesh(meshes[3], &allocator);
+#endif
+
+#if COLLISION_LOGIC
+  {
+    ::free_mesh(capsule_mesh, &allocator);
+  }
+#endif
 
   for (auto& entry : texture_id)
     ::evict_from_gpu(entry.second);
@@ -239,6 +310,12 @@ application::update()
       input_static %= 3;
     }
 
+#if COLLISION_LOGIC
+    if (::is_key_triggered('H'))
+      draw_debug = !draw_debug;
+#endif
+
+#if OLD_COLLISION_STUFF
     if (input_static == 0) {
       if (::is_key_pressed('H'))
         capsule_0.center.data[0] -= 2.f;
@@ -267,12 +344,15 @@ application::update()
       if (::is_key_pressed('I'))
         sphere_0.center.data[2] -= 2.f;
     }
+#endif
   }
+
 
   ::set_matrix_mode(&pipeline, MODELVIEW);
   ::load_identity(&pipeline);
   ::post_multiply(&pipeline, &m_camera.get_view_transformation().data);
 
+#if SHOW_GRID
   // draw grid.
   {
     ::push_matrix(&pipeline);
@@ -280,16 +360,18 @@ application::update()
     ::draw_grid(&pipeline, 5000.f, 100);
     ::pop_matrix(&pipeline);
   }
+#endif
 
   // render the scene.
   if (m_scene) {
    ::push_matrix(&pipeline);
-   ::pre_translate(&pipeline, 0, -120, -300);
+   ::pre_translate(&pipeline, 0, 0, 0);
    ::pre_scale(&pipeline, 1, 1, 1);
    ::draw_meshes(&mesh_render_data[0], &texture_render_id[0], (uint32_t)mesh_render_data.size(), &pipeline);
    ::pop_matrix(&pipeline);
   }
 
+#if OLD_COLLISION_STUFF
   {
     ::push_matrix(&pipeline);
     ::pre_translate(&pipeline, sphere_0.center.data[0], sphere_0.center.data[1], sphere_0.center.data[2]);
@@ -548,18 +630,45 @@ application::update()
       }
     }
   }
+#endif
+
+#if COLLISION_LOGIC
+  {
+    if (draw_debug) {
+      // draw the collision faces.
+      float vertices[12];
+      for (uint32_t i = 0; i < collision_faces.size(); ++i) {
+        vertices[0 * 3 + 0] = collision_faces[i].points[0].data[0];
+        vertices[0 * 3 + 1] = collision_faces[i].points[0].data[1];
+        vertices[0 * 3 + 2] = collision_faces[i].points[0].data[2];
+        vertices[1 * 3 + 0] = collision_faces[i].points[1].data[0];
+        vertices[1 * 3 + 1] = collision_faces[i].points[1].data[1];
+        vertices[1 * 3 + 2] = collision_faces[i].points[1].data[2];
+        vertices[2 * 3 + 0] = collision_faces[i].points[2].data[0];
+        vertices[2 * 3 + 1] = collision_faces[i].points[2].data[1];
+        vertices[2 * 3 + 2] = collision_faces[i].points[2].data[2];
+        vertices[3 * 3 + 0] = collision_faces[i].points[0].data[0];
+        vertices[3 * 3 + 1] = collision_faces[i].points[0].data[1];
+        vertices[3 * 3 + 2] = collision_faces[i].points[0].data[2];
+        ::draw_lines(vertices, 4, { 0.f, 1.f, 0.f, 1.f }, 2, &pipeline);
+      }
+    }
+  }
+#endif
 
   // display simple instructions.
   if (m_font) {
     std::vector<std::string> strvec;
     strvec.push_back("[C] RESET CAMERA");
     strvec.push_back("[~] CAMERA UNLOCK/LOCK");
+#if OLD_COLLISION_STUFF
     if (input_static == 0) 
       strvec.push_back("[INPUT] CAPSULE");
     else if (input_static == 1)
       strvec.push_back("[INPUT] SPHERE");
     else if (input_static == 2)
       strvec.push_back("[INPUT] LINE");
+#endif
 
     for (uint32_t i = 0, count = strvec.size(); i < count; ++i) {
       std::vector<unit_quad_t> bounds;
@@ -715,4 +824,38 @@ application::update_camera()
       m_camera.m_position.z -= vecxz.z * speed;
     }
   }
+
+#if COLLISION_LOGIC
+  {
+    capsule.center = m_camera.m_position.data;
+    vector3f penetration;
+    segment_t coplanar_overlap;
+    capsule_face_classification_t classification;
+
+    for (uint32_t i = 0; i < collision_faces.size(); ++i) {
+      // if the collision face is valid go ahead, otherwise do not bother.
+      {
+        auto& face = collision_faces[i];
+        if (
+          ::equal_to_v3f(face.points + 0, face.points + 1) ||
+          ::equal_to_v3f(face.points + 0, face.points + 2) ||
+          ::equal_to_v3f(face.points + 1, face.points + 2))
+          continue;
+      }
+
+      capsule_face_classification_t classification = 
+        classify_capsule_face(
+          &capsule, 
+          &collision_faces[i], 
+          &collision_normals[i], 
+          &penetration, 
+          &coplanar_overlap);
+      
+      if (classification != CAPSULE_FACE_NO_COLLISION) {
+        ::add_set_v3f(&capsule.center, &penetration);
+        ::add_set_v3f(&m_camera.m_position.data, &penetration);
+      }
+    }
+  }
+#endif 
 }

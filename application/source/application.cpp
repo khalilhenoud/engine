@@ -73,12 +73,12 @@ void free_block(void* block)
 
 // TODO: Move all of this stuff into a collision app/unit test. It is useful but
 // not here.
-#define SHOW_GRID 1
-#define RENDER_SCENE 0
+#define SHOW_GRID 0
+#define RENDER_SCENE 1
 #define OLD_COLLISION_STUFF 0
-#define COLLISION_LOGIC 0
+#define COLLISION_LOGIC 1
 #define COLLISION_LOGIC_PHYSICS 0
-#define NEW_COLLISION_STUFF 1
+#define NEW_COLLISION_STUFF 0
 
 framerate_controller controller;
 pipeline_t pipeline;
@@ -109,15 +109,22 @@ std::vector<mesh_render_data_t> collision_render_data;
 capsule_t capsules[2];
 face_t faces[2];
 int32_t chosen_index = 0;
-int32_t total_index = 5;
-int32_t face_indices[5] = { 588 , 576 , 589 , 576 , 589 };
-vector3f positions[5] = { 
+int32_t total_index = 6;
+int32_t face_indices[6] = { 561, 588 , 576 , 589 , 576 , 589 };
+vector3f positions[6] = { 
+  {1854.29382, -139.971054, -4.60462284},
   {2312.48413, -205.961578, -876.927917}, 
   {2293.82910, -218.396912, -860.903931}, 
   {2298.09180, -163.541550, -868.215210}, 
   {2287.18262, -213.384109, -869.126343}, 
   {2291.02075, -163.990952, -875.709595} };
-vector3f colors[5] = {
+vector3f points[3] = {
+  {1838.62024, -135.575882, -4.60462284},
+  {1838.62024, -135.575882, -4.60462284},
+  {1839.68018, -135.092865, -4.60462952}
+};
+vector3f colors[6] = {
+  {1.f, 0.f, 1.f},
   {1.f, 0.f, 1.f},
   {0.f, 1.f, 1.f},
   {1.f, 1.f, 1.f},
@@ -440,7 +447,7 @@ application::update()
   {
     uint32_t capsule_texture_render_id[1] = { 0 };
     ::push_matrix(&pipeline);
-    ::pre_translate(&pipeline, capsule.center.data[0], capsule.center.data[1], capsule.center.data[2] - 300);
+    ::pre_translate(&pipeline, capsule.center.data[0], capsule.center.data[1], capsule.center.data[2]);
     float scale = (capsule.half_height + capsule.radius);
     ::pre_scale(&pipeline, scale, scale, scale);
     ::draw_meshes(&capsule_render_data, capsule_texture_render_id, 1, &pipeline);
@@ -469,6 +476,31 @@ application::update()
       m_offset[2] -= 2.f;
 
     {
+      {
+        {
+          segment_t segments[2];
+          segments[0].points[0] = { 1926.95251, -95.3237305, -157.898224 };
+          segments[0].points[1] = { 1806.96692, -150.000000, 52.8562088 };
+          segments[1].points[0] = { 1854.29382, -128.433578, -4.60462284 };
+          segments[1].points[1] = { 1838.62024, -135.575882, -4.60462284 };
+
+          for (int32_t i = 0; i < 2; ++i) {
+            float vertices[12];
+            vertices[0 * 3 + 0] = segments[i].points[0].data[0];
+            vertices[0 * 3 + 1] = segments[i].points[0].data[1];
+            vertices[0 * 3 + 2] = segments[i].points[0].data[2];
+            vertices[1 * 3 + 0] = segments[i].points[1].data[0];
+            vertices[1 * 3 + 1] = segments[i].points[1].data[1];
+            vertices[1 * 3 + 2] = segments[i].points[1].data[2];
+            ::draw_lines(vertices, 2, { 0.f, 1.f, 1.f, 1.f }, 1, & pipeline);
+          }
+        }
+
+        {
+          ::draw_points(points[0].data, 3, {1.f, 0.f, 0.f, 1.f}, 3, & pipeline);
+        }
+      }
+
       {
         for (/*int32_t i = 0; i < 5; ++i*/;;) {
           int32_t i = chosen_index;
@@ -525,7 +557,7 @@ application::update()
             if (classification != CAPSULE_FACE_NO_COLLISION) {
               float direction[6];
               float length0 = ::length_v3f(&result);
-              float length1 = -(capsules[0].radius - length0);
+              float length1 = fabs(capsules[0].radius - length0);
               result = normalize_v3f(&result);
               direction[0] = result.data[0] * length1;
               direction[1] = result.data[1] * length1;
@@ -1042,10 +1074,19 @@ application::update_camera()
 {
   math::matrix4f crossup, camerarotateY, camerarotatetemp, tmpmatrix;
   float dx, dy, d, tempangle;
-  float speed = 10.f;
+  static float speed = 10.f;
   float length;
   int32_t mx, my;
   math::vector3f tmp, tmp2;
+
+  if (::is_key_pressed('1')) {
+    speed += 0.25;
+  }
+
+  if (::is_key_pressed('2')) {
+    speed -= 0.25;
+    speed = fmax(speed, 0.125);
+  }
 
   if (::is_key_pressed('C')) {
     y_limit = 0;
@@ -1164,7 +1205,7 @@ application::update_camera()
       y_speed = 20.f;
 
     y_speed -= y_acc;
-    y_speed = max(y_speed, -60);
+    y_speed = max(y_speed, -20);
     m_camera.m_position.data.data[1] += y_speed;
 #endif
 
@@ -1172,6 +1213,9 @@ application::update_camera()
     vector3f penetration;
     segment_t coplanar_overlap;
     capsule_face_classification_t classification;
+
+    vector3f total_out = { 0.f, 0.f, 0.f };
+    int32_t total = 0;
 
     for (uint32_t i = 0; i < collision_faces.size(); ++i) {
       // if the collision face is valid go ahead, otherwise do not bother.
@@ -1191,17 +1235,30 @@ application::update_camera()
           &collision_normals[i], 
           &penetration, 
           &coplanar_overlap);
-      
-      float along_normal = dot_product_v3f(
-        &penetration, &collision_normals[i]) - length_v3f(&penetration);
-      along_normal = fabs(along_normal);
 
-      if (
-        classification != CAPSULE_FACE_NO_COLLISION && 
-        along_normal <= 1e-4 ) {
+      if (classification != CAPSULE_FACE_NO_COLLISION) {
+
+        ::add_set_v3f(&total_out, &penetration);
+        total++;
         
-        ::add_set_v3f(&capsule.center, &penetration);
-        ::add_set_v3f(&m_camera.m_position.data, &penetration);
+        // ::add_set_v3f(&capsule.center, &penetration);
+        // ::add_set_v3f(&m_camera.m_position.data, &penetration);
+
+        // draw the collision faces.
+        float vertices[12];
+        vertices[0 * 3 + 0] = collision_faces[i].points[0].data[0] + collision_normals[i].data[0] * 1;
+        vertices[0 * 3 + 1] = collision_faces[i].points[0].data[1] + collision_normals[i].data[1] * 1;
+        vertices[0 * 3 + 2] = collision_faces[i].points[0].data[2] + collision_normals[i].data[2] * 1;
+        vertices[1 * 3 + 0] = collision_faces[i].points[1].data[0] + collision_normals[i].data[0] * 1;
+        vertices[1 * 3 + 1] = collision_faces[i].points[1].data[1] + collision_normals[i].data[1] * 1;
+        vertices[1 * 3 + 2] = collision_faces[i].points[1].data[2] + collision_normals[i].data[2] * 1;
+        vertices[2 * 3 + 0] = collision_faces[i].points[2].data[0] + collision_normals[i].data[0] * 1;
+        vertices[2 * 3 + 1] = collision_faces[i].points[2].data[1] + collision_normals[i].data[1] * 1;
+        vertices[2 * 3 + 2] = collision_faces[i].points[2].data[2] + collision_normals[i].data[2] * 1;
+        vertices[3 * 3 + 0] = collision_faces[i].points[0].data[0] + collision_normals[i].data[0] * 1;
+        vertices[3 * 3 + 1] = collision_faces[i].points[0].data[1] + collision_normals[i].data[1] * 1;
+        vertices[3 * 3 + 2] = collision_faces[i].points[0].data[2] + collision_normals[i].data[2] * 1;
+        ::draw_lines(vertices, 4, { 1.f, 0.f, 0.f, 1.f }, 5, &pipeline);
 
 #if COLLISION_LOGIC_PHYSICS
         // non-significant wall.
@@ -1216,6 +1273,15 @@ application::update_camera()
 #endif
       }
     }
+
+    if (total) {
+      total_out.data[0] /= total;
+      total_out.data[1] /= total;
+      total_out.data[2] /= total;
+      ::add_set_v3f(&capsule.center, &total_out);
+      ::add_set_v3f(&m_camera.m_position.data, &total_out);
+    }
+    
   }
 #endif 
 }

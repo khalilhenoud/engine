@@ -74,10 +74,10 @@ void free_block(void* block)
 // TODO: Move all of this stuff into a collision app/unit test. It is useful but
 // not here.
 #define SHOW_GRID 0
-#define RENDER_SCENE 1
+#define RENDER_SCENE !SHOW_GRID
 #define OLD_COLLISION_STUFF 0
 #define COLLISION_LOGIC 1
-#define COLLISION_LOGIC_PHYSICS 0
+#define COLLISION_LOGIC_PHYSICS 1
 #define NEW_COLLISION_STUFF 0
 
 framerate_controller controller;
@@ -381,7 +381,7 @@ application::update()
     }
 
 #if COLLISION_LOGIC
-    if (::is_key_triggered('H'))
+    if (::is_key_triggered('G'))
       draw_debug = !draw_debug;
 #endif
 
@@ -557,7 +557,7 @@ application::update()
             if (classification != CAPSULE_FACE_NO_COLLISION) {
               float direction[6];
               float length0 = ::length_v3f(&result);
-              float length1 = fabs(capsules[0].radius - length0);
+              float length1 = -(capsules[0].radius - length0);
               result = normalize_v3f(&result);
               direction[0] = result.data[0] * length1;
               direction[1] = result.data[1] * length1;
@@ -1214,9 +1214,6 @@ application::update_camera()
     segment_t coplanar_overlap;
     capsule_face_classification_t classification;
 
-    vector3f total_out = { 0.f, 0.f, 0.f };
-    int32_t total = 0;
-
     for (uint32_t i = 0; i < collision_faces.size(); ++i) {
       // if the collision face is valid go ahead, otherwise do not bother.
       {
@@ -1237,12 +1234,8 @@ application::update_camera()
           &coplanar_overlap);
 
       if (classification != CAPSULE_FACE_NO_COLLISION) {
-
-        ::add_set_v3f(&total_out, &penetration);
-        total++;
-        
-        // ::add_set_v3f(&capsule.center, &penetration);
-        // ::add_set_v3f(&m_camera.m_position.data, &penetration);
+        ::add_set_v3f(&capsule.center, &penetration);
+        ::add_set_v3f(&m_camera.m_position.data, &penetration);
 
         // draw the collision faces.
         float vertices[12];
@@ -1258,30 +1251,9 @@ application::update_camera()
         vertices[3 * 3 + 0] = collision_faces[i].points[0].data[0] + collision_normals[i].data[0] * 1;
         vertices[3 * 3 + 1] = collision_faces[i].points[0].data[1] + collision_normals[i].data[1] * 1;
         vertices[3 * 3 + 2] = collision_faces[i].points[0].data[2] + collision_normals[i].data[2] * 1;
-        ::draw_lines(vertices, 4, { 1.f, 0.f, 0.f, 1.f }, 5, &pipeline);
-
-#if COLLISION_LOGIC_PHYSICS
-        // non-significant wall.
-        // if (
-        //   collision_normals[i].data[1] > collision_normals[i].data[0] && 
-        //   collision_normals[i].data[1] > collision_normals[i].data[2])
-        //   y_speed = 0.f;
-        
-        //// ceiling.
-        //if (collision_normals[i].data[1] < 0.f)
-        //  y_speed = 0.f;
-#endif
+        ::draw_lines(vertices, 4, { 1.f, 0.f, 0.f, 1.f }, 3, &pipeline);
       }
     }
-
-    if (total) {
-      total_out.data[0] /= total;
-      total_out.data[1] /= total;
-      total_out.data[2] /= total;
-      ::add_set_v3f(&capsule.center, &total_out);
-      ::add_set_v3f(&m_camera.m_position.data, &total_out);
-    }
-    
   }
 #endif 
 }

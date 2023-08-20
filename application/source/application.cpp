@@ -1226,12 +1226,11 @@ application::update_camera()
       }
 
       capsule_face_classification_t classification = 
-        classify_capsule_face(
+        classify_capsule_faceplane(
           &capsule, 
           &collision_faces[i], 
           &collision_normals[i], 
-          &penetration, 
-          &coplanar_overlap);
+          &penetration);
 
       if (classification != CAPSULE_FACE_NO_COLLISION) {
         ::add_set_v3f(&capsule.center, &penetration);

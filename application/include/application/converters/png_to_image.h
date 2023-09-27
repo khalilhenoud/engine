@@ -11,19 +11,22 @@
 #ifndef PNG_TO_IMAGE
 #define PNG_TO_IMAGE
 
-#include <string>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
+typedef struct image_t image_t;
 typedef struct allocator_t allocator_t;
 
-namespace entity {
-  struct image;
-}
-
-bool
-load_image(
-  std::string& dataset, 
-  entity::image& image, 
+void
+load_image_buffer(
+  const char* data_set, 
+  image_t* image, 
   const allocator_t* allocator);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

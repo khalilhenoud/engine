@@ -11,21 +11,25 @@
 #ifndef CSV_TO_FONT
 #define CSV_TO_FONT
 
-#include <memory>
-#include <string>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
+typedef struct font_t font_t;
 typedef struct allocator_t allocator_t;
 
-namespace entity {
-  struct font;
-}
-
-std::unique_ptr<entity::font>
+// data_set is the base directory.
+// call free_font() to delete the font.
+font_t*
 load_font(
-  std::string& data_set,
-  std::string& image_file, 
-  std::string& data_file, 
+  const char* data_set,
+  const char* image_file, 
+  const char* data_file, 
   const allocator_t* allocator);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

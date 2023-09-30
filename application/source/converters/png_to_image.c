@@ -15,8 +15,8 @@
 #include <library/allocator/allocator.h>
 #include <library/string/fixed_string.h>
 #include <loaders/loader_png.h>
-#include <entity/c/runtime/image.h>
-#include <entity/c/runtime/image_utils.h>
+#include <entity/c/runtime/texture.h>
+#include <entity/c/runtime/texture_utils.h>
 
 
 void
@@ -35,13 +35,13 @@ load_image_buffer(
     {
       fixed_str_t path;
       memset(path.data, 0, sizeof(path.data));
-      sprintf(path.data, "%s%s", data_set, image->path.data);
+      sprintf(path.data, "%s%s", data_set, image->texture.path.data);
 
       {
         loader_png_data_t* data = load_png(path.data, allocator);
         assert(data);
 
-        allocate_image_buffer(image, data->total_buffer_size, allocator);
+        allocate_runtime_buffer(image, data->total_buffer_size, allocator);
         memcpy(image->buffer, data->buffer, data->total_buffer_size);
         
         // the types are compatible.

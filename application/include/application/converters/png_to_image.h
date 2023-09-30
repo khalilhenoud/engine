@@ -16,7 +16,8 @@ extern "C" {
 #endif
 
 
-typedef struct image_t image_t;
+typedef struct texture_runtime_t texture_runtime_t;
+typedef texture_runtime_t image_t;
 typedef struct allocator_t allocator_t;
 
 void

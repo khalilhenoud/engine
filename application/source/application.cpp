@@ -15,8 +15,8 @@
 #include <cmath>
 #include <functional>
 #include <unordered_map>
-#include <entity/c/runtime/image.h>
-#include <entity/c/runtime/image_utils.h>
+#include <entity/c/runtime/texture.h>
+#include <entity/c/runtime/texture_utils.h>
 #include <entity/c/mesh/color.h>
 #include <entity/c/mesh/mesh.h>
 #include <entity/c/mesh/mesh_utils.h>
@@ -33,6 +33,7 @@
 #include <application/converters/png_to_image.h>
 #include <application/converters/csv_to_font.h>
 #include <application/converters/bin_to_scene_to_bin.h>
+#include <application/process/text/utils.h>
 #include <math/vector3f.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
@@ -95,20 +96,17 @@ mesh_t* capsule_mesh;
 render_data_t* capsule_render_data;
 
 // The font in question.
-font_t* font;
+font_runtime_t* font;
 image_t* font_image;
 uint32_t font_image_id;
-std::unordered_map<std::string, uint32_t> texture_id;
 
 camera_t* camera;
 
 #if 0
+// std::unordered_map<std::string, uint32_t> texture_id;
 entity::camera m_camera;
 std::vector<entity::image> m_images;
-std::unique_ptr<entity::node> m_scene;
-std::unique_ptr<entity::font> m_font;
 
-std::vector<mesh_render_data_t> mesh_render_data;
 std::vector<const char*> texture_render_data;
 std::vector<uint32_t> texture_render_id;
 #endif
@@ -242,16 +240,14 @@ application::application(
     scene_bin->material_repo.data[0].ambient.data[1] = 0.2f;
     scene_bin->material_repo.data[0].ambient.data[2] = 0.2f;
     scene_bin->material_repo.data[0].ambient.data[3] = 1.f;
-    // m_scene = bin_to_scene(scene_bin);
     scene = bin_to_scene(scene_bin, &allocator);
-    ::free_bin(scene_bin, &allocator);
-    // TODO: remove this test the scene to bin functionality.
-    scene_bin = scene_to_bin(scene, &allocator);
     ::free_bin(scene_bin, &allocator);
   }
 
   // load the scene render data.
   scene_render_data = load_scene_render_data(scene, &allocator);
+
+  // need to load the images required by the scene.
 
   // load the capsule mesh.
   {
@@ -266,16 +262,19 @@ application::application(
 
   // load the font in question.
   {
-    auto datafile = std::string("media\\font\\FontData2.csv");
-    auto imagefile = std::string("media\\font\\ExportedFont2.png");
+    auto datafile = std::string("media\\font\\FontData.csv");
+    auto imagefile = std::string("media\\font\\ExportedFont.png");
     font = load_font(
       m_dataset.c_str(), imagefile.c_str(), datafile.c_str(), &allocator);
     
     {
-      font_image = create_image(imagefile.c_str(), &allocator);
+      texture_t texture;
+      memset(texture.path.data, 0, sizeof(texture.path.data));
+      memcpy(texture.path.data, imagefile.c_str(), imagefile.size());
+      font_image = create_texture_runtime(&texture, &allocator);
       load_image_buffer(m_dataset.c_str(), font_image, &allocator);
       font_image_id = ::upload_to_gpu(
-        font_image->path.data,
+        font_image->texture.path.data,
         font_image->buffer,
         font_image->width,
         font_image->height,
@@ -397,18 +396,17 @@ application::~application()
 #if 0
   for (auto& entry : texture_id)
     ::evict_from_gpu(entry.second);
-  
-  ::renderer_cleanup(); 
 #endif
   ::free_camera(camera, &allocator);
   ::free_scene(scene, &allocator);
   ::free_render_data(scene_render_data, &allocator);
   ::free_mesh(capsule_mesh, &allocator);
   ::free_render_data(capsule_render_data, &allocator);
-  ::free_font(font, &allocator);
-  ::free_image(font_image, &allocator);
+  ::free_font_runtime(font, &allocator);
+  ::free_texture_runtime(font_image, &allocator);
   ::evict_from_gpu(font_image_id);
   ::renderer_cleanup();
+
   assert(allocated.size() == 0 && "Memory leak detected!");
 }
 
@@ -418,7 +416,6 @@ application::update()
   controller.start();
 
   ::input_update();
-
   ::clear_color_and_depth_buffers();
 
   // disable/enable input with '~' key.
@@ -464,25 +461,14 @@ application::update()
 
 #if RENDER_SCENE
   if (scene) {
-  ::push_matrix(&pipeline);
-   ::pre_translate(&pipeline, 0, 0, 0);
-   ::pre_scale(&pipeline, 1, 1, 1);
-   ::draw_meshes(
+    ::push_matrix(&pipeline);
+    ::pre_translate(&pipeline, 0, 0, 0);
+    ::pre_scale(&pipeline, 1, 1, 1);
+    ::draw_meshes(
     scene_render_data->mesh_render_data, 
     scene_render_data->texture_ids, 
     scene_render_data->mesh_count, 
     &pipeline);
-   ::pop_matrix(&pipeline);
-  }
-#endif
-
-  // render the scene.
-#if 0 && RENDER_SCENE
-  if (m_scene) {
-   ::push_matrix(&pipeline);
-   ::pre_translate(&pipeline, 0, 0, 0);
-   ::pre_scale(&pipeline, 1, 1, 1);
-   ::draw_meshes(&mesh_render_data[0], &texture_render_id[0], (uint32_t)mesh_render_data.size(), &pipeline);
    ::pop_matrix(&pipeline);
   }
 #endif
@@ -670,46 +656,18 @@ application::update()
   }
 #endif
 
-  // display simple instructions.
-  if (font) {
-    glyph_bounds_t from;
-    std::vector<std::string> strvec;
-    strvec.push_back("[C] RESET CAMERA");
-    strvec.push_back("[~] CAMERA UNLOCK/LOCK");
 
-    for (uint32_t i = 0, count = strvec.size(); i < count; ++i) {
-      std::vector<unit_quad_t> bounds;
-      auto& str = strvec[i];
-      for (auto& c : str) {
-        get_glyph_bounds(font, c, &from);
-        unit_quad_t quad;
-        quad.data[0] = from[0];
-        quad.data[1] = from[1];
-        quad.data[2] = from[2];
-        quad.data[3] = from[3];
-        quad.data[4] = from[4];
-        quad.data[5] = from[5];
-        bounds.push_back(quad);
-      }
-
-      float left, right, bottom, top, nearz, farz;
-      float viewport_left, viewport_right, viewport_bottom, viewport_top;
-      ::get_frustum(&pipeline, &left, &right, &bottom, &top, &nearz, &farz);
-      ::get_viewport_info(&pipeline, &viewport_left, &viewport_top, &viewport_right, &viewport_bottom);
-
-      ::set_orthographic(&pipeline, viewport_left, viewport_right, viewport_top, viewport_bottom, nearz, farz);
-      ::update_projection(&pipeline);
-
-      ::push_matrix(&pipeline);
-      ::load_identity(&pipeline);
-      ::pre_translate(&pipeline, 0, viewport_bottom - ((i + 1) * (float)font->font_height), -2);
-      ::pre_scale(&pipeline, (float)font->cell_width, (float)font->cell_height, 0);
-      ::draw_unit_quads(&bounds[0], bounds.size(), font_image_id, &pipeline);
-      ::pop_matrix(&pipeline);
-
-      ::set_perspective(&pipeline, left, right, bottom, top, nearz, farz);
-      ::update_projection(&pipeline);
-    }
+  {
+    // display simple instructions.
+    std::vector<const char*> text;
+    text.push_back("[C] RESET CAMERA");
+    text.push_back("[~] CAMERA UNLOCK/LOCK");
+    render_text_to_screen(
+      font, 
+      font_image_id, 
+      &pipeline, 
+      &text[0], 
+      (uint32_t)text.size());
   }
 
   ::flush_operations();
@@ -774,12 +732,11 @@ application::update_camera()
   // Orthogonalizing the m_camera up and direction vector (to avoid floating
   // point imprecision). Discard the y and the w components (preserver x and z,
   // making it parallel to the movement plane).
-  tmp.data[1] =/* tmp.w =*/ 0;
+  tmp.data[1] = 0;
   length = sqrtf(tmp.data[0] * tmp.data[0] + tmp.data[2] * tmp.data[2]);
   if (length != 0) {
     // Normalizes tmp and return cross product matrix.
     matrix4f_cross_product(&crossup, &tmp);
-    // crossup = math::matrix4f::cross_product(tmp);
     tmp2 = camera->up_vector;
     // 'tmp2' is now the oppposite of the direction vector.
     tmp2 = mult_m4f_v3f(&crossup, &tmp2);
@@ -788,7 +745,6 @@ application::update_camera()
 
   // Create a rotation matrix on the y relative the movement of the mouse on x.
   matrix4f_rotation_y(&camerarotateY, -dx / 1000.f);
-  // camerarotateY = math::matrix4f::rotation_y(-dx / 1000.f);
   // Limit y_limit to a certain range (to control x range of movement).
   tempangle = y_limit;
   tempangle -= dy / 1000;
@@ -800,16 +756,12 @@ application::update_camera()
   y_limit += d;
   // Find the rotation matrix along perpendicular axis.
   matrix4f_set_axisangle(&camerarotatetemp, &tmp, d / K_PI * 180);
-  // camerarotatetemp = math::matrix4f::axisangle(tmp, d / K_PI * 180);
-  // Switching the rotations here makes no difference, why???, it seems
+  // Switching the rotations here makes no difference, why? It seems
   // geometrically the result is the same. Just simulate it using your thumb and
   // index.
   tmpmatrix = mult_m4f(&camerarotateY, &camerarotatetemp);
-  // tmpmatrix = camerarotateY * camerarotatetemp;
   camera->lookat_direction = mult_m4f_v3f(&tmpmatrix, &camera->lookat_direction);
-  // m_camera.m_lookatdirection = tmpmatrix.mult_vec(m_camera.m_lookatdirection);
   camera->up_vector = mult_m4f_v3f(&tmpmatrix, &camera->up_vector);
-  // m_camera.m_upvector = tmpmatrix.mult_vec(m_camera.m_upvector);
 
   // Handling translations.
   if (::is_key_pressed('E')) {

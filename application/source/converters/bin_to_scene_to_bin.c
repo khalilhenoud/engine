@@ -19,8 +19,11 @@
 #include <entity/c/mesh/texture.h>
 #include <entity/c/mesh/material.h>
 #include <entity/c/mesh/color.h>
+#include <entity/c/misc/font.h>
 #include <entity/c/scene/scene.h>
 #include <entity/c/scene/scene_utils.h>
+#include <entity/c/scene/camera.h>
+#include <entity/c/scene/camera_utils.h>
 #include <serializer/serializer_scene_data.h>
 #include <application/converters/bin_to_scene_to_bin.h>
 
@@ -403,6 +406,190 @@ copy_node_data(
   }
 }
 
+static
+void
+populate_serializer_font_data(
+  scene_t* scene, 
+  serializer_scene_data_t* target, 
+  const allocator_t* allocator)
+{
+  assert(scene && target && allocator);
+
+  {
+    target->font_repo.used = scene->font_repo.count;
+    target->font_repo.data = NULL;
+    if (scene->font_repo.count) {
+      target->font_repo.data = 
+        (serializer_font_t*)allocator->mem_cont_alloc(
+          scene->font_repo.count, sizeof(serializer_font_t));
+
+      for (uint32_t i = 0; i < scene->font_repo.count; ++i) {
+        font_t* source = scene->font_repo.fonts + i;
+        serializer_font_t* font = target->font_repo.data + i;
+
+        memset(font->data_file.data, 0, sizeof(font->data_file.data));
+        memcpy(
+          font->data_file.data, 
+          source->data_file.data, 
+          strlen(source->data_file.data));
+
+        memset(font->image_file.data, 0, sizeof(font->image_file.data));
+        memcpy(
+          font->image_file.data, 
+          source->image_file.data, 
+          strlen(source->image_file.data));
+      }
+    }
+  }
+}
+
+static
+void
+copy_default_font(font_t* font)
+{
+  assert(font);
+
+  {
+    const char* default_data_file = "media\\font\\FontData.csv";
+    const char* default_image_file = "media\\font\\ExportedFont.png";
+    memset(font->data_file.data, 0, sizeof(font->data_file.data));
+    memcpy(
+      font->data_file.data, 
+      default_data_file, 
+      strlen(default_data_file));
+
+    memset(font->image_file.data, 0, sizeof(font->image_file.data));
+    memcpy(
+      font->image_file.data, 
+      default_image_file, 
+      strlen(default_image_file));
+  }
+}
+
+static
+void
+copy_font_data(
+  serializer_scene_data_t* scene, 
+  scene_t* target, 
+  const allocator_t* allocator)
+{
+  assert(scene && target && allocator);
+  
+  {
+    target->font_repo.count = scene->font_repo.used;
+    target->font_repo.fonts = NULL;
+    if (scene->font_repo.used) {
+      target->font_repo.fonts = 
+        (font_t*)allocator->mem_cont_alloc(
+          scene->font_repo.used, sizeof(font_t));
+
+      for (uint32_t i = 0; i < scene->font_repo.used; ++i) {
+        serializer_font_t* source = scene->font_repo.data + i;
+        font_t* font = target->font_repo.fonts + i;
+
+        memset(font->data_file.data, 0, sizeof(font->data_file.data));
+        memcpy(
+          font->data_file.data, 
+          source->data_file.data, 
+          strlen(source->data_file.data));
+
+        memset(font->image_file.data, 0, sizeof(font->image_file.data));
+        memcpy(
+          font->image_file.data, 
+          source->image_file.data, 
+          strlen(source->image_file.data));
+      }
+    } else {
+      // ensure at least the default font in the scene.
+      target->font_repo.count = 1;
+      target->font_repo.fonts = 
+        (font_t*)allocator->mem_cont_alloc(
+          target->font_repo.count, sizeof(font_t));
+
+      copy_default_font(target->font_repo.fonts);
+    }
+  }
+}
+
+static
+void
+populate_serializer_camera_data(
+  scene_t* scene, 
+  serializer_scene_data_t* target, 
+  const allocator_t* allocator)
+{
+  assert(scene && target && allocator);
+  
+  {
+    target->camera_repo.used = scene->camera_repo.count;
+    target->camera_repo.data = NULL;
+    if (scene->camera_repo.count) {
+      target->camera_repo.data = 
+        (serializer_camera_t*)allocator->mem_cont_alloc(
+          scene->camera_repo.count, sizeof(serializer_camera_t));
+
+      for (uint32_t i = 0; i < scene->camera_repo.count; ++i) {
+        camera_t* source = scene->camera_repo.cameras + i;
+        serializer_camera_t* camera = target->camera_repo.data + i;
+
+        camera->position = source->position;
+        camera->lookat_direction = source->lookat_direction;
+        camera->up_vector = source->up_vector;
+      }
+    }
+  }
+}
+
+static
+void
+copy_default_camera(camera_t* camera)
+{
+  vector3f center, at, up;
+  center.data[0] = center.data[1] = center.data[2] = 0.f;
+  at.data[0] = at.data[1] = at.data[2] = 0.f;
+  at.data[2] = -1.f;
+  up.data[0] = up.data[1] = up.data[2] = 0.f;
+  up.data[1] = 1.f;
+  set_camera_lookat(camera, center, at, up);
+}
+
+static
+void
+copy_camera_data(
+  serializer_scene_data_t* scene, 
+  scene_t* target, 
+  const allocator_t* allocator)
+{
+  assert(scene && target && allocator);
+  
+  {
+    target->camera_repo.count = scene->camera_repo.used;
+    target->camera_repo.cameras = NULL;
+    if (scene->camera_repo.used) {
+      target->camera_repo.cameras = 
+        (camera_t*)allocator->mem_cont_alloc(
+          scene->camera_repo.used, sizeof(camera_t));
+
+      for (uint32_t i = 0; i < scene->camera_repo.used; ++i) {
+        serializer_camera_t* source = scene->camera_repo.data + i;
+        camera_t* camera = target->camera_repo.cameras + i;
+
+        camera->position = source->position;
+        camera->lookat_direction = source->lookat_direction;
+        camera->up_vector = source->up_vector;
+      }
+    } else {
+      // ensure at least the default font in the scene.
+      target->camera_repo.count = 1;
+      target->camera_repo.cameras = 
+        (camera_t*)allocator->mem_cont_alloc(
+          target->camera_repo.count, sizeof(camera_t));
+
+      copy_default_camera(target->camera_repo.cameras);
+    }
+  }
+}
+
 scene_t*
 bin_to_scene(
   serializer_scene_data_t* scene,
@@ -417,8 +604,8 @@ bin_to_scene(
     copy_material_data(scene, runtime_scene, allocator);
     copy_mesh_data(scene, runtime_scene, allocator);
     copy_node_data(scene, runtime_scene, allocator);
-    runtime_scene->font_repo.count = 0;
-    runtime_scene->font_repo.fonts = NULL;
+    copy_font_data(scene, runtime_scene, allocator);
+    copy_camera_data(scene, runtime_scene, allocator);
     return runtime_scene;
   }
 }
@@ -438,6 +625,8 @@ scene_to_bin(
     populate_serializer_material_data(scene, serializer_scene, allocator);
     populate_serializer_mesh_data(scene, serializer_scene, allocator);
     populate_serializer_model_data(scene, serializer_scene, allocator);
+    populate_serializer_font_data(scene, serializer_scene, allocator);
+    populate_serializer_camera_data(scene, serializer_scene, allocator);
     return serializer_scene;
   }
 }

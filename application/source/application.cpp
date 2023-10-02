@@ -17,13 +17,13 @@
 #include <unordered_map>
 #include <entity/c/runtime/texture.h>
 #include <entity/c/runtime/texture_utils.h>
+#include <entity/c/runtime/font.h>
+#include <entity/c/runtime/font_utils.h>
 #include <entity/c/mesh/color.h>
 #include <entity/c/mesh/mesh.h>
 #include <entity/c/mesh/mesh_utils.h>
 #include <entity/c/scene/scene_utils.h>
 #include <entity/c/scene/scene.h>
-#include <entity/c/runtime/font.h>
-#include <entity/c/runtime/font_utils.h>
 #include <entity/c/scene/camera.h>
 #include <entity/c/scene/camera_utils.h>
 #include <application/application.h>
@@ -34,7 +34,7 @@
 #include <application/converters/csv_to_font.h>
 #include <application/converters/bin_to_scene_to_bin.h>
 #include <application/process/text/utils.h>
-#include <math/vector3f.h>
+#include <math/c/vector3f.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <collision/capsule.h>
@@ -88,12 +88,12 @@ pipeline_t pipeline;
 
 // the scene and its renderer data.
 scene_t* scene;
-render_data_t* scene_render_data;
+packaged_scene_render_data_t* scene_render_data;
 
 // the capsule and its renderer data.
 capsule_t capsule;
 mesh_t* capsule_mesh;
-render_data_t* capsule_render_data;
+packaged_mesh_data_t* capsule_render_data;
 
 // The font in question.
 font_runtime_t* font;
@@ -401,7 +401,7 @@ application::~application()
   ::free_scene(scene, &allocator);
   ::free_render_data(scene_render_data, &allocator);
   ::free_mesh(capsule_mesh, &allocator);
-  ::free_render_data(capsule_render_data, &allocator);
+  ::free_mesh_render_data(capsule_render_data, &allocator);
   ::free_font_runtime(font, &allocator);
   ::free_texture_runtime(font_image, &allocator);
   ::evict_from_gpu(font_image_id);
@@ -465,9 +465,9 @@ application::update()
     ::pre_translate(&pipeline, 0, 0, 0);
     ::pre_scale(&pipeline, 1, 1, 1);
     ::draw_meshes(
-    scene_render_data->mesh_render_data, 
-    scene_render_data->texture_ids, 
-    scene_render_data->mesh_count, 
+    scene_render_data->mesh_data.mesh_render_data, 
+    scene_render_data->mesh_data.texture_ids, 
+    scene_render_data->mesh_data.count, 
     &pipeline);
    ::pop_matrix(&pipeline);
   }
@@ -788,28 +788,30 @@ application::update_camera()
     k_engaged = !k_engaged;
 
   if (::is_key_pressed('W') || k_engaged) {
-    math::vector3f vecxz;
-    vecxz.x = camera->lookat_direction.data[0];
-    vecxz.z = camera->lookat_direction.data[2];
-    length = sqrtf(vecxz.x * vecxz.x + vecxz.z * vecxz.z);
+    vector3f vecxz;
+    vecxz.data[0] = camera->lookat_direction.data[0];
+    vecxz.data[2] = camera->lookat_direction.data[2];
+    length = 
+      sqrtf(vecxz.data[0] * vecxz.data[0] + vecxz.data[2] * vecxz.data[2]);
     if (length != 0) {
-      vecxz.x /= length;
-      vecxz.z /= length;
-      camera->position.data[0] += vecxz.x * speed;
-      camera->position.data[2] += vecxz.z * speed;
+      vecxz.data[0] /= length;
+      vecxz.data[2] /= length;
+      camera->position.data[0] += vecxz.data[0] * speed;
+      camera->position.data[2] += vecxz.data[2] * speed;
     }
   }
 
   if (::is_key_pressed('S')) {
-    math::vector3f vecxz;
-    vecxz.x = camera->lookat_direction.data[0];
-    vecxz.z = camera->lookat_direction.data[2];
-    length = sqrtf(vecxz.x * vecxz.x + vecxz.z * vecxz.z);
+    vector3f vecxz;
+    vecxz.data[0] = camera->lookat_direction.data[0];
+    vecxz.data[2] = camera->lookat_direction.data[2];
+    length = 
+      sqrtf(vecxz.data[0] * vecxz.data[0] + vecxz.data[2] * vecxz.data[2]);
     if (length != 0) {
-      vecxz.x /= length;
-      vecxz.z /= length;
-      camera->position.data[0] -= vecxz.x * speed;
-      camera->position.data[2] -= vecxz.z * speed;
+      vecxz.data[0] /= length;
+      vecxz.data[2] /= length;
+      camera->position.data[0] -= vecxz.data[0] * speed;
+      camera->position.data[2] -= vecxz.data[2] * speed;
     }
   }
 

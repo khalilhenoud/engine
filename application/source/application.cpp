@@ -73,6 +73,69 @@ void free_block(void* block)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+static
+void
+prep_packaged_render_data(
+  const char* data_set,
+  packaged_scene_render_data_t* render_data, 
+  const allocator_t* allocator)
+{
+  // start with the mesh_data
+  for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
+    texture_runtime_t* runtime = render_data->mesh_data.texture_runtimes + i;
+    if (strlen(runtime->texture.path.data)) {
+      load_image_buffer(data_set, runtime, allocator);
+      render_data->mesh_data.texture_ids[i] = ::upload_to_gpu(
+        runtime->texture.path.data,
+        runtime->buffer,
+        runtime->width,
+        runtime->height,
+        (renderer_image_format_t)runtime->format);
+    }
+  }
+
+  // then do the font_data.
+  for (uint32_t i = 0; i < render_data->font_data.count; ++i) {
+    load_font_inplace(
+      data_set, 
+      &render_data->font_data.fonts[i].font,
+      &render_data->font_data.fonts[i], 
+      allocator);
+    // TODO: Ultimately we need a system for this, we need to be able to handle
+    // deduplication.
+    texture_runtime_t* runtime = render_data->font_data.texture_runtimes + i;
+    if (strlen(runtime->texture.path.data)) {
+      load_image_buffer(data_set, runtime, allocator);
+      render_data->font_data.texture_ids[i] = ::upload_to_gpu(
+        runtime->texture.path.data,
+        runtime->buffer,
+        runtime->width,
+        runtime->height,
+        (renderer_image_format_t)runtime->format);
+    }
+  }
+}
+
+static
+void
+cleanup_packaged_render_data(
+  packaged_scene_render_data_t* render_data, 
+  const allocator_t* allocator)
+{
+  for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
+    if (render_data->mesh_data.texture_ids[i])
+      ::evict_from_gpu(render_data->mesh_data.texture_ids[i]);
+  }
+
+  for (uint32_t i = 0; i < render_data->font_data.count; ++i) {
+    if (render_data->font_data.texture_ids[i])
+      ::evict_from_gpu(render_data->font_data.texture_ids[i]);
+  }
+
+  free_render_data(render_data, allocator);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 // TODO: Move all of this stuff into a collision app/unit test. It is useful but
 // not here.
@@ -97,22 +160,13 @@ packaged_mesh_data_t* capsule_render_data;
 
 // The font in question.
 font_runtime_t* font;
-image_t* font_image;
 uint32_t font_image_id;
 
 camera_t* camera;
-
-#if 0
-// std::unordered_map<std::string, uint32_t> texture_id;
-entity::camera m_camera;
-std::vector<entity::image> m_images;
-
-std::vector<const char*> texture_render_data;
-std::vector<uint32_t> texture_render_id;
-#endif
 allocator_t allocator;
 
 
+#if 0
 #if NEW_COLLISION_STUFF
 mesh_t* meshes[2] = { nullptr };
 std::vector<mesh_render_data_t> collision_render_data;
@@ -153,7 +207,6 @@ capsule_t capsule;
 mesh_t* capsule_mesh;
 mesh_render_data_t capsule_render_data;
 #endif
-#if 0
 std::vector<face_t> collision_faces;
 std::vector<vector3f> collision_normals;
 std::vector<float> dot_product_normals;
@@ -174,19 +227,6 @@ application::application(
   allocator.mem_free = free_block;
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
-
-  camera = create_camera(&allocator);
-  {
-    vector3f center;
-    center.data[0] = center.data[1] = center.data[2] = 0.f;
-    vector3f at;
-    at.data[0] = at.data[1] = at.data[2] = 0.f;
-    at.data[2] = -1.f;
-    vector3f up;
-    up.data[0] = up.data[1] = up.data[2] = 0.f;
-    up.data[1] = 1.f;
-    ::set_camera_lookat(camera, center, at, up);
-  }
 
 #if NEW_COLLISION_STUFF
   capsules[0].center = { 2292.47876, -162.489792, -863.596619 };
@@ -214,23 +254,6 @@ application::application(
   m_camera.m_position.z = -600;
 #endif
 
-#if 0
-  auto datafile = std::string("media\\font\\FontData2.csv");
-  auto imagefile = std::string("media\\font\\ExportedFont2.png");
-  m_font = load_font(m_dataset, imagefile, datafile, &allocator);
-  m_images.emplace_back(imagefile);
-
-  auto model_path = std::string("media\\test\\test01.ASE");
-  //m_scene = load_ase_model(m_dataset, model_path, &allocator);
-
-  //{
-  //  // save to bin format.
-  //  auto fullpath = m_dataset + "media\\cooked\\test01.bin";
-  //  auto scene_bin = scene_to_bin(*m_scene, &allocator);
-  //  ::serialize_bin(fullpath.c_str(), scene_bin);
-  //  ::free_bin(scene_bin, &allocator);
-  //}
-#endif
   {
     // load the scene from a bin file.
     auto fullpath = m_dataset + "media\\cooked\\map.bin";
@@ -246,8 +269,14 @@ application::application(
 
   // load the scene render data.
   scene_render_data = load_scene_render_data(scene, &allocator);
+  prep_packaged_render_data(m_dataset.c_str(), scene_render_data, &allocator);
+
+  // guaranteed to exist, same with the font.
+  camera = scene_render_data->camera_data.cameras;
 
   // need to load the images required by the scene.
+  font = scene_render_data->font_data.fonts;
+  font_image_id = scene_render_data->font_data.texture_ids[0];
 
   // load the capsule mesh.
   {
@@ -260,56 +289,7 @@ application::application(
       capsule_mesh, color_rgba_t{ 1.f, 1.f, 0.f, 0.5f }, &allocator);
   }
 
-  // load the font in question.
-  {
-    auto datafile = std::string("media\\font\\FontData.csv");
-    auto imagefile = std::string("media\\font\\ExportedFont.png");
-    font = load_font(
-      m_dataset.c_str(), imagefile.c_str(), datafile.c_str(), &allocator);
-    
-    {
-      texture_t texture;
-      memset(texture.path.data, 0, sizeof(texture.path.data));
-      memcpy(texture.path.data, imagefile.c_str(), imagefile.size());
-      font_image = create_texture_runtime(&texture, &allocator);
-      load_image_buffer(m_dataset.c_str(), font_image, &allocator);
-      font_image_id = ::upload_to_gpu(
-        font_image->texture.path.data,
-        font_image->buffer,
-        font_image->width,
-        font_image->height,
-        (renderer_image_format_t)font_image->format);
-    }
-  }
-
 #if 0
-  std::tie(mesh_render_data, texture_render_data) = load_renderer_data(*m_scene);
-
-  for (auto& entry : m_scene->get_textures_paths())
-    m_images.emplace_back(entry.c_str());
-
-  for (auto& image : m_images)
-    load_image(m_dataset, image, &allocator);
-
-  for (auto& image : m_images) {
-    if (texture_id.find(image.m_path) != texture_id.end())
-      continue;
-    
-    texture_id[image.m_path] = ::upload_to_gpu(
-      image.m_path.c_str(),
-      &image.m_buffer[0],
-      image.m_width,
-      image.m_height,
-      static_cast<image_format_t>(image.m_format));
-  }
-
-  for (auto path : texture_render_data) {
-    if (path && (texture_id.find(std::string(path)) != texture_id.end())) 
-      texture_render_id.push_back(texture_id[std::string(path)]);
-    else
-      texture_render_id.push_back(0);
-  }
-
 #if COLLISION_LOGIC
   {
     capsule.center = m_camera.m_position.data;
@@ -382,6 +362,7 @@ application::application(
 
 application::~application()
 {
+#if 0
 #if NEW_COLLISION_STUFF
   ::free_mesh(meshes[0], &allocator);
   ::free_mesh(meshes[1], &allocator);
@@ -392,20 +373,12 @@ application::~application()
     ::free_mesh(capsule_mesh, &allocator);
   }
 #endif
-
-#if 0
-  for (auto& entry : texture_id)
-    ::evict_from_gpu(entry.second);
 #endif
-  ::free_camera(camera, &allocator);
-  ::free_scene(scene, &allocator);
-  ::free_render_data(scene_render_data, &allocator);
-  ::free_mesh(capsule_mesh, &allocator);
-  ::free_mesh_render_data(capsule_render_data, &allocator);
-  ::free_font_runtime(font, &allocator);
-  ::free_texture_runtime(font_image, &allocator);
-  ::evict_from_gpu(font_image_id);
-  ::renderer_cleanup();
+  free_scene(scene, &allocator);
+  cleanup_packaged_render_data(scene_render_data, &allocator);
+  free_mesh(capsule_mesh, &allocator);
+  free_mesh_render_data(capsule_render_data, &allocator);
+  renderer_cleanup();
 
   assert(allocated.size() == 0 && "Memory leak detected!");
 }
@@ -473,6 +446,7 @@ application::update()
   }
 #endif
 
+#if 0
 #if COLLISION_LOGIC
   {
     uint32_t capsule_texture_render_id[1] = { 0 };
@@ -654,6 +628,7 @@ application::update()
       }
     }
   }
+#endif
 #endif
 
 

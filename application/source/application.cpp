@@ -34,6 +34,8 @@
 #include <application/converters/csv_to_font.h>
 #include <application/converters/bin_to_scene_to_bin.h>
 #include <application/process/text/utils.h>
+#include <application/process/logic/camera.h>
+#include <application/process/spatial/bvh.h>
 #include <math/c/vector3f.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
@@ -165,6 +167,7 @@ uint32_t font_image_id;
 camera_t* camera;
 allocator_t allocator;
 
+bvh_t* bvh;
 
 #if 0
 #if NEW_COLLISION_STUFF
@@ -278,8 +281,8 @@ application::application(
   font = scene_render_data->font_data.fonts;
   font_image_id = scene_render_data->font_data.texture_ids[0];
 
-  // load the capsule mesh.
   {
+    // load the capsule mesh.
     memset(capsule.center.data, 0, sizeof(capsule.center.data));
     capsule.half_height = 30;
     capsule.radius = 25;
@@ -287,6 +290,49 @@ application::application(
       30, capsule.half_height / capsule.radius, &allocator);
     capsule_render_data = load_mesh_renderer_data(
       capsule_mesh, color_rgba_t{ 1.f, 1.f, 0.f, 0.5f }, &allocator);
+  }
+
+  {
+    float** vertices = NULL;
+    uint32_t** indices = NULL;
+    uint32_t* indices_count = NULL;
+    uint32_t mesh_count = 0;
+
+    for (uint32_t i = 0; i < scene->mesh_repo.count; ++i) {
+      if (scene->mesh_repo.meshes[i].indices_count)
+        ++mesh_count;
+    }
+
+    if (mesh_count) {
+      vertices = (float**)allocator.mem_alloc(sizeof(float*) * mesh_count);
+      assert(vertices && "allocation failed!");
+      indices = (uint32_t**)allocator.mem_alloc(sizeof(uint32_t*) * mesh_count);
+      assert(indices && "allocation failed!");
+      indices_count = (uint32_t*)allocator.mem_alloc(sizeof(uint32_t) * mesh_count); 
+      assert(indices && "allocation failed!");
+
+      for (uint32_t i = 0, k = 0; i < scene->mesh_repo.count; ++i) {
+        if (scene->mesh_repo.meshes[i].indices_count) {
+          mesh_t* mesh = scene->mesh_repo.meshes + i;
+          vertices[k] = mesh->vertices;
+          indices[k] = mesh->indices;
+          indices_count[k] = mesh->indices_count;
+          ++k;
+        }
+      }
+
+      bvh = create_bvh(
+        vertices, 
+        indices, 
+        indices_count, 
+        mesh_count, 
+        &allocator, 
+        BVH_CONSTRUCT_NAIVE);
+
+      allocator.mem_free(vertices);
+      allocator.mem_free(indices);
+      allocator.mem_free(indices_count);
+    }
   }
 
 #if 0
@@ -379,6 +425,7 @@ application::~application()
   free_mesh(capsule_mesh, &allocator);
   free_mesh_render_data(capsule_render_data, &allocator);
   renderer_cleanup();
+  free_bvh(bvh, &allocator);
 
   assert(allocated.size() == 0 && "Memory leak detected!");
 }
@@ -397,12 +444,12 @@ application::update()
     ::show_cursor((int32_t)m_disable_input);
 
     if (m_disable_input)
-      prev_mouse_x = prev_mouse_y = -1;
+      recenter_camera_cursor();
   }
 
   static int32_t input_static = 0;
   if (!m_disable_input) {
-    update_camera();    
+    camera_update(camera);    
 
     if (::is_key_triggered('T')) {
       ++input_static;
@@ -438,10 +485,10 @@ application::update()
     ::pre_translate(&pipeline, 0, 0, 0);
     ::pre_scale(&pipeline, 1, 1, 1);
     ::draw_meshes(
-    scene_render_data->mesh_data.mesh_render_data, 
-    scene_render_data->mesh_data.texture_ids, 
-    scene_render_data->mesh_data.count, 
-    &pipeline);
+      scene_render_data->mesh_data.mesh_render_data, 
+      scene_render_data->mesh_data.texture_ids, 
+      scene_render_data->mesh_data.count, 
+      &pipeline);
    ::pop_matrix(&pipeline);
   }
 #endif
@@ -631,12 +678,57 @@ application::update()
 #endif
 #endif
 
+  {
+    {
+      float vertices[12];
+
+      vector3f min;
+      vector3f_set_3f(&min, -40, -100, -40);
+      bvh_aabb_t bounds = { camera->position, camera->position };
+      add_set_v3f(bounds.min_max, &min);
+      mult_set_v3f(&min, -1.f);
+      add_set_v3f(bounds.min_max + 1, &min);
+
+      uint32_t array[256];
+      uint32_t used = 0;
+      query_intersection(bvh, &bounds, array, &used);
+      
+      if (used) {
+        for (uint32_t used_index = 0; used_index < used; ++used_index) {
+          bvh_node_t* node = bvh->nodes + array[used_index];
+          for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
+            if (!bvh->faces[i].is_valid)
+              continue;
+
+            vertices[0 * 3 + 0] = bvh->faces[i].points[0].data[0] + bvh->faces[i].normal.data[0];
+            vertices[0 * 3 + 1] = bvh->faces[i].points[0].data[1] + bvh->faces[i].normal.data[1];
+            vertices[0 * 3 + 2] = bvh->faces[i].points[0].data[2] + bvh->faces[i].normal.data[2];
+            vertices[1 * 3 + 0] = bvh->faces[i].points[1].data[0] + bvh->faces[i].normal.data[0];
+            vertices[1 * 3 + 1] = bvh->faces[i].points[1].data[1] + bvh->faces[i].normal.data[1];
+            vertices[1 * 3 + 2] = bvh->faces[i].points[1].data[2] + bvh->faces[i].normal.data[2];
+            vertices[2 * 3 + 0] = bvh->faces[i].points[2].data[0] + bvh->faces[i].normal.data[0];
+            vertices[2 * 3 + 1] = bvh->faces[i].points[2].data[1] + bvh->faces[i].normal.data[1];
+            vertices[2 * 3 + 2] = bvh->faces[i].points[2].data[2] + bvh->faces[i].normal.data[2];
+            vertices[3 * 3 + 0] = bvh->faces[i].points[0].data[0] + bvh->faces[i].normal.data[0];
+            vertices[3 * 3 + 1] = bvh->faces[i].points[0].data[1] + bvh->faces[i].normal.data[1];
+            vertices[3 * 3 + 2] = bvh->faces[i].points[0].data[2] + bvh->faces[i].normal.data[2];
+            if (bvh->faces[i].is_floor)
+              ::draw_lines(vertices, 4, { 1.f, 0.f, 0.f, 1.f }, 3, &pipeline);
+            else
+              ::draw_lines(vertices, 4, { 0.f, 1.f, 0.f, 1.f }, 2, &pipeline);
+          }
+        }
+      }
+    }
+  }
+
 
   {
     // display simple instructions.
     std::vector<const char*> text;
     text.push_back("[C] RESET CAMERA");
     text.push_back("[~] CAMERA UNLOCK/LOCK");
+    text.push_back("[1/2/WASD] CAMERA SPEED/MOVEMENT");
     render_text_to_screen(
       font, 
       font_image_id, 
@@ -648,234 +740,4 @@ application::update()
   ::flush_operations();
 
   return controller.end();
-}
-
-void 
-application::update_camera()
-{
-  matrix4f crossup, camerarotateY, camerarotatetemp, tmpmatrix;
-  float dx, dy, d, tempangle;
-  static float speed = 10.f;
-  static bool falling = false;
-  float length;
-  int32_t mx, my;
-  vector3f tmp, tmp2;
-
-  if (::is_key_pressed('1')) {
-    speed += 0.25;
-  }
-
-  if (::is_key_pressed('2')) {
-    speed -= 0.25;
-    speed = fmax(speed, 0.125);
-  }
-
-  if (::is_key_pressed('C')) {
-    y_limit = 0;
-    vector3f center;
-    center.data[0] = center.data[1] = center.data[2] = 0.f;
-    vector3f at;
-    at.data[0] = at.data[1] = at.data[2] = 0.f;
-    at.data[2] = -1.f;
-    vector3f up;
-    up.data[0] = up.data[1] = up.data[2] = 0.f;
-    up.data[1] = 1.f;
-    ::set_camera_lookat(camera, center, at, up);
-  }
-
-  if (prev_mouse_x == -1)
-    ::center_cursor();
-
-  // Handling the m_camera controls, first orientation, second translation.
-  ::get_position(&mx, &my);
-  mouse_x = mx;
-  mouse_y = my;
-  if (prev_mouse_x == -1)
-    prev_mouse_x = mx;
-  if (prev_mouse_y == -1)
-    prev_mouse_y = my;
-  dx = (float)mouse_x - prev_mouse_x;
-  dy = (float)mouse_y - prev_mouse_y;
-  ::set_position(prev_mouse_x, prev_mouse_y);
-
-  // Crossing the m_camera up vector with the opposite of the look at direction.
-  matrix4f_cross_product(&crossup, &camera->up_vector);
-  tmp = mult_v3f(&camera->lookat_direction, -1.f);
-  // 'tmp' is now orthogonal to the up and look_at vector.
-  tmp = mult_m4f_v3f(&crossup, &tmp);
-
-  // Orthogonalizing the m_camera up and direction vector (to avoid floating
-  // point imprecision). Discard the y and the w components (preserver x and z,
-  // making it parallel to the movement plane).
-  tmp.data[1] = 0;
-  length = sqrtf(tmp.data[0] * tmp.data[0] + tmp.data[2] * tmp.data[2]);
-  if (length != 0) {
-    // Normalizes tmp and return cross product matrix.
-    matrix4f_cross_product(&crossup, &tmp);
-    tmp2 = camera->up_vector;
-    // 'tmp2' is now the oppposite of the direction vector.
-    tmp2 = mult_m4f_v3f(&crossup, &tmp2);
-    camera->lookat_direction = mult_v3f(&tmp2, -1.f);
-  }
-
-  // Create a rotation matrix on the y relative the movement of the mouse on x.
-  matrix4f_rotation_y(&camerarotateY, -dx / 1000.f);
-  // Limit y_limit to a certain range (to control x range of movement).
-  tempangle = y_limit;
-  tempangle -= dy / 1000;
-  d = -dy / 1000;
-  if (tempangle > 0.925f)
-    d = 0.925f - y_limit;
-  else if (tempangle < -0.925f)
-    d = -0.925f - y_limit;
-  y_limit += d;
-  // Find the rotation matrix along perpendicular axis.
-  matrix4f_set_axisangle(&camerarotatetemp, &tmp, d / K_PI * 180);
-  // Switching the rotations here makes no difference, why? It seems
-  // geometrically the result is the same. Just simulate it using your thumb and
-  // index.
-  tmpmatrix = mult_m4f(&camerarotateY, &camerarotatetemp);
-  camera->lookat_direction = mult_m4f_v3f(&tmpmatrix, &camera->lookat_direction);
-  camera->up_vector = mult_m4f_v3f(&tmpmatrix, &camera->up_vector);
-
-  // Handling translations.
-  if (::is_key_pressed('E')) {
-    camera->position.data[1] -= speed;
-  }
-
-  if (::is_key_pressed('Q')) {
-    camera->position.data[1] += speed;
-  }
-
-  if (::is_key_pressed('A')) {
-    camera->position.data[0] -= tmp.data[0] * speed;
-    camera->position.data[2] -= tmp.data[2] * speed;
-  }
-
-  if (::is_key_pressed('D')) {
-    camera->position.data[0] += tmp.data[0] * speed;
-    camera->position.data[2] += tmp.data[2] * speed;
-  }
-
-  static bool k_engaged = false;
-
-  if (::is_key_triggered('N'))
-    k_engaged = !k_engaged;
-
-  if (::is_key_pressed('W') || k_engaged) {
-    vector3f vecxz;
-    vecxz.data[0] = camera->lookat_direction.data[0];
-    vecxz.data[2] = camera->lookat_direction.data[2];
-    length = 
-      sqrtf(vecxz.data[0] * vecxz.data[0] + vecxz.data[2] * vecxz.data[2]);
-    if (length != 0) {
-      vecxz.data[0] /= length;
-      vecxz.data[2] /= length;
-      camera->position.data[0] += vecxz.data[0] * speed;
-      camera->position.data[2] += vecxz.data[2] * speed;
-    }
-  }
-
-  if (::is_key_pressed('S')) {
-    vector3f vecxz;
-    vecxz.data[0] = camera->lookat_direction.data[0];
-    vecxz.data[2] = camera->lookat_direction.data[2];
-    length = 
-      sqrtf(vecxz.data[0] * vecxz.data[0] + vecxz.data[2] * vecxz.data[2]);
-    if (length != 0) {
-      vecxz.data[0] /= length;
-      vecxz.data[2] /= length;
-      camera->position.data[0] -= vecxz.data[0] * speed;
-      camera->position.data[2] -= vecxz.data[2] * speed;
-    }
-  }
-
-#if COLLISION_LOGIC
-  {
-    auto&& draw_face = [&](uint32_t face_index) {
-      float vertices[12];
-      vertices[0 * 3 + 0] = collision_faces[face_index].points[0].data[0] + collision_normals[face_index].data[0] * 1;
-      vertices[0 * 3 + 1] = collision_faces[face_index].points[0].data[1] + collision_normals[face_index].data[1] * 1;
-      vertices[0 * 3 + 2] = collision_faces[face_index].points[0].data[2] + collision_normals[face_index].data[2] * 1;
-      vertices[1 * 3 + 0] = collision_faces[face_index].points[1].data[0] + collision_normals[face_index].data[0] * 1;
-      vertices[1 * 3 + 1] = collision_faces[face_index].points[1].data[1] + collision_normals[face_index].data[1] * 1;
-      vertices[1 * 3 + 2] = collision_faces[face_index].points[1].data[2] + collision_normals[face_index].data[2] * 1;
-      vertices[2 * 3 + 0] = collision_faces[face_index].points[2].data[0] + collision_normals[face_index].data[0] * 1;
-      vertices[2 * 3 + 1] = collision_faces[face_index].points[2].data[1] + collision_normals[face_index].data[1] * 1;
-      vertices[2 * 3 + 2] = collision_faces[face_index].points[2].data[2] + collision_normals[face_index].data[2] * 1;
-      vertices[3 * 3 + 0] = collision_faces[face_index].points[0].data[0] + collision_normals[face_index].data[0] * 1;
-      vertices[3 * 3 + 1] = collision_faces[face_index].points[0].data[1] + collision_normals[face_index].data[1] * 1;
-      vertices[3 * 3 + 2] = collision_faces[face_index].points[0].data[2] + collision_normals[face_index].data[2] * 1;
-      ::draw_lines(vertices, 4, { 1.f, 0.f, 0.f, 1.f }, 3, &pipeline);
-    };
-
-    auto&& is_falling = [&](capsule_t to_test, math::vector3f pos)-> bool {
-      to_test.center = pos.data;
-      for (uint32_t i = 0; i < collision_faces.size(); ++i) {
-        if (!is_face_valid[i])
-          continue;
-
-        // won't consider any face who's normal isn't within a certain range.
-        // this can be cached for our purposes
-        if (!is_floor[i])
-          continue;
-
-        ::vector3f any;
-        capsule_face_classification_t classification =
-          classify_capsule_faceplane(
-            &to_test,
-            &collision_faces[i],
-            &collision_normals[i],
-            &any);
-
-        if (classification != CAPSULE_FACE_NO_COLLISION)
-          return false;
-      }
-
-      return true;
-    };
-
-#if COLLISION_LOGIC_PHYSICS
-    // jump when space is pressed.
-    if (::is_key_triggered(0x20) /*&& !falling*/) {
-      falling = true;
-      y_speed = 20.f;
-    }
-
-    // TODO: Investigate why this keeps falling at at certain point.
-    // TODO: Investigate the jitter.
-    if (falling) 
-    {
-      y_speed -= y_acc;
-      y_speed = max(y_speed, -20);
-      m_camera.m_position.y += y_speed;
-    }
-
-    falling = is_falling(capsule, m_camera.m_position);
-#endif
-
-    capsule.center = m_camera.m_position.data;
-    vector3f penetration;
-    segment_t coplanar_overlap;
-    capsule_face_classification_t classification;
-
-    for (uint32_t i = 0; i < collision_faces.size(); ++i) {
-      if (!is_face_valid[i])
-        continue;
-
-      capsule_face_classification_t classification =
-        classify_capsule_faceplane(
-          &capsule,
-          &collision_faces[i],
-          &collision_normals[i],
-          &penetration);
-
-      if (classification != CAPSULE_FACE_NO_COLLISION) {
-        ::add_set_v3f(&capsule.center, &penetration);
-        ::add_set_v3f(&m_camera.m_position.data, &penetration);
-        draw_face(i);
-      }
-    }
-  }
-#endif
 }

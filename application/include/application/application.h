@@ -26,18 +26,8 @@ application {
   uint64_t 
   update();
 
-  void 
-  update_camera();
-
   //////////////////////////////////////////////////////////////////////////////
   std::string m_dataset;
-
-  int32_t x   = 0,  y   = 0;
-  int32_t dx  = 0,  dy  = 0;
-  int32_t mouse_x       = 0,   mouse_y      = 0;
-  int32_t prev_mouse_x  = -1,  prev_mouse_y = -1;
-  float   y_limit       = 0.f;
-
   bool    m_disable_input = false;
 };
 

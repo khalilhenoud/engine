@@ -13,7 +13,9 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/converters/csv_to_font.c
       ./source/converters/bin_to_scene_to_bin.c
       ./source/converters/png_to_image.c
+      ./source/process/logic/camera.c
       ./source/process/text/utils.c
+      ./source/process/spatial/bvh.c
 			./source/application.cpp
 			./source/main.cpp
       ./source/input.c

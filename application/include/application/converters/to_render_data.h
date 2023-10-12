@@ -28,6 +28,7 @@ typedef struct font_runtime_t font_runtime_t;
 typedef struct camera_t camera_t;
 typedef struct texture_runtime_t texture_runtime_t;
 
+// TODO(khalil): support matrix hierarchy when rendering.
 typedef
 struct packaged_mesh_data_t {
   uint32_t count;

@@ -449,7 +449,7 @@ application::update()
 
   static int32_t input_static = 0;
   if (!m_disable_input) {
-    camera_update(camera);    
+    camera_update(camera, bvh, &capsule, &pipeline);    
 
     if (::is_key_triggered('T')) {
       ++input_static;
@@ -679,56 +679,12 @@ application::update()
 #endif
 
   {
-    {
-      float vertices[12];
-
-      vector3f min;
-      vector3f_set_3f(&min, -40, -100, -40);
-      bvh_aabb_t bounds = { camera->position, camera->position };
-      add_set_v3f(bounds.min_max, &min);
-      mult_set_v3f(&min, -1.f);
-      add_set_v3f(bounds.min_max + 1, &min);
-
-      uint32_t array[256];
-      uint32_t used = 0;
-      query_intersection(bvh, &bounds, array, &used);
-      
-      if (used) {
-        for (uint32_t used_index = 0; used_index < used; ++used_index) {
-          bvh_node_t* node = bvh->nodes + array[used_index];
-          for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
-            if (!bvh->faces[i].is_valid)
-              continue;
-
-            vertices[0 * 3 + 0] = bvh->faces[i].points[0].data[0] + bvh->faces[i].normal.data[0];
-            vertices[0 * 3 + 1] = bvh->faces[i].points[0].data[1] + bvh->faces[i].normal.data[1];
-            vertices[0 * 3 + 2] = bvh->faces[i].points[0].data[2] + bvh->faces[i].normal.data[2];
-            vertices[1 * 3 + 0] = bvh->faces[i].points[1].data[0] + bvh->faces[i].normal.data[0];
-            vertices[1 * 3 + 1] = bvh->faces[i].points[1].data[1] + bvh->faces[i].normal.data[1];
-            vertices[1 * 3 + 2] = bvh->faces[i].points[1].data[2] + bvh->faces[i].normal.data[2];
-            vertices[2 * 3 + 0] = bvh->faces[i].points[2].data[0] + bvh->faces[i].normal.data[0];
-            vertices[2 * 3 + 1] = bvh->faces[i].points[2].data[1] + bvh->faces[i].normal.data[1];
-            vertices[2 * 3 + 2] = bvh->faces[i].points[2].data[2] + bvh->faces[i].normal.data[2];
-            vertices[3 * 3 + 0] = bvh->faces[i].points[0].data[0] + bvh->faces[i].normal.data[0];
-            vertices[3 * 3 + 1] = bvh->faces[i].points[0].data[1] + bvh->faces[i].normal.data[1];
-            vertices[3 * 3 + 2] = bvh->faces[i].points[0].data[2] + bvh->faces[i].normal.data[2];
-            if (bvh->faces[i].is_floor)
-              ::draw_lines(vertices, 4, { 1.f, 0.f, 0.f, 1.f }, 3, &pipeline);
-            else
-              ::draw_lines(vertices, 4, { 0.f, 1.f, 0.f, 1.f }, 2, &pipeline);
-          }
-        }
-      }
-    }
-  }
-
-
-  {
     // display simple instructions.
     std::vector<const char*> text;
     text.push_back("[C] RESET CAMERA");
     text.push_back("[~] CAMERA UNLOCK/LOCK");
-    text.push_back("[1/2/WASD] CAMERA SPEED/MOVEMENT");
+    text.push_back("[1/2/WASD/EQ] CAMERA SPEED/MOVEMENT");
+    text.push_back("[3/4] RENDER COLLISION QUERIES");
     render_text_to_screen(
       font, 
       font_image_id, 

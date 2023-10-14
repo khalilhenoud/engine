@@ -16,10 +16,14 @@ extern "C" {
 #endif
 
 
+typedef struct bvh_t bvh_t;
+typedef struct capsule_t capsule_t;
 typedef struct camera_t camera_t;
+typedef struct pipeline_t pipeline_t;
 
 void
-camera_update(camera_t* camera);
+camera_update(
+  camera_t* camera, bvh_t* bvh, capsule_t* capsule, pipeline_t* pipeline);
 
 void
 recenter_camera_cursor(void);

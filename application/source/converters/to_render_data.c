@@ -405,9 +405,10 @@ load_mesh_renderer_data(
       0, 
       sizeof(mesh_data->texture_runtimes[0].texture.path.data));
     // set a default ambient color.
-    r_data->ambient.data[0] = 
-    r_data->ambient.data[1] = r_data->ambient.data[2] = 0.5f;
-    r_data->ambient.data[3] = 1.f;
+    r_data->ambient.data[0] = color.data[0];
+    r_data->ambient.data[1] = color.data[1];
+    r_data->ambient.data[2] = color.data[2];
+    r_data->ambient.data[3] = color.data[3];
     // copy the ambient default color into the diffuse and specular.
     array_size = sizeof(r_data->diffuse.data);
     memcpy(r_data->diffuse.data, r_data->ambient.data, array_size);

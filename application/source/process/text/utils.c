@@ -22,7 +22,10 @@ render_text_to_screen(
   uint32_t font_image_id,
   pipeline_t* pipeline, 
   const char** text, 
-  uint32_t count)
+  uint32_t count,
+  const color_t* color,
+  float x,
+  float y)
 {
   if (!(font && pipeline && text))
     return;
@@ -69,13 +72,13 @@ render_text_to_screen(
       load_identity(pipeline);
       pre_translate(
         pipeline, 
-        0, 
-        viewport_bottom - ((i + 1) * (float)font->font_height), -2);
+        x, 
+        viewport_bottom - ((i + 1) * (float)font->font_height) - y, -2);
       pre_scale(
         pipeline, 
         (float)font->cell_width, 
         (float)font->cell_height, 0);
-      draw_unit_quads(bounds, str_length, font_image_id, pipeline);
+      draw_unit_quads(bounds, str_length, font_image_id, *color, pipeline);
       pop_matrix(pipeline);
 
       set_perspective(pipeline, left, right, bottom, top, nearz, farz);

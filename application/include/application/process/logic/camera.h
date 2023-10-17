@@ -15,15 +15,32 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 
 typedef struct bvh_t bvh_t;
 typedef struct capsule_t capsule_t;
 typedef struct camera_t camera_t;
 typedef struct pipeline_t pipeline_t;
+typedef struct font_runtime_t font_runtime_t;
 
 void
 camera_update(
-  camera_t* camera, bvh_t* bvh, capsule_t* capsule, pipeline_t* pipeline);
+  camera_t* camera, 
+  bvh_t* bvh, 
+  capsule_t* capsule, 
+  pipeline_t* pipeline, 
+  font_runtime_t* font, 
+  uint32_t font_image_id);
+
+int32_t
+is_falling(
+  capsule_t capsule,
+  bvh_t* bvh,
+  float expand_down,
+  pipeline_t* pipeline,
+  int32_t draw_collision_query,
+  int32_t draw_collision_face);
 
 void
 recenter_camera_cursor(void);

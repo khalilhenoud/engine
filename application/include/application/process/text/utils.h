@@ -20,6 +20,7 @@ extern "C" {
 
 typedef struct font_runtime_t font_runtime_t;
 typedef struct pipeline_t pipeline_t;
+typedef struct color_t color_t;
 
 void
 render_text_to_screen(
@@ -27,7 +28,10 @@ render_text_to_screen(
   uint32_t font_image_id,
   pipeline_t* pipeline, 
   const char** text, 
-  uint32_t count);
+  uint32_t count,
+  const color_t* color,
+  float x,
+  float y);
 
 #ifdef __cplusplus
 }

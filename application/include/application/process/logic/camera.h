@@ -31,7 +31,7 @@ camera_update(
   capsule_t* capsule, 
   pipeline_t* pipeline, 
   font_runtime_t* font, 
-  uint32_t font_image_id);
+  const uint32_t font_image_id);
 
 int32_t
 is_falling(

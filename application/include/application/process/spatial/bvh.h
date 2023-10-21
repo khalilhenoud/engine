@@ -81,6 +81,9 @@ free_bvh(bvh_t* bvh, const allocator_t* allocator);
 uint32_t
 get_bvh_primitives_per_leaf(void);
 
+int32_t
+bounds_intersect(const bvh_aabb_t* left, const bvh_aabb_t* right);
+
 // NOTE: A max 256 leaf indices returned, if used is 0 no intersection.
 void
 query_intersection(

@@ -306,7 +306,6 @@ free_bvh(bvh_t* bvh, const allocator_t* allocator)
   allocator->mem_free(bvh);
 }
 
-static
 int32_t
 bounds_intersect(const bvh_aabb_t* left, const bvh_aabb_t* right)
 {

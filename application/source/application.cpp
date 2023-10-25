@@ -202,11 +202,20 @@ application::application(
 
   // guaranteed to exist, same with the font.
   camera = scene_render_data->camera_data.cameras;
+
   {
+    // complex room.
     camera->position.data[0] = 1636;
     camera->position.data[1] = 149;
     camera->position.data[2] = 1781;
   }
+
+  // {
+  //   // long corridor.
+  //   camera->position.data[0] = 889.193054;
+  //   camera->position.data[1] = -25.5755959;
+  //   camera->position.data[2] = -1536.21448;
+  // }
 
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
@@ -337,7 +346,8 @@ application::update()
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 #if 0
-  static vector3f debug_position = { 1862.78345, 204.111115, 2034.12927 };
+  static vector3f debug_position = { 1826.99866, -113.391373, -675.791565 };
+  //static vector3f debug_position = { 1862.78345, 204.111115, 2034.12927 };
   //static vector3f debug_position = { 1569.43994, -90.2638550, 130.261658 };
 
   {
@@ -535,6 +545,8 @@ application::update()
     text.push_back("[~] CAMERA UNLOCK/LOCK");
     text.push_back("[1/2/WASD/EQ] CAMERA SPEED/MOVEMENT");
     text.push_back("[3/4] RENDER COLLISION QUERIES");
+    text.push_back("[5] SHOW SNAPPING/FALLING STATE");
+    text.push_back("[6] SHOW SNAPPING FACE");
     render_text_to_screen(
       font, 
       font_image_id, 

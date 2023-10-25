@@ -28,32 +28,42 @@
 #include <entity/c/runtime/font_utils.h>
 #include <application/process/text/utils.h>
 
-#define KEY_SPEED_PLUS      '1'
-#define KEY_SPEED_MINUS     '2'
-#define KEY_COLLISION_QUERY '3'
-#define KEY_COLLISION_FACE  '4'
-#define KEY_STRAFE_LEFT     'A'
-#define KEY_STRAFE_RIGHT    'D'
-#define KEY_MOVE_FWD        'W'
-#define KEY_MOVE_BACK       'S'
-#define KEY_MOVE_UP         'Q'
-#define KEY_MOVE_DOWN       'E'
-#define KEY_RESET_CAMERA    'C'
-#define SNAP_THRESHOLD      1
-#define SNAP_EXTENT         10
+#define KEY_SPEED_PLUS            '1'
+#define KEY_SPEED_MINUS           '2'
+#define KEY_COLLISION_QUERY       '3'
+#define KEY_COLLISION_FACE        '4'
+#define KEY_DRAW_STATUS           '5'
+#define KEY_DRAW_SNAPPING_FACE    '6'
+#define KEY_STRAFE_LEFT           'A'
+#define KEY_STRAFE_RIGHT          'D'
+#define KEY_MOVE_FWD              'W'
+#define KEY_MOVE_BACK             'S'
+#define KEY_MOVE_UP               'Q'
+#define KEY_MOVE_DOWN             'E'
+#define KEY_RESET_CAMERA          'C'
 
-#define ITERATIONS          4
-#define BINS                5
-#define PRINT_STATUS        0
+#define SNAP_THRESHOLD            0.1f
+#define SNAP_EXTENT               25
+#define SORTED_ITERATIONS         16
+#define ITERATIONS                4
+#define BINS                      3
+#define BINNED_MICRO_DISTANCE     12
 
 
 static int32_t prev_mouse_x = -1; 
 static int32_t prev_mouse_y = -1;
 static int32_t draw_collision_query = 0;
 static int32_t draw_collided_face = 0;
+static int32_t draw_status = 0;
+static int32_t draw_snapping_face = 0;
 static float y_speed = 0.f;
 static const float jump_speed = 20.f;
 static const float y_acc = 1.f;
+
+static color_t red = { 1.f, 0.f, 0.f, 1.f };
+static color_t green = { 0.f, 1.f, 0.f, 1.f };
+static color_t blue = { 0.f, 0.f, 1.f, 1.f };
+static color_t yellow = { 1.f, 1.f, 0.f, 1.f };
 
 void
 recenter_camera_cursor(void)
@@ -96,6 +106,12 @@ handle_input(camera_t* camera)
 
   if (is_key_triggered(KEY_COLLISION_FACE))
     draw_collided_face = !draw_collided_face;
+
+  if (is_key_triggered(KEY_DRAW_STATUS))
+    draw_status = !draw_status;
+
+  if (is_key_triggered(KEY_DRAW_SNAPPING_FACE))
+    draw_snapping_face = !draw_snapping_face;
 
   if (is_key_pressed(KEY_SPEED_PLUS))
     speed += 0.25;
@@ -242,19 +258,16 @@ snap_to_floor(
   float expand_down,
   pipeline_t* pipeline,
   int32_t draw_collision_query,
-  int32_t draw_collision_face)
+  int32_t draw_snapping_face)
 {
   float displacement = 0.f;
   float min_distance = FLT_MAX, current_distance = 0.f;
   uint32_t min_distance_index = 0;
-  color_t green = { 1.f, 0.f, 0.f, 1.f };
-  color_t red = { 0.f, 1.f, 0.f, 1.f };
-  color_t yellow = { 1.f, 1.f, 0.f, 1.f };
   uint32_t array[256];
   uint32_t used = 0;
   
   // find the aabb leaves we share space with.
-  float multiplier = 1.2f;
+  float multiplier = 1.25f;
   bvh_aabb_t bounds;
   vector3f min, max, sphere_center;
   vector3f_set_3f(
@@ -266,7 +279,7 @@ snap_to_floor(
   vector3f_set_3f(
     &min, 
     -capsule.radius * multiplier, 
-    (- capsule.radius - expand_down) * multiplier, 
+    (-capsule.radius - expand_down) * multiplier, 
     -capsule.radius * multiplier);
   vector3f_set_3f(
     &max, 
@@ -280,8 +293,11 @@ snap_to_floor(
   
   if (used) {
     vector3f penetration;
-    capsule_face_classification_t classification;
+    sphere_face_classification_t classification;
+    sphere_t sphere;
     faceplane_t face;
+
+    sphere.radius = capsule.radius;
 
     for (uint32_t used_index = 0; used_index < used; ++used_index) {
       bvh_node_t* node = bvh->nodes + array[used_index];
@@ -306,20 +322,30 @@ snap_to_floor(
         current_distance = 
           get_point_distance(&face, &bvh->faces[i].normal, &sphere_center);
 
+        vector3f_copy(&sphere.center, &sphere_center);
+        sphere.center.data[1] -= current_distance;
+        classification = 
+          classify_sphere_face(
+            &sphere, 
+            &face, 
+            &bvh->faces[i].normal, 
+            &penetration);
+
         // NOTE: We know we do not collide with any face, so we restrict
         // ourselves to distances greater than our radius. This is error prone 
         // but not terribly so, so for now it has to do.
         if (
           current_distance > capsule.radius && 
-          current_distance < min_distance) {
-          min_distance = current_distance;
+          current_distance < min_distance &&
+          classification != SPHERE_FACE_NO_COLLISION) {
+          min_distance = current_distance; 
           min_distance_index = i;
         }
       }
     }
   }
 
-  if (used && draw_collision_face) {
+  if (used && draw_snapping_face) {
      draw_face(
       bvh->faces + min_distance_index,
       &bvh->faces[min_distance_index].normal,
@@ -343,9 +369,6 @@ is_falling(
   int32_t draw_collision_query,
   int32_t draw_collision_face)
 {
-  color_t green = { 1.f, 0.f, 0.f, 1.f };
-  color_t red = { 0.f, 1.f, 0.f, 1.f };
-  color_t blue = { 0.f, 0.f, 1.f, 1.f };
   uint32_t array[256];
   uint32_t used = 0;
   
@@ -405,6 +428,7 @@ is_falling(
           &penetration);
 
         if (classification != CAPSULE_FACE_NO_COLLISION) {
+          #if 1
           float t;
           segment_classification = 
             classify_segment_face(
@@ -432,6 +456,9 @@ is_falling(
                 pipeline);
             return 0;
           }
+          #else
+          return 0;
+          #endif
         }
       }
     }
@@ -461,7 +488,90 @@ populate_capsule_aabb(bvh_aabb_t* aabb, const capsule_t* capsule)
 }
 
 static
-uint32_t
+void
+handle_collision_sorted(
+  camera_t* camera, 
+  bvh_t* bvh, 
+  uint32_t array[256],
+  uint32_t used,
+  capsule_t* capsule, 
+  pipeline_t* pipeline, 
+  uint32_t iterations)
+{
+  vector3f penetration;
+  bvh_aabb_t capsule_aabb;
+  capsule->center = camera->position;
+  populate_capsule_aabb(&capsule_aabb, capsule);
+
+  assert(used && "Do not call this function with used set to 0");
+
+  while (iterations--) {
+    // apply collision logic.
+    capsule_face_classification_t classification;
+    faceplane_t face;
+    float length_sqrd;
+    float min_length_sqrd = FLT_MAX;
+    uint32_t min_face_idx = UINT32_MAX;
+    vector3f min_displace;
+    vector3f_set_3f(&min_displace, 0.f, 0.f, 0.f);
+
+    for (uint32_t used_index = 0; used_index < used; ++used_index) {
+      bvh_node_t* node = bvh->nodes + array[used_index];
+      for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
+        if (!bvh->faces[i].is_valid)
+          continue;
+
+        if (!bounds_intersect(&capsule_aabb, &bvh->faces[i].aabb))
+          continue;
+
+        // TODO(khalil): we can avoid the copy by providing an alternative to
+        // the function or a cast the 3 float vecs to faceplane_t.
+        face.points[0] = bvh->faces[i].points[0]; 
+        face.points[1] = bvh->faces[i].points[1]; 
+        face.points[2] = bvh->faces[i].points[2]; 
+          
+        classification =
+        classify_capsule_faceplane(
+          capsule,
+          &face,
+          &bvh->faces[i].normal,
+          &penetration);
+
+        length_sqrd = length_squared_v3f(&penetration);
+
+        if (
+          classification != CAPSULE_FACE_NO_COLLISION && 
+          length_sqrd > 0.f &&
+          length_sqrd < min_length_sqrd) {
+          min_length_sqrd = length_sqrd;
+          min_face_idx = i;
+          vector3f_copy(&min_displace, &penetration);
+        }
+      }
+    }
+
+    // don't iterate if we did not collide with anything.
+    if (min_face_idx == UINT32_MAX)
+      break;
+    else {
+      float multiplier = 1.05f;
+      mult_set_v3f(&min_displace, multiplier);
+      add_set_v3f(&capsule->center, &min_displace);
+      add_set_v3f(&camera->position, &min_displace);
+
+      if (draw_collided_face)
+        draw_face(
+          bvh->faces + min_face_idx, 
+          &bvh->faces[min_face_idx].normal,
+          &blue, 
+          5, 
+          pipeline);
+    }
+  }
+}
+
+static
+void
 handle_collision_binned(
   camera_t* camera, 
   bvh_t* bvh, 
@@ -472,10 +582,6 @@ handle_collision_binned(
   uint32_t iterations,
   const float threshold_sqrd)
 {
-  uint32_t total_collisions = 0;
-  color_t green = { 1.f, 0.f, 0.f, 1.f };
-  color_t red = { 0.f, 1.f, 0.f, 1.f };
-  color_t blue = { 0.f, 0.f, 1.f, 1.f };
   vector3f penetration;
   bvh_aabb_t capsule_aabb;
   capsule->center = camera->position;
@@ -520,9 +626,8 @@ handle_collision_binned(
           classification != CAPSULE_FACE_NO_COLLISION && 
           length_sqrd > 0.f &&
           length_sqrd < threshold_sqrd) {
-          add_set_v3f(&displace, &penetration);
+           add_set_v3f(&displace, &penetration);
           ++collided;
-          ++total_collisions;
 
           if (draw_collided_face)
             draw_face(
@@ -539,14 +644,13 @@ handle_collision_binned(
     if (collided == 0)
       break;
     else {
+      float multiplier = 1.05f;
       mult_set_v3f(&displace, 1.f/collided);
-      mult_set_v3f(&displace, 1.05f);
+      mult_set_v3f(&displace, multiplier);
       add_set_v3f(&capsule->center, &displace);
       add_set_v3f(&camera->position, &displace);
     }
   }
-
-  return total_collisions;
 }
 
 static
@@ -583,13 +687,11 @@ handle_collision(
   bvh_t* bvh, 
   capsule_t* capsule, 
   pipeline_t* pipeline,
+  const uint32_t sorted_iterations,
   const uint32_t iterations,
   const uint32_t bins,
   const float binned_distance)
 {
-  color_t green = { 1.f, 0.f, 0.f, 1.f };
-  color_t red = { 0.f, 1.f, 0.f, 1.f };
-  color_t blue = { 0.f, 0.f, 1.f, 1.f };
   vector3f penetration;
   uint32_t array[256];
   uint32_t used = 0;
@@ -639,7 +741,7 @@ handle_collision(
       float root = find_quadratic_root(bins, binned_distance * binned_distance);
       for (uint32_t i = 0; i < bins; ++i) {
         float threshold = get_nth_value(root, i);
-        uint32_t total = handle_collision_binned(
+        handle_collision_binned(
           camera, 
           bvh, 
           array, 
@@ -648,10 +750,9 @@ handle_collision(
           pipeline, 
           iterations, 
           threshold);
-
-        (void)total;
       }
 
+#if 1
       // handle all collisions.
       handle_collision_binned(
           camera, 
@@ -662,6 +763,17 @@ handle_collision(
           pipeline, 
           iterations, 
           FLT_MAX);
+#else
+      // handle remaining collisions.
+      handle_collision_sorted(
+          camera, 
+          bvh, 
+          array, 
+          used, 
+          capsule, 
+          pipeline, 
+          sorted_iterations);
+#endif
     }
   }
 }
@@ -692,26 +804,27 @@ handle_physics(
     float distance = 0.f;
     capsule_t new_copy = *capsule;
     new_copy.center = camera->position;
-    distance = snap_to_floor(new_copy, bvh, capsule->radius, pipeline, 0, 0);
+    distance = snap_to_floor(
+      new_copy, bvh, snap_extent, pipeline, 0, draw_snapping_face);
     falling = 0;
     y_speed = 0.f;
     if (distance > snap_threshold) {
       camera->position.data[1] -= distance;
 
-#if PRINT_STATUS
-      {
-        color_t red = { 1.f, 0.f, 0.f, 1.f };
-        const char* text = "SNAPPING";
+      if (draw_status) {
+        char text[512];
+        const char* ptext = text;
+        memset(text, 0, sizeof(text));
+        sprintf(text, "SNAPPING %f", distance);
         render_text_to_screen(
           font,
           font_image_id,
           pipeline,
-          &text,
+          &ptext,
           1,
-          &red,
+          &green,
           400.f, 300.f);
       }
-#endif
     }
   }
 
@@ -725,9 +838,7 @@ handle_physics(
     y_speed = fmax(y_speed, -jump_speed);
     camera->position.data[1] += y_speed;
 
-#if PRINT_STATUS
-    if (falling && future_falling) {
-      color_t red = { 1.f, 0.f, 0.f, 1.f };
+    if (falling && future_falling && draw_status) {
       const char* text = "FALLING";
       render_text_to_screen(
         font,
@@ -738,7 +849,6 @@ handle_physics(
         &red,
         300.f, 300.f);
     }
-#endif
   }
 }
 
@@ -756,5 +866,6 @@ camera_update(
     camera, bvh, capsule, pipeline, font, font_image_id, 
     SNAP_EXTENT, SNAP_THRESHOLD);
   handle_collision(
-    camera, bvh, capsule, pipeline, ITERATIONS, BINS, capsule->radius);
+    camera, bvh, capsule, pipeline, 
+    SORTED_ITERATIONS, ITERATIONS, BINS, BINNED_MICRO_DISTANCE);
 }

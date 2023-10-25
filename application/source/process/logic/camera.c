@@ -45,9 +45,10 @@
 #define SNAP_THRESHOLD            0.1f
 #define SNAP_EXTENT               25
 #define SORTED_ITERATIONS         16
-#define ITERATIONS                4
-#define BINS                      3
-#define BINNED_MICRO_DISTANCE     12
+#define ITERATIONS                6
+#define BINS                      5
+#define BINNED_MICRO_DISTANCE     25
+#define BINNED_MACRO_LIMIT        40
 
 
 static int32_t prev_mouse_x = -1; 
@@ -428,7 +429,6 @@ is_falling(
           &penetration);
 
         if (classification != CAPSULE_FACE_NO_COLLISION) {
-          #if 1
           float t;
           segment_classification = 
             classify_segment_face(
@@ -456,9 +456,6 @@ is_falling(
                 pipeline);
             return 0;
           }
-          #else
-          return 0;
-          #endif
         }
       }
     }
@@ -487,6 +484,7 @@ populate_capsule_aabb(bvh_aabb_t* aabb, const capsule_t* capsule)
   }
 }
 
+#if 0
 static
 void
 handle_collision_sorted(
@@ -569,6 +567,7 @@ handle_collision_sorted(
     }
   }
 }
+#endif
 
 static
 void
@@ -626,7 +625,7 @@ handle_collision_binned(
           classification != CAPSULE_FACE_NO_COLLISION && 
           length_sqrd > 0.f &&
           length_sqrd < threshold_sqrd) {
-           add_set_v3f(&displace, &penetration);
+          add_set_v3f(&displace, &penetration);
           ++collided;
 
           if (draw_collided_face)
@@ -752,7 +751,6 @@ handle_collision(
           threshold);
       }
 
-#if 1
       // handle all collisions.
       handle_collision_binned(
           camera, 
@@ -762,18 +760,7 @@ handle_collision(
           capsule, 
           pipeline, 
           iterations, 
-          FLT_MAX);
-#else
-      // handle remaining collisions.
-      handle_collision_sorted(
-          camera, 
-          bvh, 
-          array, 
-          used, 
-          capsule, 
-          pipeline, 
-          sorted_iterations);
-#endif
+          BINNED_MACRO_LIMIT);
     }
   }
 }

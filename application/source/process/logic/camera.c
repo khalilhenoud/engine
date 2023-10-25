@@ -369,9 +369,14 @@ is_falling(
   query_intersection(bvh, &bounds, array, &used);
   
   if (used) {
+    segment_t segment;
     vector3f penetration;
     capsule_face_classification_t classification;
     faceplane_t face;
+    segment_plane_classification_t segment_classification;
+    point3f segment_intersection, segment_closest;
+
+    get_capsule_segment(&capsule, &segment);
 
     for (uint32_t used_index = 0; used_index < used; ++used_index) {
       bvh_node_t* node = bvh->nodes + array[used_index];
@@ -400,14 +405,33 @@ is_falling(
           &penetration);
 
         if (classification != CAPSULE_FACE_NO_COLLISION) {
-          if (draw_collision_face)
-            draw_face(
-              bvh->faces + i,
-              &bvh->faces[i].normal,
-              &blue,
-              5,
-              pipeline);
-          return 0;
+          float t;
+          segment_classification = 
+            classify_segment_face(
+              &face, 
+              &bvh->faces[i].normal, 
+              &segment, 
+              &segment_intersection, 
+              &t);
+
+          if ((
+            segment_classification == SEGMENT_PLANE_INTERSECT_OFF_SEGMENT ||
+            segment_classification == SEGMENT_PLANE_INTERSECT_ON_SEGMENT) &&
+            classify_coplanar_point_face(
+              &face, 
+              &bvh->faces[i].normal, 
+              &segment_intersection, 
+              &segment_closest) == COPLANAR_POINT_ON_OR_INSIDE) {
+            
+            if (draw_collision_face)
+              draw_face(
+                bvh->faces + i,
+                &bvh->faces[i].normal,
+                &blue,
+                5,
+                pipeline);
+            return 0;
+          }
         }
       }
     }
@@ -500,7 +524,7 @@ handle_collision_binned(
           ++collided;
           ++total_collisions;
 
-          if (draw_collided_face) 
+          if (draw_collided_face)
             draw_face(
               bvh->faces + i, 
               &bvh->faces[i].normal, 
@@ -516,6 +540,7 @@ handle_collision_binned(
       break;
     else {
       mult_set_v3f(&displace, 1.f/collided);
+      mult_set_v3f(&displace, 1.05f);
       add_set_v3f(&capsule->center, &displace);
       add_set_v3f(&camera->position, &displace);
     }

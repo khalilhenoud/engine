@@ -185,7 +185,7 @@ application::application(
 
   {
     // load the scene from a bin file.
-    auto fullpath = m_dataset + "media\\cooked\\map.bin";
+    auto fullpath = m_dataset + "media\\cooked\\map2.bin";
     serializer_scene_data_t *scene_bin = ::deserialize_bin(
       fullpath.c_str(), &allocator);
     scene_bin->material_repo.data[0].ambient.data[0] = 0.2f;
@@ -202,6 +202,11 @@ application::application(
 
   // guaranteed to exist, same with the font.
   camera = scene_render_data->camera_data.cameras;
+  {
+    camera->position.data[0] = 1636;
+    camera->position.data[1] = 149;
+    camera->position.data[2] = 1781;
+  }
 
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
@@ -332,7 +337,8 @@ application::update()
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 #if 0
-  static vector3f debug_position = { 1569.43994, -90.2638550, 130.261658 };
+  static vector3f debug_position = { 1862.78345, 204.111115, 2034.12927 };
+  //static vector3f debug_position = { 1569.43994, -90.2638550, 130.261658 };
 
   {
     capsule.center.data[0] = debug_position.data[0];

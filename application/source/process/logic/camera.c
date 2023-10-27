@@ -44,6 +44,7 @@
 
 #define SNAP_THRESHOLD            0.1f
 #define SNAP_EXTENT               25
+#define PROTRUSION_RATIO          0.5f
 #define SORTED_ITERATIONS         16
 #define ITERATIONS                6
 #define BINS                      5
@@ -258,7 +259,6 @@ snap_to_floor(
   bvh_t* bvh,
   float expand_down,
   pipeline_t* pipeline,
-  int32_t draw_collision_query,
   int32_t draw_snapping_face)
 {
   float displacement = 0.f;
@@ -305,16 +305,7 @@ snap_to_floor(
       for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
         if (!bvh->faces[i].is_valid || !bvh->faces[i].is_floor)
           continue;
-
-        if (draw_collision_query) {
-          draw_face(
-            bvh->faces + i,
-            &bvh->faces[i].normal,
-            (bvh->faces[i].is_floor) ? &green : &red,
-            (bvh->faces[i].is_floor) ? 3 : 2,
-            pipeline);
-        }
-
+        
         // TODO: we can avoid a copy here.
         face.points[0] = bvh->faces[i].points[0];
         face.points[1] = bvh->faces[i].points[1];
@@ -361,17 +352,40 @@ snap_to_floor(
   return displacement;
 }
 
+static
+void
+populate_capsule_aabb(bvh_aabb_t* aabb, const capsule_t* capsule)
+{
+  aabb->min_max[0] = capsule->center;
+  aabb->min_max[1] = capsule->center;
+  
+  {
+    vector3f min;
+    vector3f_set_3f(
+      &min, 
+      -capsule->radius, 
+      (-capsule->half_height - capsule->radius), 
+      -capsule->radius);
+    add_set_v3f(aabb->min_max, &min);
+    mult_set_v3f(&min, -1.f);
+    add_set_v3f(aabb->min_max + 1, &min);
+  }
+}
+
+
 int32_t
 is_falling(
   capsule_t capsule,
   bvh_t* bvh,
   float expand_down,
   pipeline_t* pipeline,
+  vector3f* to_add,
   int32_t draw_collision_query,
   int32_t draw_collision_face)
 {
   uint32_t array[256];
   uint32_t used = 0;
+  int32_t collision_count = 0;
   
   // find the aabb leaves we share space with.
   float multiplier = 1.2f;
@@ -391,9 +405,11 @@ is_falling(
   add_set_v3f(bounds.min_max + 1, &max);
 
   query_intersection(bvh, &bounds, array, &used);
+  vector3f_set_1f(to_add, 0.f);
   
   if (used) {
-    segment_t segment;
+    bvh_aabb_t capsule_aabb;
+    segment_t segment, partial_overlap;
     vector3f penetration;
     capsule_face_classification_t classification;
     faceplane_t face;
@@ -401,11 +417,15 @@ is_falling(
     point3f segment_intersection, segment_closest;
 
     get_capsule_segment(&capsule, &segment);
+    populate_capsule_aabb(&capsule_aabb, &capsule);
 
     for (uint32_t used_index = 0; used_index < used; ++used_index) {
       bvh_node_t* node = bvh->nodes + array[used_index];
       for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
         if (!bvh->faces[i].is_valid || !bvh->faces[i].is_floor)
+          continue;
+
+        if (!bounds_intersect(&capsule_aabb, &bvh->faces[i].aabb))
           continue;
 
         if (draw_collision_query) {
@@ -422,11 +442,12 @@ is_falling(
         face.points[1] = bvh->faces[i].points[1];
         face.points[2] = bvh->faces[i].points[2];
           
-        classification = classify_capsule_faceplane(
+        classification = classify_capsule_face(
           &capsule,
           &face,
           &bvh->faces[i].normal,
-          &penetration);
+          &penetration,
+          &partial_overlap);
 
         if (classification != CAPSULE_FACE_NO_COLLISION) {
           float t;
@@ -454,120 +475,24 @@ is_falling(
                 &blue,
                 5,
                 pipeline);
+            vector3f_set_1f(to_add, 0.f);
             return 0;
+          } else {
+            // if it does collide with the floor outer rim, we need to find the
+            // vector that pushes it outside the edge.
+            add_set_v3f(to_add, &penetration);
+            ++collision_count;
           }
         }
       }
     }
   }
 
+  if (collision_count)
+    mult_set_v3f(to_add, 1.f/(float)collision_count);
+  
   return 1;
 }
-
-static
-void
-populate_capsule_aabb(bvh_aabb_t* aabb, const capsule_t* capsule)
-{
-  aabb->min_max[0] = capsule->center;
-  aabb->min_max[1] = capsule->center;
-  
-  {
-    vector3f min;
-    vector3f_set_3f(
-      &min, 
-      -capsule->radius, 
-      (-capsule->half_height - capsule->radius), 
-      -capsule->radius);
-    add_set_v3f(aabb->min_max, &min);
-    mult_set_v3f(&min, -1.f);
-    add_set_v3f(aabb->min_max + 1, &min);
-  }
-}
-
-#if 0
-static
-void
-handle_collision_sorted(
-  camera_t* camera, 
-  bvh_t* bvh, 
-  uint32_t array[256],
-  uint32_t used,
-  capsule_t* capsule, 
-  pipeline_t* pipeline, 
-  uint32_t iterations)
-{
-  vector3f penetration;
-  bvh_aabb_t capsule_aabb;
-  capsule->center = camera->position;
-  populate_capsule_aabb(&capsule_aabb, capsule);
-
-  assert(used && "Do not call this function with used set to 0");
-
-  while (iterations--) {
-    // apply collision logic.
-    capsule_face_classification_t classification;
-    faceplane_t face;
-    float length_sqrd;
-    float min_length_sqrd = FLT_MAX;
-    uint32_t min_face_idx = UINT32_MAX;
-    vector3f min_displace;
-    vector3f_set_3f(&min_displace, 0.f, 0.f, 0.f);
-
-    for (uint32_t used_index = 0; used_index < used; ++used_index) {
-      bvh_node_t* node = bvh->nodes + array[used_index];
-      for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
-        if (!bvh->faces[i].is_valid)
-          continue;
-
-        if (!bounds_intersect(&capsule_aabb, &bvh->faces[i].aabb))
-          continue;
-
-        // TODO(khalil): we can avoid the copy by providing an alternative to
-        // the function or a cast the 3 float vecs to faceplane_t.
-        face.points[0] = bvh->faces[i].points[0]; 
-        face.points[1] = bvh->faces[i].points[1]; 
-        face.points[2] = bvh->faces[i].points[2]; 
-          
-        classification =
-        classify_capsule_faceplane(
-          capsule,
-          &face,
-          &bvh->faces[i].normal,
-          &penetration);
-
-        length_sqrd = length_squared_v3f(&penetration);
-
-        if (
-          classification != CAPSULE_FACE_NO_COLLISION && 
-          length_sqrd > 0.f &&
-          length_sqrd < min_length_sqrd) {
-          min_length_sqrd = length_sqrd;
-          min_face_idx = i;
-          vector3f_copy(&min_displace, &penetration);
-        }
-      }
-    }
-
-    // don't iterate if we did not collide with anything.
-    if (min_face_idx == UINT32_MAX)
-      break;
-    else {
-      float multiplier = 1.05f;
-      mult_set_v3f(&min_displace, multiplier);
-      add_set_v3f(&capsule->center, &min_displace);
-      add_set_v3f(&camera->position, &min_displace);
-
-      if (draw_collided_face)
-        draw_face(
-          bvh->faces + min_face_idx, 
-          &bvh->faces[min_face_idx].normal,
-          &blue, 
-          5, 
-          pipeline);
-    }
-  }
-}
-#endif
 
 static
 void
@@ -777,14 +702,15 @@ handle_physics(
   const float snap_extent,
   const float snap_threshold)
 {
+  vector3f to_add[2];
   int32_t falling = 0;
   int32_t future_falling = 0;
 
   capsule_t copy = *capsule;
   copy.center = camera->position;
-  falling = is_falling(copy, bvh, 0.f, pipeline, 0, 0);
+  falling = is_falling(copy, bvh, 0.f, pipeline, to_add, 0, 0);
   copy.center.data[1] -= snap_extent;
-  future_falling = is_falling(copy, bvh, 0.f, pipeline, 0, 0);
+  future_falling = is_falling(copy, bvh, 0.f, pipeline, to_add + 1, 0, 0);
 
   // snap the capsule to the nearst floor.
   if (falling && !future_falling && y_speed <= 0.f) {
@@ -792,7 +718,7 @@ handle_physics(
     capsule_t new_copy = *capsule;
     new_copy.center = camera->position;
     distance = snap_to_floor(
-      new_copy, bvh, snap_extent, pipeline, 0, draw_snapping_face);
+      new_copy, bvh, snap_extent, pipeline, draw_snapping_face);
     falling = 0;
     y_speed = 0.f;
     if (distance > snap_threshold) {
@@ -824,6 +750,12 @@ handle_physics(
     y_speed -= y_acc;
     y_speed = fmax(y_speed, -jump_speed);
     camera->position.data[1] += y_speed;
+    if (future_falling) {
+      // since the snap extent is considerable, use a multiplier to smooth the 
+      // protrusion effect.
+      mult_set_v3f(to_add + 1, PROTRUSION_RATIO);
+      add_set_v3f(&camera->position, to_add + 1);
+    }
 
     if (falling && future_falling && draw_status) {
       const char* text = "FALLING";

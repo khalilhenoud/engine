@@ -39,6 +39,7 @@ is_falling(
   bvh_t* bvh,
   float expand_down,
   pipeline_t* pipeline,
+  vector3f* to_add,
   int32_t draw_collision_query,
   int32_t draw_collision_face);
 

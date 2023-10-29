@@ -26,6 +26,7 @@ typedef struct font_runtime_t font_runtime_t;
 
 void
 camera_update(
+  float delta_time,
   camera_t* camera, 
   bvh_t* bvh, 
   capsule_t* capsule, 

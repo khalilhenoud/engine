@@ -18,10 +18,23 @@
 struct 
 framerate_controller {
 
-  void 
+  float 
   start()
   {
+    auto previous_start = time_start;
     time_start = std::chrono::high_resolution_clock::now();
+
+    if (m_first) {
+      m_first = false;
+      previous_start = time_start;
+      return 0.f;
+    }
+
+    std::chrono::duration<double> duration = time_start - previous_start;
+    std::chrono::milliseconds in_millisec = 
+      std::chrono::duration_cast<std::chrono::milliseconds>(duration);
+    auto seconds = (double)in_millisec.count()/1000.0;
+    return (float)seconds;
   }
 
   uint64_t 
@@ -36,8 +49,8 @@ framerate_controller {
     divider = divider == 0 ? 1 : divider;
     m_current_framerate = 1000ll / divider;
 
-    if (m_locked && m_target_milliseconds > divider)
-      std::this_thread::sleep_for(std::chrono::milliseconds(m_target_milliseconds - divider));
+    if (m_locked && m_target_milliseconds > (divider + buffer_time))
+      std::this_thread::sleep_for(std::chrono::milliseconds(m_target_milliseconds - (divider + buffer_time)));
 
     return previous_framerate;
   }
@@ -65,6 +78,8 @@ framerate_controller {
   uint64_t m_target_milliseconds = 0;
   uint64_t m_current_framerate = 0;
   bool m_locked = false;
+  bool m_first = true;
+  uint32_t buffer_time = 1;
   std::chrono::time_point<std::chrono::high_resolution_clock> time_start;
   std::chrono::time_point<std::chrono::high_resolution_clock> time_end;
 };

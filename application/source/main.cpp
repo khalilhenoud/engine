@@ -9,6 +9,7 @@
  * 
  */
 #include <windows.h>
+#include <timeapi.h>
 #include <string>
 #include <memory>
 #include <application/application.h>
@@ -55,6 +56,12 @@ WndProc(
 	return 0;
 }
 
+void
+last_call(void)
+{
+	opengl_swapbuffer();
+}
+
 int 
 APIENTRY 
 WinMain(
@@ -94,12 +101,14 @@ WinMain(
 	input_parameters_t input_params{ &g_hWnd };
 	input_set_client(&input_params);
 
+  // set the timers precision of the app in general.
+  timeBeginPeriod(1);
+
 	g_hWindowDC = GetDC(g_hWnd);
   opengl_parameters_t params{&g_hWindowDC};
   opengl_initialize(&params);
 	auto app = std::make_unique<application>(client_width, client_height, lpCmdLine);
   
-  uint64_t framerate = 0;
   char array[100] = { 0 };
 	MSG msg;
 	while (true) {
@@ -115,10 +124,7 @@ WinMain(
       continue;
     }
 
-		framerate = app->update();
-    sprintf(array, "C++ Project: %llu fps", framerate);
-    SetWindowText(g_hWnd, array);
-    
+    app->update();
     opengl_swapbuffer();
 	}
 
@@ -126,6 +132,8 @@ End:
 	app.reset();
   opengl_cleanup();
 	ReleaseDC(g_hWnd, g_hWindowDC);
+
+  timeEndPeriod(1);
 
 	return (int)msg.wParam;
 }

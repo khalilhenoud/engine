@@ -15,7 +15,7 @@
 #include <application/process/spatial/bvh.h>
 #include <library/allocator/allocator.h>
 
-#define FLOOR_ANGLE_DEGREES 80
+#define FLOOR_ANGLE_DEGREES 60
 #define PRIMITIVES_PER_LEAF 8
 
 

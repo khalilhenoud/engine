@@ -139,15 +139,6 @@ cleanup_packaged_render_data(
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// TODO: Move all of this stuff into a collision app/unit test. It is useful but
-// not here.
-#define SHOW_GRID 0
-#define RENDER_SCENE !SHOW_GRID
-#define COLLISION_LOGIC 0
-#define COLLISION_LOGIC_PHYSICS 0
-#define NEW_COLLISION_STUFF 0
-#define DRAW_TEXT 1
-
 framerate_controller controller;
 pipeline_t pipeline;
 
@@ -286,7 +277,7 @@ application::application(
   ::set_perspective(&pipeline, -fw, fw, -fh, fh, znear, zfar);
   ::update_projection(&pipeline);
 
-  controller.lock_framerate(60);
+  controller.lock_framerate(30);
 
   ::show_cursor(0);
 }
@@ -306,7 +297,8 @@ application::~application()
 uint64_t 
 application::update()
 {
-  controller.start();
+  uint64_t frame_rate = controller.end();
+  float dt_seconds = controller.start();
 
   ::input_update();
   ::clear_color_and_depth_buffers();
@@ -328,7 +320,6 @@ application::update()
   }
 #endif
 
-#if RENDER_SCENE
   if (scene) {
     ::push_matrix(&pipeline);
     ::pre_translate(&pipeline, 0, 0, 0);
@@ -340,7 +331,6 @@ application::update()
       &pipeline);
     ::pop_matrix(&pipeline);
   }
-#endif
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -395,130 +385,6 @@ application::update()
       debug_position.data[2] -= 2.f;
   }
 #endif
-
-#if 0
-  {
-    //if (::is_key_triggered('T')) {
-    //  chosen_index++;
-    //  chosen_index %= total_index;
-    //}
-
-    //if (::is_key_pressed('H'))
-    //  m_offset[0] -= 2.f;
-    //if (::is_key_pressed('K'))
-    //  m_offset[0] += 2.f;
-    //if (::is_key_pressed('U'))
-    //  m_offset[1] += 2.f;
-    //if (::is_key_pressed('J'))
-    //  m_offset[1] -= 2.f;
-    //if (::is_key_pressed('Y'))
-    //  m_offset[2] += 2.f;
-    //if (::is_key_pressed('I'))
-    //  m_offset[2] -= 2.f;
-
-    {
-      {
-        for (/*int32_t i = 0; i < 5; ++i*/;;) {
-          int32_t i = chosen_index;
-          vector3f offset = { m_offset[0], m_offset[1], m_offset[2] };
-          capsules[0].center = add_v3f(positions + i, &offset);
-          face_t& face = collision_faces[face_indices[i]];
-          vector3f& normal = collision_normals[face_indices[i]];
-          bool floor = is_floor[face_indices[i]];
-
-          {
-            segment_t segment;
-            get_capsule_segment(capsules, &segment);
-
-            float vertices[12];
-            vertices[0 * 3 + 0] = segment.points[0].data[0];
-            vertices[0 * 3 + 1] = segment.points[0].data[1];
-            vertices[0 * 3 + 2] = segment.points[0].data[2];
-            vertices[1 * 3 + 0] = segment.points[1].data[0];
-            vertices[1 * 3 + 1] = segment.points[1].data[1];
-            vertices[1 * 3 + 2] = segment.points[1].data[2];
-            ::draw_lines(vertices, 2, { 0.f, 1.f, 1.f, 1.f }, 1, &pipeline);
-          }
-         
-
-          ::push_matrix(&pipeline);
-          ::pre_translate(&pipeline, capsules[0].center.data[0], capsules[0].center.data[1], capsules[0].center.data[2]);
-
-          {
-            vector3f result;
-            segment_t coplanar_overlap;
-            capsule_face_classification_t classification =
-              classify_capsule_face(&capsules[0], &face, &normal, &result, &coplanar_overlap);
-            if (classification != CAPSULE_FACE_NO_COLLISION) {
-              float direction[6];
-              float length0 = ::length_v3f(&result);
-              float length1 = -(capsules[0].radius - length0);
-              result = normalize_v3f(&result);
-              direction[0] = result.data[0] * length1;
-              direction[1] = result.data[1] * length1;
-              direction[2] = result.data[2] * length1;
-              direction[3] = direction[0] + result.data[0] * length0;
-              direction[4] = direction[1] + result.data[1] * length0;
-              direction[5] = direction[2] + result.data[2] * length0;
-              if (classification == CAPSULE_FACE_COLLIDES_CAPSULE_AXIS_INTERSECTS_FACE)
-                ::draw_lines(direction, 2, color_t{ 1.f, 0.f, 0.f, 1.f }, 2, &pipeline);
-              else
-                ::draw_lines(direction, 2, color_t{ 0.f, 1.f, 1.f, 1.f }, 2, &pipeline);
-
-              if (classification == CAPSULE_FACE_COLLIDES_CAPSULE_AXIS_COPLANAR_FACE) {
-                ::pop_matrix(&pipeline);
-                ::draw_lines(coplanar_overlap.points[0].data, 2, color_t{ 0, 1, 0, 1 }, 5, &pipeline);
-                ::push_matrix(&pipeline);
-                ::pre_translate(&pipeline, capsules[0].center.data[0], capsules[0].center.data[1], capsules[0].center.data[2]);
-              }
-            }
-          }
-
-          ::pop_matrix(&pipeline);
-
-          {
-            uint32_t capsule_texture_render_id[1] = { 0 };
-            ::push_matrix(&pipeline);
-            ::pre_translate(&pipeline, capsules[0].center.data[0], capsules[0].center.data[1], capsules[0].center.data[2]);
-            float scale = (capsules[0].half_height + capsules[0].radius);
-            ::pre_scale(&pipeline, scale, scale, scale);
-            ::draw_meshes(&collision_render_data[0], capsule_texture_render_id, 1, &pipeline);
-            ::pop_matrix(&pipeline);
-          }
-
-          break;
-        }
-      }
-    }
-  }
-
-#if COLLISION_LOGIC
-  {
-    if (draw_debug) {
-      // draw the collision faces.
-      float vertices[12];
-      for (uint32_t i = 0; i < collision_faces.size(); ++i) {
-        vertices[0 * 3 + 0] = collision_faces[i].points[0].data[0] + collision_normals[i].data[0];
-        vertices[0 * 3 + 1] = collision_faces[i].points[0].data[1] + collision_normals[i].data[1];
-        vertices[0 * 3 + 2] = collision_faces[i].points[0].data[2] + collision_normals[i].data[2];
-        vertices[1 * 3 + 0] = collision_faces[i].points[1].data[0] + collision_normals[i].data[0];
-        vertices[1 * 3 + 1] = collision_faces[i].points[1].data[1] + collision_normals[i].data[1];
-        vertices[1 * 3 + 2] = collision_faces[i].points[1].data[2] + collision_normals[i].data[2];
-        vertices[2 * 3 + 0] = collision_faces[i].points[2].data[0] + collision_normals[i].data[0];
-        vertices[2 * 3 + 1] = collision_faces[i].points[2].data[1] + collision_normals[i].data[1];
-        vertices[2 * 3 + 2] = collision_faces[i].points[2].data[2] + collision_normals[i].data[2];
-        vertices[3 * 3 + 0] = collision_faces[i].points[0].data[0] + collision_normals[i].data[0];
-        vertices[3 * 3 + 1] = collision_faces[i].points[0].data[1] + collision_normals[i].data[1];
-        vertices[3 * 3 + 2] = collision_faces[i].points[0].data[2] + collision_normals[i].data[2];
-        if (is_floor[i])
-          ::draw_lines(vertices, 4, { 1.f, 0.f, 0.f, 1.f }, 3, &pipeline);
-        else
-          ::draw_lines(vertices, 4, { 0.f, 1.f, 0.f, 1.f }, 2, &pipeline);
-      }
-    }
-  }
-#endif
-#endif
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -533,14 +399,30 @@ application::update()
         recenter_camera_cursor();
     }
 
-    if (!m_disable_input)
-      camera_update(camera, bvh, &capsule, &pipeline, font, font_image_id);
+    if (!m_disable_input) {
+      camera_update(
+        dt_seconds, 
+        camera, 
+        bvh, 
+        &capsule, 
+        &pipeline, 
+        font, 
+        font_image_id);
+    }
   }
 
   {
+    char delta_str[128] = { 0 };
+    sprintf(delta_str, "delta: %f", dt_seconds);
+    char frame_str[128] = { 0 };
+    sprintf(frame_str, "fps: %llu", frame_rate);
+
     color_t white = { 1.f, 1.f, 1.f, 1.f };
     // display simple instructions.
     std::vector<const char*> text;
+    text.push_back(delta_str);
+    text.push_back(frame_str);
+    text.push_back("----------------");
     text.push_back("[C] RESET CAMERA");
     text.push_back("[~] CAMERA UNLOCK/LOCK");
     text.push_back("[1/2/WASD/EQ] CAMERA SPEED/MOVEMENT");
@@ -558,6 +440,6 @@ application::update()
   }
 
   ::flush_operations();
-
-  return controller.end();
+  
+  return frame_rate;
 }

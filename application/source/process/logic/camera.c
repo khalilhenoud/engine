@@ -76,7 +76,7 @@ recenter_camera_cursor(void)
 
 static
 void
-handle_input(camera_t* camera)
+handle_input(float delta_time, camera_t* camera)
 {
   static float    y_limit = 0.f;
   static float    speed = 10.f;
@@ -607,6 +607,7 @@ get_nth_value(
 static
 void
 handle_collision(
+  float delta_time,
   camera_t* camera, 
   bvh_t* bvh, 
   capsule_t* capsule, 
@@ -693,6 +694,7 @@ handle_collision(
 static
 void
 handle_physics(
+  float delta_time,
   camera_t* camera, 
   bvh_t* bvh, 
   capsule_t* capsule, 
@@ -773,6 +775,7 @@ handle_physics(
 
 void
 camera_update(
+  float delta_time,
   camera_t* camera, 
   bvh_t* bvh, 
   capsule_t* capsule, 
@@ -780,11 +783,11 @@ camera_update(
   font_runtime_t* font, 
   const uint32_t font_image_id)
 {
-  handle_input(camera);
+  handle_input(delta_time, camera);
   handle_physics(
-    camera, bvh, capsule, pipeline, font, font_image_id, 
+    delta_time, camera, bvh, capsule, pipeline, font, font_image_id, 
     SNAP_EXTENT, SNAP_THRESHOLD);
   handle_collision(
-    camera, bvh, capsule, pipeline, 
+    delta_time, camera, bvh, capsule, pipeline, 
     SORTED_ITERATIONS, ITERATIONS, BINS, BINNED_MICRO_DISTANCE);
 }

@@ -34,6 +34,7 @@
 #define KEY_COLLISION_FACE        '4'
 #define KEY_DRAW_STATUS           '5'
 #define KEY_DRAW_SNAPPING_FACE    '6'
+#define KEY_JUMP                  0x20
 #define KEY_STRAFE_LEFT           'A'
 #define KEY_STRAFE_RIGHT          'D'
 #define KEY_MOVE_FWD              'W'
@@ -51,6 +52,8 @@
 #define BINNED_MICRO_DISTANCE     25
 #define BINNED_MACRO_LIMIT        40
 
+#define REFERENCE_FRAME_TIME      0.033f
+
 
 static int32_t prev_mouse_x = -1; 
 static int32_t prev_mouse_y = -1;
@@ -58,14 +61,30 @@ static int32_t draw_collision_query = 0;
 static int32_t draw_collided_face = 0;
 static int32_t draw_status = 0;
 static int32_t draw_snapping_face = 0;
-static float y_speed = 0.f;
+static vector3f cam_acc = { 5.f, 5.f, 5.f };
+static vector3f cam_speed = { 0.f, 0.f, 0.f };
+static vector3f cam_speed_limit = { 10.f, 20.f, 10.f };
+static const float gravity_acc = 1.f;
+static const float friction_dec = 2.f;
+static const float friction_k = 1.f;
 static const float jump_speed = 20.f;
-static const float y_acc = 1.f;
+
+// 0 is walking, 1 is flying...
+static uint32_t movement_mode = 0;
 
 static color_t red = { 1.f, 0.f, 0.f, 1.f };
 static color_t green = { 0.f, 1.f, 0.f, 1.f };
 static color_t blue = { 0.f, 0.f, 1.f, 1.f };
 static color_t yellow = { 1.f, 1.f, 0.f, 1.f };
+static color_t white = { 1.f, 1.f, 1.f, 1.f };
+
+typedef
+enum {
+  COLLIDED_FLOOR_FLAG = 1 << 0,
+  COLLIDED_CEILING_FLAG = 1 << 1,
+  COLLIDED_WALLS = 1 << 2,
+  COLLIDED_NONE = 1 << 3
+} collision_flags_t;
 
 void
 recenter_camera_cursor(void)
@@ -79,7 +98,7 @@ void
 handle_input(float delta_time, camera_t* camera)
 {
   static float    y_limit = 0.f;
-  static float    speed = 10.f;
+  float multiplier = delta_time / REFERENCE_FRAME_TIME;
   
   matrix4f crossup, camerarotateY, camerarotatetemp, tmpmatrix;
   float dx, dy, d, tempangle;
@@ -116,11 +135,12 @@ handle_input(float delta_time, camera_t* camera)
     draw_snapping_face = !draw_snapping_face;
 
   if (is_key_pressed(KEY_SPEED_PLUS))
-    speed += 0.25;
+    cam_speed_limit.data[0] = cam_speed_limit.data[2] += 0.25f;
 
   if (is_key_pressed(KEY_SPEED_MINUS)) {
-    speed -= 0.25;
-    speed = fmax(speed, 0.125);
+    cam_speed_limit.data[0] = cam_speed_limit.data[2] -= 0.25f;
+    cam_speed_limit.data[0] = cam_speed_limit.data[2] = 
+      fmax(cam_speed_limit.data[2], 0.125f);
   }
 
   if (prev_mouse_x == -1)
@@ -180,48 +200,82 @@ handle_input(float delta_time, camera_t* camera)
   camera->up_vector = mult_m4f_v3f(&tmpmatrix, &camera->up_vector);
 
   // Handling translations.
-  if (is_key_pressed(KEY_MOVE_DOWN))
-    camera->position.data[1] -= speed;
+  if (movement_mode) {
+    if (is_key_pressed(KEY_MOVE_DOWN))
+      cam_speed.data[1] -= cam_acc.data[1] * multiplier;
 
-  if (is_key_pressed(KEY_MOVE_UP))
-    camera->position.data[1] += speed;
-
-  if (is_key_pressed(KEY_STRAFE_LEFT)) {
-    camera->position.data[0] -= tmp.data[0] * speed;
-    camera->position.data[2] -= tmp.data[2] * speed;
+    if (is_key_pressed(KEY_MOVE_UP))
+      cam_speed.data[1] += cam_acc.data[1] * multiplier;
   }
 
-  if (is_key_pressed(KEY_STRAFE_RIGHT)) {
-    camera->position.data[0] += tmp.data[0] * speed;
-    camera->position.data[2] += tmp.data[2] * speed;
-  }
+  if (is_key_pressed(KEY_STRAFE_LEFT))
+    cam_speed.data[0] -= cam_acc.data[0] * multiplier;
 
-  if (is_key_pressed(KEY_MOVE_FWD)) {
-    vector3f vecxz;
-    vecxz.data[0] = camera->lookat_direction.data[0];
-    vecxz.data[2] = camera->lookat_direction.data[2];
-    length = 
-      sqrtf(vecxz.data[0] * vecxz.data[0] + vecxz.data[2] * vecxz.data[2]);
-    if (length != 0) {
-      vecxz.data[0] /= length;
-      vecxz.data[2] /= length;
-      camera->position.data[0] += vecxz.data[0] * speed;
-      camera->position.data[2] += vecxz.data[2] * speed;
+  if (is_key_pressed(KEY_STRAFE_RIGHT))
+    cam_speed.data[0] += cam_acc.data[0] * multiplier;
+
+  if (is_key_pressed(KEY_MOVE_FWD))
+    cam_speed.data[2] += cam_acc.data[2] * multiplier;
+
+  if (is_key_pressed(KEY_MOVE_BACK))
+    cam_speed.data[2] -= cam_acc.data[2];
+
+  {
+    {
+      // apply friction.
+      float friction = friction_k * friction_dec * multiplier;
+      if (cam_speed.data[0] < 0.f) {
+        cam_speed.data[0] += friction;
+        cam_speed.data[0] = fmin(cam_speed.data[0], 0.f);
+      } else {
+        cam_speed.data[0] -= friction;
+        cam_speed.data[0] = fmax(cam_speed.data[0], 0.f);
+      }
+
+      if (cam_speed.data[2] < 0.f) {
+        cam_speed.data[2] += friction;
+        cam_speed.data[2] = fmin(cam_speed.data[2], 0.f);
+      } else {
+        cam_speed.data[2] -= friction;
+        cam_speed.data[2] = fmax(cam_speed.data[2], 0.f);
+      }
+    }
+
+    {
+      // limit cam_speed
+      cam_speed.data[0] = (cam_speed.data[0] < -cam_speed_limit.data[0]) ? 
+        -cam_speed_limit.data[0] : cam_speed.data[0];
+      cam_speed.data[0] = (cam_speed.data[0] > +cam_speed_limit.data[0]) ? 
+        +cam_speed_limit.data[0] : cam_speed.data[0];
+      cam_speed.data[2] = (cam_speed.data[2] < -cam_speed_limit.data[2]) ? 
+        -cam_speed_limit.data[2] : cam_speed.data[2];
+      cam_speed.data[2] = (cam_speed.data[2] > +cam_speed_limit.data[2]) ? 
+        +cam_speed_limit.data[2] : cam_speed.data[2];
     }
   }
 
-  if (is_key_pressed(KEY_MOVE_BACK)) {
-    vector3f vecxz;
-    vecxz.data[0] = camera->lookat_direction.data[0];
-    vecxz.data[2] = camera->lookat_direction.data[2];
-    length = 
-      sqrtf(vecxz.data[0] * vecxz.data[0] + vecxz.data[2] * vecxz.data[2]);
-    if (length != 0) {
-      vecxz.data[0] /= length;
-      vecxz.data[2] /= length;
-      camera->position.data[0] -= vecxz.data[0] * speed;
-      camera->position.data[2] -= vecxz.data[2] * speed;
+  {
+    vector3f cam_dt_pos = { 0.f, 0.f, 0.f };
+    cam_dt_pos.data[0] += tmp.data[0] * cam_speed.data[0] * multiplier;
+    cam_dt_pos.data[2] += tmp.data[2] * cam_speed.data[0] * multiplier;
+
+    {
+      vector3f vecxz;
+      vecxz.data[0] = camera->lookat_direction.data[0];
+      vecxz.data[2] = camera->lookat_direction.data[2];
+      length = 
+        sqrtf(vecxz.data[0] * vecxz.data[0] + vecxz.data[2] * vecxz.data[2]);
+      if (length != 0) {
+        vecxz.data[0] /= length;
+        vecxz.data[2] /= length;
+
+        cam_dt_pos.data[0] += vecxz.data[0] * cam_speed.data[2] * multiplier;
+        cam_dt_pos.data[2] += vecxz.data[2] * cam_speed.data[2] * multiplier;
+      }
     }
+
+    camera->position.data[0] += cam_dt_pos.data[0];
+    camera->position.data[2] += cam_dt_pos.data[2];
   }
 }
 
@@ -372,7 +426,6 @@ populate_capsule_aabb(bvh_aabb_t* aabb, const capsule_t* capsule)
   }
 }
 
-
 int32_t
 is_falling(
   capsule_t capsule,
@@ -399,7 +452,7 @@ is_falling(
   vector3f_set_3f(
     &max, 
     capsule.radius * multiplier, 
-    (capsule.half_height + capsule.radius) * multiplier, 
+    (capsule.half_height + capsule.radius) * multiplier,
     capsule.radius * multiplier);
   add_set_v3f(bounds.min_max, &min);
   add_set_v3f(bounds.min_max + 1, &max);
@@ -432,7 +485,8 @@ is_falling(
           draw_face(
             bvh->faces + i,
             &bvh->faces[i].normal,
-            (bvh->faces[i].is_floor) ? &green : &red,
+            (bvh->faces[i].is_floor) ? &green : 
+              ((bvh->faces[i].is_ceiling) ? &white : &red),
             (bvh->faces[i].is_floor) ? 3 : 2,
             pipeline);
         }
@@ -495,7 +549,7 @@ is_falling(
 }
 
 static
-void
+collision_flags_t
 handle_collision_binned(
   camera_t* camera, 
   bvh_t* bvh, 
@@ -506,6 +560,7 @@ handle_collision_binned(
   uint32_t iterations,
   const float threshold_sqrd)
 {
+  collision_flags_t flags = COLLIDED_NONE;
   vector3f penetration;
   bvh_aabb_t capsule_aabb;
   capsule->center = camera->position;
@@ -553,6 +608,9 @@ handle_collision_binned(
           add_set_v3f(&displace, &penetration);
           ++collided;
 
+          flags |= bvh->faces[i].is_ceiling * COLLIDED_CEILING_FLAG;
+          flags |= bvh->faces[i].is_floor * COLLIDED_FLOOR_FLAG;
+
           if (draw_collided_face)
             draw_face(
               bvh->faces + i, 
@@ -575,6 +633,8 @@ handle_collision_binned(
       add_set_v3f(&camera->position, &displace);
     }
   }
+
+  return flags;
 }
 
 static
@@ -605,9 +665,8 @@ get_nth_value(
 // TODO(khalil): create a context that holds the information we need to pass for
 // updates.
 static
-void
+collision_flags_t
 handle_collision(
-  float delta_time,
   camera_t* camera, 
   bvh_t* bvh, 
   capsule_t* capsule, 
@@ -615,8 +674,10 @@ handle_collision(
   const uint32_t sorted_iterations,
   const uint32_t iterations,
   const uint32_t bins,
-  const float binned_distance)
+  const float binned_distance,
+  const float limit_distance)
 {
+  collision_flags_t flags = COLLIDED_NONE;
   vector3f penetration;
   uint32_t array[256];
   uint32_t used = 0;
@@ -654,7 +715,8 @@ handle_collision(
           draw_face(
             bvh->faces + i, 
             &bvh->faces[i].normal, 
-            (bvh->faces[i].is_floor) ? &green : &red, 
+            (bvh->faces[i].is_floor) ? &green : 
+              (bvh->faces[i].is_ceiling ? &white : &red), 
             (bvh->faces[i].is_floor) ? 3 : 2,
             pipeline);
         }
@@ -666,7 +728,7 @@ handle_collision(
       float root = find_quadratic_root(bins, binned_distance * binned_distance);
       for (uint32_t i = 0; i < bins; ++i) {
         float threshold = get_nth_value(root, i);
-        handle_collision_binned(
+        flags |= handle_collision_binned(
           camera, 
           bvh, 
           array, 
@@ -678,7 +740,7 @@ handle_collision(
       }
 
       // handle all collisions.
-      handle_collision_binned(
+      flags |= handle_collision_binned(
           camera, 
           bvh, 
           array, 
@@ -686,9 +748,11 @@ handle_collision(
           capsule, 
           pipeline, 
           iterations, 
-          BINNED_MACRO_LIMIT);
+          limit_distance);
     }
   }
+
+  return flags;
 }
 
 static
@@ -704,6 +768,7 @@ handle_physics(
   const float snap_extent,
   const float snap_threshold)
 {
+  float multiplier = delta_time / REFERENCE_FRAME_TIME;
   vector3f to_add[2];
   int32_t falling = 0;
   int32_t future_falling = 0;
@@ -715,14 +780,14 @@ handle_physics(
   future_falling = is_falling(copy, bvh, 0.f, pipeline, to_add + 1, 0, 0);
 
   // snap the capsule to the nearst floor.
-  if (falling && !future_falling && y_speed <= 0.f) {
+  if (falling && !future_falling && cam_speed.data[1] <= 0.f) {
     float distance = 0.f;
     capsule_t new_copy = *capsule;
     new_copy.center = camera->position;
     distance = snap_to_floor(
       new_copy, bvh, snap_extent, pipeline, draw_snapping_face);
     falling = 0;
-    y_speed = 0.f;
+    cam_speed.data[1] = 0.f;
     if (distance > snap_threshold) {
       camera->position.data[1] -= distance;
 
@@ -743,15 +808,15 @@ handle_physics(
     }
   }
 
-  if (is_key_triggered(0x20) && !falling) {
+  if (is_key_triggered(KEY_JUMP) && !falling) {
     falling = 1;
-    y_speed = jump_speed;
+    cam_speed.data[1] = jump_speed;
   }
 
   if (falling) {
-    y_speed -= y_acc;
-    y_speed = fmax(y_speed, -jump_speed);
-    camera->position.data[1] += y_speed;
+    cam_speed.data[1] -= gravity_acc * multiplier;
+    cam_speed.data[1] = fmax(cam_speed.data[1], -cam_speed_limit.data[1]);
+    camera->position.data[1] += cam_speed.data[1] * multiplier;
     if (future_falling) {
       // since the snap extent is considerable, use a multiplier to smooth the 
       // protrusion effect.
@@ -784,10 +849,23 @@ camera_update(
   const uint32_t font_image_id)
 {
   handle_input(delta_time, camera);
+  
   handle_physics(
     delta_time, camera, bvh, capsule, pipeline, font, font_image_id, 
     SNAP_EXTENT, SNAP_THRESHOLD);
-  handle_collision(
-    delta_time, camera, bvh, capsule, pipeline, 
-    SORTED_ITERATIONS, ITERATIONS, BINS, BINNED_MICRO_DISTANCE);
+  
+  {
+    collision_flags_t flags = handle_collision(
+      camera, bvh, capsule, pipeline, 
+      SORTED_ITERATIONS, 
+      ITERATIONS, 
+      BINS, 
+      BINNED_MICRO_DISTANCE, 
+      BINNED_MACRO_LIMIT);
+
+    if (
+      (flags & COLLIDED_CEILING_FLAG) == COLLIDED_CEILING_FLAG && 
+      cam_speed.data[1] > 0.f)
+      cam_speed.data[1] = 0.f;
+  }
 }

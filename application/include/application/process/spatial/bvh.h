@@ -40,6 +40,7 @@ struct bvh_face_t {
   // TODO: These are optional, move to meta arrays.
   float normal_dot;
   uint8_t is_floor;
+  uint8_t is_ceiling;
 } bvh_face_t;
 
 typedef

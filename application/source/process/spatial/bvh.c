@@ -278,6 +278,7 @@ create_bvh(
             float cosine_target = cosf(TO_RADIANS(FLOOR_ANGLE_DEGREES));
             face->normal_dot = face->normal.data[1];
             face->is_floor = face->normal_dot > cosine_target;
+            face->is_ceiling = face->normal_dot < -cosine_target;
             face->is_valid = !(
               equal_to_v3f(face->points + 0, face->points + 1) ||
               equal_to_v3f(face->points + 0, face->points + 2) ||

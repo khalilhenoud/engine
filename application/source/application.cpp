@@ -201,12 +201,12 @@ application::application(
     camera->position.data[2] = 1781;
   }
 
-  // {
-  //   // long corridor.
-  //   camera->position.data[0] = 889.193054;
-  //   camera->position.data[1] = -25.5755959;
-  //   camera->position.data[2] = -1536.21448;
-  // }
+  //{
+  //  // long corridor.
+  //  camera->position.data[0] = 889.193054;
+  //  camera->position.data[1] = -25.5755959;
+  //  camera->position.data[2] = -1536.21448;
+  //}
 
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
@@ -277,7 +277,7 @@ application::application(
   ::set_perspective(&pipeline, -fw, fw, -fh, fh, znear, zfar);
   ::update_projection(&pipeline);
 
-  controller.lock_framerate(30);
+  controller.lock_framerate(60);
 
   ::show_cursor(0);
 }

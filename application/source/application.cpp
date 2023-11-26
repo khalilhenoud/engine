@@ -359,7 +359,7 @@ application::update()
   std::vector<color_t> asso_colors;
   vector3f av_penetration = { 0, 0, 0 };
   int32_t instances = 0;
-  std::vector<faceplane_t> of_interest;
+  std::vector<face_t> of_interest;
   std::vector<vector3f> of_interest_normals;
 
   auto && populate_capsule_aabb = [](bvh_aabb_t* aabb, const capsule_t* capsule)
@@ -406,9 +406,9 @@ application::update()
   };
 
   auto&& is_already_considered = [](
-    std::vector<faceplane_t> &considered, 
+    std::vector<face_t> &considered, 
     std::vector<vector3f> &of_interest_normals, 
-    faceplane_t current, 
+    face_t current, 
     vector3f normal) {
     
     for (uint32_t i = 0; i < considered.size(); ++i) {
@@ -451,7 +451,7 @@ application::update()
         segment_t segment, partial_overlap;
         vector3f penetration;
         capsule_face_classification_t classification;
-        faceplane_t face;
+        face_t face;
         segment_plane_classification_t segment_classification;
         point3f segment_intersection, segment_closest;
 
@@ -474,10 +474,11 @@ application::update()
 
             point3f sphere_center;
 
-            classification = classify_capsule_faceplane(
+            classification = classify_capsule_face(
               &capsule,
               &face,
               &bvh->faces[i].normal,
+              1,
               &penetration,
               &sphere_center);
 
@@ -576,7 +577,8 @@ application::update()
 #if 0
   {
     vector3f penetration;
-    faceplane_t face;
+    face_t face;
+    point3f center;
     int32_t i_face = 361;// 361, 381
     face.points[0] = bvh->faces[i_face].points[0];
     face.points[1] = bvh->faces[i_face].points[1];
@@ -584,20 +586,23 @@ application::update()
 
     if (draw_sphere) {
       sphere_face_classification_t classification =
-        classify_sphere_faceplane(
+        classify_sphere_face(
           &sphere,
           &face,
           &bvh->faces[i_face].normal,
-          &penetration);
+          &penetration,
+          &center);
     }
 
     if (draw_capsule) {
       capsule_face_classification_t classification =
-        classify_capsule_faceplane(
+        classify_capsule_face(
           &capsule,
           &face,
           &bvh->faces[i_face].normal,
-          &penetration);
+          1,
+          &penetration,
+          &center);
     }
   }
 #endif

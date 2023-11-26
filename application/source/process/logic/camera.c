@@ -371,7 +371,7 @@ snap_to_floor(
     vector3f penetration;
     sphere_face_classification_t classification;
     sphere_t sphere;
-    faceplane_t face;
+    face_t face;
 
     sphere.center = sphere_center;
     sphere.radius = capsule.radius;
@@ -398,6 +398,7 @@ snap_to_floor(
             &sphere, 
             &face, 
             &bvh->faces[i].normal, 
+            0,
             &penetration);
 
         // NOTE: We know we do not collide with any face, so we restrict
@@ -478,12 +479,13 @@ is_falling(
   
   if (used) {
     bvh_aabb_t capsule_aabb;
-    segment_t segment, partial_overlap;
+    segment_t segment;
     vector3f penetration;
     capsule_face_classification_t classification;
-    faceplane_t face;
+    face_t face;
     segment_plane_classification_t segment_classification;
     point3f segment_intersection, segment_closest;
+    point3f sphere_center;
 
     get_capsule_segment(&capsule, &segment);
     populate_capsule_aabb(&capsule_aabb, &capsule);
@@ -516,8 +518,9 @@ is_falling(
           &capsule,
           &face,
           &bvh->faces[i].normal,
+          0,
           &penetration,
-          &partial_overlap);
+          &sphere_center);
 
         if (classification != CAPSULE_FACE_NO_COLLISION) {
           float t;
@@ -606,7 +609,7 @@ handle_collision_binned(
   while (iterations--) {
     // apply collision logic.
     capsule_face_classification_t classification;
-    faceplane_t face;
+    face_t face;
     int32_t collided = 0;
     float length_sqrd;
     vector3f displace;
@@ -623,16 +626,17 @@ handle_collision_binned(
           continue;
 
         // TODO(khalil): we can avoid the copy by providing an alternative to
-        // the function or a cast the 3 float vecs to faceplane_t.
+        // the function or a cast the 3 float vecs to face_t.
         face.points[0] = bvh->faces[i].points[0]; 
         face.points[1] = bvh->faces[i].points[1]; 
         face.points[2] = bvh->faces[i].points[2]; 
           
         classification =
-        classify_capsule_faceplane(
+        classify_capsule_face(
           capsule,
           &face,
           &bvh->faces[i].normal,
+          1,
           &penetration,
           &sphere_center);
 

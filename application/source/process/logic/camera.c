@@ -307,17 +307,37 @@ draw_face(
 }
 
 static
+void
+populate_capsule_aabb(bvh_aabb_t* aabb, const capsule_t* capsule)
+{
+  aabb->min_max[0] = capsule->center;
+  aabb->min_max[1] = capsule->center;
+
+  {
+    vector3f min;
+    vector3f_set_3f(
+      &min,
+      -capsule->radius,
+      (-capsule->half_height - capsule->radius),
+      -capsule->radius);
+    add_set_v3f(aabb->min_max, &min);
+    mult_set_v3f(&min, -1.f);
+    add_set_v3f(aabb->min_max + 1, &min);
+  }
+}
+
+static
 float
 snap_to_floor(
   capsule_t capsule,
   bvh_t* bvh,
   float expand_down,
-  pipeline_t* pipeline,
-  int32_t draw_snapping_face)
+  pipeline_t* pipeline)
 {
+  bvh_aabb_t capsule_aabb;
   float displacement = 0.f;
-  float min_distance = FLT_MAX, current_distance = 0.f;
-  uint32_t min_distance_index = 0;
+  float current_distance;
+  int32_t hits = 0;
   uint32_t array[256];
   uint32_t used = 0;
   
@@ -344,6 +364,7 @@ snap_to_floor(
   add_set_v3f(bounds.min_max, &min);
   add_set_v3f(bounds.min_max + 1, &max);
 
+  populate_capsule_aabb(&capsule_aabb, &capsule);
   query_intersection(bvh, &bounds, array, &used);
   
   if (used) {
@@ -352,12 +373,16 @@ snap_to_floor(
     sphere_t sphere;
     faceplane_t face;
 
+    sphere.center = sphere_center;
     sphere.radius = capsule.radius;
 
     for (uint32_t used_index = 0; used_index < used; ++used_index) {
       bvh_node_t* node = bvh->nodes + array[used_index];
       for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
         if (!bvh->faces[i].is_valid || !bvh->faces[i].is_floor)
+          continue;
+
+        if (!bounds_intersect(&capsule_aabb, &bvh->faces[i].aabb))
           continue;
         
         // TODO: we can avoid a copy here.
@@ -366,10 +391,8 @@ snap_to_floor(
         face.points[2] = bvh->faces[i].points[2];
 
         current_distance = 
-          get_point_distance(&face, &bvh->faces[i].normal, &sphere_center);
+          get_point_distance(&face, &bvh->faces[i].normal, &sphere.center);
 
-        vector3f_copy(&sphere.center, &sphere_center);
-        sphere.center.data[1] -= current_distance;
         classification = 
           classify_sphere_face(
             &sphere, 
@@ -381,49 +404,40 @@ snap_to_floor(
         // ourselves to distances greater than our radius. This is error prone 
         // but not terribly so, so for now it has to do.
         if (
-          current_distance > capsule.radius && 
-          current_distance < min_distance &&
-          classification != SPHERE_FACE_NO_COLLISION) {
-          min_distance = current_distance; 
-          min_distance_index = i;
+          classification != SPHERE_FACE_NO_COLLISION &&
+          current_distance < sphere.radius) {
+          // find the deepest penetration point to the face, then do segment
+          // face intersection.
+          segment_plane_classification_t seg_classify;
+          float t = 0.f;
+          point3f intersection;
+          segment_t segment;
+          segment.points[0] = sphere_center;
+          vector3f dist = bvh->faces[i].normal;
+          mult_set_v3f(&dist, sphere.radius);
+          diff_set_v3f(segment.points, &dist);
+          segment.points[1] = segment.points[0];
+          segment.points[1].data[1] += 2 * sphere.radius;
+
+          // find the intersection of the segment with the face.
+          seg_classify = classify_segment_face(
+            &face, &bvh->faces[i].normal, &segment, &intersection, &t);
+          if (
+            seg_classify == SEGMENT_PLANE_INTERSECT_ON_SEGMENT || 
+            seg_classify == SEGMENT_PLANE_INTERSECT_OFF_SEGMENT) {
+            vector3f diff = diff_v3f(&intersection, segment.points);
+            current_distance = length_v3f(&diff);
+          } else
+            assert(0);
+
+          displacement = 
+            displacement < current_distance ? current_distance : displacement;
         }
       }
     }
   }
 
-  if (used && draw_snapping_face) {
-     draw_face(
-      bvh->faces + min_distance_index,
-      &bvh->faces[min_distance_index].normal,
-      &yellow,
-      5,
-      pipeline);
-  }
-
-  if (min_distance != FLT_MAX)
-    displacement = min_distance - capsule.radius;
-
   return displacement;
-}
-
-static
-void
-populate_capsule_aabb(bvh_aabb_t* aabb, const capsule_t* capsule)
-{
-  aabb->min_max[0] = capsule->center;
-  aabb->min_max[1] = capsule->center;
-  
-  {
-    vector3f min;
-    vector3f_set_3f(
-      &min, 
-      -capsule->radius, 
-      (-capsule->half_height - capsule->radius), 
-      -capsule->radius);
-    add_set_v3f(aabb->min_max, &min);
-    mult_set_v3f(&min, -1.f);
-    add_set_v3f(aabb->min_max + 1, &min);
-  }
 }
 
 int32_t
@@ -433,6 +447,8 @@ is_falling(
   float expand_down,
   pipeline_t* pipeline,
   vector3f* to_add,
+  uint32_t* face_collided,
+  float* shift_vertical,
   int32_t draw_collision_query,
   int32_t draw_collision_face)
 {
@@ -529,6 +545,25 @@ is_falling(
                 &blue,
                 5,
                 pipeline);
+            
+            {
+              // set the extrusion data.
+              assert(face_collided && "face collided pointer cannot be null");
+              assert(shift_vertical && "distance pointer cannot be null");
+
+              {
+                point3f pt = segment_intersection;
+                pt.data[1] += capsule.radius;
+                float dist = get_point_distance(
+                  &face, &bvh->faces[i].normal, &pt);
+                dist = dist < capsule.radius ? capsule.radius - dist : 0.f;
+                *face_collided = i;
+                *shift_vertical = 
+                  (segment_intersection.data[1] + capsule.radius + dist) - 
+                  segment.points[0].data[1];
+              }
+            }
+            
             vector3f_set_1f(to_add, 0.f);
             return 0;
           } else {
@@ -575,6 +610,7 @@ handle_collision_binned(
     int32_t collided = 0;
     float length_sqrd;
     vector3f displace;
+    point3f sphere_center;
     vector3f_set_3f(&displace, 0.f, 0.f, 0.f);
 
     for (uint32_t used_index = 0; used_index < used; ++used_index) {
@@ -597,7 +633,8 @@ handle_collision_binned(
           capsule,
           &face,
           &bvh->faces[i].normal,
-          &penetration);
+          &penetration,
+          &sphere_center);
 
         length_sqrd = length_squared_v3f(&penetration);
 
@@ -626,7 +663,7 @@ handle_collision_binned(
     if (collided == 0)
       break;
     else {
-      float multiplier = 1.05f;
+      float multiplier = 1.0f;
       mult_set_v3f(&displace, 1.f/collided);
       mult_set_v3f(&displace, multiplier);
       add_set_v3f(&capsule->center, &displace);
@@ -771,40 +808,50 @@ handle_physics(
   float multiplier = delta_time / REFERENCE_FRAME_TIME;
   vector3f to_add[2];
   int32_t falling = 0;
-  int32_t future_falling = 0;
+  int32_t falling2 = 0;
+  uint32_t face_collided = 0;
+  float shift_vertical = 0.f;
 
   capsule_t copy = *capsule;
   copy.center = camera->position;
-  falling = is_falling(copy, bvh, 0.f, pipeline, to_add, 0, 0);
+  falling = is_falling(
+    copy, bvh, 0, pipeline, to_add, &face_collided, &shift_vertical, 0, 0);
   copy.center.data[1] -= snap_extent;
-  future_falling = is_falling(copy, bvh, 0.f, pipeline, to_add + 1, 0, 0);
+  falling2 = is_falling(
+    copy, bvh, 0, pipeline, to_add + 1, &face_collided, &shift_vertical, 0, 0);
 
   // snap the capsule to the nearst floor.
-  if (falling && !future_falling && cam_speed.data[1] <= 0.f) {
-    float distance = 0.f;
-    capsule_t new_copy = *capsule;
-    new_copy.center = camera->position;
-    distance = snap_to_floor(
-      new_copy, bvh, snap_extent, pipeline, draw_snapping_face);
+  if (falling && !falling2 && cam_speed.data[1] <= 0.f) {
+    copy.center.data[1] += shift_vertical;
+    float distance = snap_to_floor(
+      copy, bvh, snap_extent, pipeline);
+    copy.center.data[1] += distance;
     falling = 0;
     cam_speed.data[1] = 0.f;
-    if (distance > snap_threshold) {
-      camera->position.data[1] -= distance;
+    camera->position.data[1] = copy.center.data[1];
 
-      if (draw_status) {
-        char text[512];
-        const char* ptext = text;
-        memset(text, 0, sizeof(text));
-        sprintf(text, "SNAPPING %f", distance);
-        render_text_to_screen(
-          font,
-          font_image_id,
-          pipeline,
-          &ptext,
-          1,
-          &green,
-          400.f, 300.f);
-      }
+    if (draw_snapping_face) {
+      draw_face(
+        bvh->faces + face_collided,
+        &bvh->faces[face_collided].normal,
+        &yellow,
+        5,
+        pipeline);
+    }
+
+    if (draw_status) {
+      char text[512];
+      const char* ptext = text;
+      memset(text, 0, sizeof(text));
+      sprintf(text, "SNAPPING %f", distance);
+      render_text_to_screen(
+        font,
+        font_image_id,
+        pipeline,
+        &ptext,
+        1,
+        &green,
+        400.f, 300.f);
     }
   }
 
@@ -817,14 +864,14 @@ handle_physics(
     cam_speed.data[1] -= gravity_acc * multiplier;
     cam_speed.data[1] = fmax(cam_speed.data[1], -cam_speed_limit.data[1]);
     camera->position.data[1] += cam_speed.data[1] * multiplier;
-    if (future_falling) {
+    if (falling2) {
       // since the snap extent is considerable, use a multiplier to smooth the 
       // protrusion effect.
       mult_set_v3f(to_add + 1, PROTRUSION_RATIO);
       add_set_v3f(&camera->position, to_add + 1);
     }
 
-    if (falling && future_falling && draw_status) {
+    if (falling && falling2 && draw_status) {
       const char* text = "FALLING";
       render_text_to_screen(
         font,
@@ -838,34 +885,90 @@ handle_physics(
   }
 }
 
+static
+void
+draw_text(
+  pipeline_t* pipeline,
+  font_runtime_t* font,
+  const uint32_t font_image_id)
+{
+  {
+    const char* text = "[3] RENDER COLLISION QUERIES";
+    render_text_to_screen(
+      font,
+      font_image_id,
+      pipeline,
+      &text,
+      1,
+      draw_collision_query ? &red : &white,
+      0.f, 120.f);
+  }
+  {
+    const char* text = "[4] RENDER COLLISION FACE";
+    render_text_to_screen(
+      font,
+      font_image_id,
+      pipeline,
+      &text,
+      1,
+      draw_collided_face ? &red : &white,
+      0, 140.f);
+  }
+  {
+    const char* text = "[5] SHOW SNAPPING/FALLING STATE";
+    render_text_to_screen(
+      font,
+      font_image_id,
+      pipeline,
+      &text,
+      1,
+      draw_status ? &red : &white,
+      0, 160.f);
+  }
+  {
+    const char* text = "[6] SHOW SNAPPING FACE";
+    render_text_to_screen(
+      font,
+      font_image_id,
+      pipeline,
+      &text,
+      1,
+      draw_snapping_face ? &red : &white,
+      0, 180.f);
+  }
+}
+
 void
 camera_update(
   float delta_time,
-  camera_t* camera, 
-  bvh_t* bvh, 
-  capsule_t* capsule, 
+  camera_t* camera,
+  bvh_t* bvh,
+  capsule_t* capsule,
   pipeline_t* pipeline,
-  font_runtime_t* font, 
+  font_runtime_t* font,
   const uint32_t font_image_id)
 {
   handle_input(delta_time, camera);
-  
+
   handle_physics(
-    delta_time, camera, bvh, capsule, pipeline, font, font_image_id, 
+    delta_time, camera, bvh, capsule, pipeline, font, font_image_id,
     SNAP_EXTENT, SNAP_THRESHOLD);
-  
+
   {
+    // handle collision and ceiling collision.
     collision_flags_t flags = handle_collision(
-      camera, bvh, capsule, pipeline, 
-      SORTED_ITERATIONS, 
-      ITERATIONS, 
-      BINS, 
-      BINNED_MICRO_DISTANCE, 
+      camera, bvh, capsule, pipeline,
+      SORTED_ITERATIONS,
+      ITERATIONS,
+      BINS,
+      BINNED_MICRO_DISTANCE,
       BINNED_MACRO_LIMIT);
 
     if (
-      (flags & COLLIDED_CEILING_FLAG) == COLLIDED_CEILING_FLAG && 
+      (flags & COLLIDED_CEILING_FLAG) == COLLIDED_CEILING_FLAG &&
       cam_speed.data[1] > 0.f)
       cam_speed.data[1] = 0.f;
   }
+
+  draw_text(pipeline, font, font_image_id);
 }

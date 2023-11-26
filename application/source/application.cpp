@@ -15,6 +15,7 @@
 #include <cmath>
 #include <functional>
 #include <unordered_map>
+#include <vector>
 #include <entity/c/runtime/texture.h>
 #include <entity/c/runtime/texture_utils.h>
 #include <entity/c/runtime/font.h>
@@ -151,6 +152,10 @@ capsule_t capsule;
 mesh_t* capsule_mesh;
 packaged_mesh_data_t* capsule_render_data;
 
+sphere_t sphere;
+mesh_t* sphere_mesh;
+packaged_mesh_data_t* sphere_render_data;
+
 // The font in question.
 font_runtime_t* font;
 uint32_t font_image_id;
@@ -176,7 +181,7 @@ application::application(
 
   {
     // load the scene from a bin file.
-    auto fullpath = m_dataset + "media\\cooked\\map2.bin";
+    auto fullpath = m_dataset + "media\\cooked\\map3.bin";
     serializer_scene_data_t *scene_bin = ::deserialize_bin(
       fullpath.c_str(), &allocator);
     scene_bin->material_repo.data[0].ambient.data[0] = 0.2f;
@@ -195,18 +200,11 @@ application::application(
   camera = scene_render_data->camera_data.cameras;
 
   {
-    // complex room.
-    camera->position.data[0] = 1636;
-    camera->position.data[1] = 149;
-    camera->position.data[2] = 1781;
+    // long corridor edge case.
+    camera->position.data[0] = -684.951416;
+    camera->position.data[1] = -24.8954372;
+    camera->position.data[2] = -2169.10913;
   }
-
-  //{
-  //  // long corridor.
-  //  camera->position.data[0] = 889.193054;
-  //  camera->position.data[1] = -25.5755959;
-  //  camera->position.data[2] = -1536.21448;
-  //}
 
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
@@ -220,7 +218,16 @@ application::application(
     capsule_mesh = create_unit_capsule(
       30, capsule.half_height / capsule.radius, &allocator);
     capsule_render_data = load_mesh_renderer_data(
-      capsule_mesh, color_rgba_t{ 1.f, 1.f, 0.f, 0.5f }, &allocator);
+      capsule_mesh, color_rgba_t{ 1.f, 1.f, 0.f, 0.2f }, &allocator);
+  }
+
+  {
+    // load the sphere mesh.
+    memset(sphere.center.data, 0, sizeof(sphere.center.data));
+    sphere.radius = 25;
+    sphere_mesh = create_unit_sphere(30, &allocator);
+    sphere_render_data = load_mesh_renderer_data(
+      sphere_mesh, color_rgba_t{ 0.f, 1.f, 1.f, 0.5f }, &allocator);
   }
 
   {
@@ -288,6 +295,8 @@ application::~application()
   cleanup_packaged_render_data(scene_render_data, &allocator);
   free_mesh(capsule_mesh, &allocator);
   free_mesh_render_data(capsule_render_data, &allocator);
+  free_mesh(sphere_mesh, &allocator);
+  free_mesh_render_data(sphere_render_data, &allocator);
   renderer_cleanup();
   free_bvh(bvh, &allocator);
 
@@ -336,15 +345,176 @@ application::update()
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 #if 0
-  static vector3f debug_position = { 1826.99866, -113.391373, -675.791565 };
-  //static vector3f debug_position = { 1862.78345, 204.111115, 2034.12927 };
-  //static vector3f debug_position = { 1569.43994, -90.2638550, 130.261658 };
+  static bool draw_sphere = 0;
+  static bool draw_capsule = 1;
+  static vector3f debug_position = { -691.779297, 101.072632, -2092.68628 };
+  static color_t red = { 1.f, 0.f, 0.f, 1.f };
+  static color_t green = { 0.f, 1.f, 0.f, 1.f };
+  static color_t blue = { 0.f, 0.f, 1.f, 1.f };
+  static color_t yellow = { 1.f, 1.f, 0.f, 1.f };
+  static color_t white = { 1.f, 1.f, 1.f, 1.f };
+  std::vector<color_t> colors = { red, green, blue, yellow, white };
+  uint32_t colors_index = 0;
+  std::vector<point3f> centers;
+  std::vector<color_t> asso_colors;
+  vector3f av_penetration = { 0, 0, 0 };
+  int32_t instances = 0;
+  std::vector<faceplane_t> of_interest;
+  std::vector<vector3f> of_interest_normals;
+
+  auto && populate_capsule_aabb = [](bvh_aabb_t* aabb, const capsule_t* capsule)
+  {
+    aabb->min_max[0] = capsule->center;
+    aabb->min_max[1] = capsule->center;
+
+    {
+      vector3f min;
+      vector3f_set_3f(
+        &min,
+        -capsule->radius,
+        (-capsule->half_height - capsule->radius),
+        -capsule->radius);
+      add_set_v3f(aabb->min_max, &min);
+      mult_set_v3f(&min, -1.f);
+      add_set_v3f(aabb->min_max + 1, &min);
+    }
+  };
+
+  auto && draw_face = [](
+      bvh_face_t * face,
+      vector3f * normal,
+      color_t * color,
+      int32_t thickness,
+      pipeline_t * pipeline)
+  {
+    float vertices[12];
+
+    vertices[0 * 3 + 0] = face->points[0].data[0] + face->normal.data[0];
+    vertices[0 * 3 + 1] = face->points[0].data[1] + face->normal.data[1];
+    vertices[0 * 3 + 2] = face->points[0].data[2] + face->normal.data[2];
+    vertices[1 * 3 + 0] = face->points[1].data[0] + face->normal.data[0];
+    vertices[1 * 3 + 1] = face->points[1].data[1] + face->normal.data[1];
+    vertices[1 * 3 + 2] = face->points[1].data[2] + face->normal.data[2];
+    vertices[2 * 3 + 0] = face->points[2].data[0] + face->normal.data[0];
+    vertices[2 * 3 + 1] = face->points[2].data[1] + face->normal.data[1];
+    vertices[2 * 3 + 2] = face->points[2].data[2] + face->normal.data[2];
+    vertices[3 * 3 + 0] = face->points[0].data[0] + face->normal.data[0];
+    vertices[3 * 3 + 1] = face->points[0].data[1] + face->normal.data[1];
+    vertices[3 * 3 + 2] = face->points[0].data[2] + face->normal.data[2];
+
+    draw_lines(vertices, 4, *color, thickness, pipeline);
+  };
+
+  auto&& is_already_considered = [](
+    std::vector<faceplane_t> &considered, 
+    std::vector<vector3f> &of_interest_normals, 
+    faceplane_t current, 
+    vector3f normal) {
+    
+    for (uint32_t i = 0; i < considered.size(); ++i) {
+      float dotproduct = dot_product_v3f(&of_interest_normals[i], &normal);
+      if (
+        IS_SAME_LP(dotproduct, 1.f) &&
+        IS_ZERO_LP(get_point_distance(&considered[i], &of_interest_normals[i], current.points)))
+        return true;
+    }
+
+    return false;
+  };
 
   {
     capsule.center.data[0] = debug_position.data[0];
     capsule.center.data[1] = debug_position.data[1];
     capsule.center.data[2] = debug_position.data[2];
 
+    {
+      uint32_t array[256];
+      uint32_t used = 0;
+
+      // find the aabb leaves we share space with.
+      float multiplier = 1.2f;
+      bvh_aabb_t bounds = { capsule.center, capsule.center };
+      vector3f min, max;
+      vector3f_set_3f(
+        &min,
+        -capsule.radius * multiplier,
+        (-capsule.half_height - capsule.radius) * multiplier,
+        -capsule.radius * multiplier);
+      add_set_v3f(bounds.min_max, &min);
+      mult_set_v3f(&min, -1.f);
+      add_set_v3f(bounds.min_max + 1, &min);
+
+      query_intersection(bvh, &bounds, array, &used);
+
+      if (used) {
+        bvh_aabb_t capsule_aabb;
+        segment_t segment, partial_overlap;
+        vector3f penetration;
+        capsule_face_classification_t classification;
+        faceplane_t face;
+        segment_plane_classification_t segment_classification;
+        point3f segment_intersection, segment_closest;
+
+        get_capsule_segment(&capsule, &segment);
+        populate_capsule_aabb(&capsule_aabb, &capsule);
+
+        for (uint32_t used_index = 0; used_index < used; ++used_index) {
+          bvh_node_t* node = bvh->nodes + array[used_index];
+          for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
+            if (!bvh->faces[i].is_valid)
+              continue;
+
+            if (!bounds_intersect(&capsule_aabb, &bvh->faces[i].aabb))
+              continue;
+
+            // TODO: we can avoid a copy here.
+            face.points[0] = bvh->faces[i].points[0];
+            face.points[1] = bvh->faces[i].points[1];
+            face.points[2] = bvh->faces[i].points[2];
+
+            point3f sphere_center;
+
+            classification = classify_capsule_faceplane(
+              &capsule,
+              &face,
+              &bvh->faces[i].normal,
+              &penetration,
+              &sphere_center);
+
+            if (classification != CAPSULE_FACE_NO_COLLISION) {
+              if (!is_already_considered(of_interest, of_interest_normals, face, bvh->faces[i].normal)) {
+                of_interest.push_back(face);
+                of_interest_normals.push_back(bvh->faces[i].normal);
+
+                add_set_v3f(&av_penetration, &penetration);
+                instances++;
+                centers.push_back(sphere_center);
+                asso_colors.push_back(colors[colors_index++ % colors.size()]);
+                draw_face(
+                  bvh->faces + i,
+                  &bvh->faces[i].normal,
+                  &asso_colors.back(),
+                  5,
+                  &pipeline);
+              } else {
+                centers.push_back(sphere_center);
+                asso_colors.push_back(color_t{0.f, 0.f, 0.f, 1.f});
+                draw_face(
+                  bvh->faces + i,
+                  &bvh->faces[i].normal,
+                  &asso_colors.back(),
+                  5,
+                  &pipeline);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    mult_set_v3f(&av_penetration, 1.f / instances);
+
+#if 1
     {
       segment_t segment;
       get_capsule_segment(&capsule, &segment);
@@ -359,7 +529,7 @@ application::update()
       ::draw_lines(vertices, 2, { 0.f, 1.f, 1.f, 1.f }, 1, &pipeline);
     }
 
-    {
+    if (draw_capsule) {
       uint32_t capsule_texture_render_id[1] = { 0 };
       ::push_matrix(&pipeline);
       ::pre_translate(&pipeline, capsule.center.data[0], capsule.center.data[1], capsule.center.data[2]);
@@ -368,7 +538,69 @@ application::update()
       ::draw_meshes(capsule_render_data->mesh_render_data, capsule_texture_render_id, 1, &pipeline);
       ::pop_matrix(&pipeline);
     }
+
+    if (draw_sphere) {
+      uint32_t sphere_texture_render_id[1] = { 0 };
+      for (uint32_t i = 0; i < centers.size(); ++i) {
+        sphere.center.data[0] = centers[i].data[0];
+        sphere.center.data[1] = centers[i].data[1];
+        sphere.center.data[2] = centers[i].data[2];
+
+        sphere_render_data->mesh_render_data->ambient.data[0] = asso_colors[i].data[0];
+        sphere_render_data->mesh_render_data->ambient.data[1] = asso_colors[i].data[1];
+        sphere_render_data->mesh_render_data->ambient.data[2] = asso_colors[i].data[2];
+        sphere_render_data->mesh_render_data->ambient.data[3] = asso_colors[i].data[3];
+
+        ::push_matrix(&pipeline);
+        ::pre_translate(&pipeline, sphere.center.data[0], sphere.center.data[1], sphere.center.data[2]);
+        float scale = sphere.radius;
+        ::pre_scale(&pipeline, scale, scale, scale);
+        ::draw_meshes(sphere_render_data->mesh_render_data, sphere_texture_render_id, 1, &pipeline);
+        ::pop_matrix(&pipeline);
+      }
+    }
+#endif
   }
+
+#if 0
+  std::vector<uint32_t> indices = { 376, 379 };
+  for (auto index : indices)
+    draw_face(
+      bvh->faces + index,
+      &bvh->faces[index].normal,
+      &green,
+      2,
+      &pipeline);
+#endif
+
+#if 0
+  {
+    vector3f penetration;
+    faceplane_t face;
+    int32_t i_face = 361;// 361, 381
+    face.points[0] = bvh->faces[i_face].points[0];
+    face.points[1] = bvh->faces[i_face].points[1];
+    face.points[2] = bvh->faces[i_face].points[2];
+
+    if (draw_sphere) {
+      sphere_face_classification_t classification =
+        classify_sphere_faceplane(
+          &sphere,
+          &face,
+          &bvh->faces[i_face].normal,
+          &penetration);
+    }
+
+    if (draw_capsule) {
+      capsule_face_classification_t classification =
+        classify_capsule_faceplane(
+          &capsule,
+          &face,
+          &bvh->faces[i_face].normal,
+          &penetration);
+    }
+  }
+#endif
 
   if (m_disable_input) {
     if (::is_key_pressed('W'))
@@ -383,6 +615,47 @@ application::update()
       debug_position.data[2] += 2.f;
     if (::is_key_pressed('A'))
       debug_position.data[2] -= 2.f;
+    if (::is_key_triggered('T'))
+      draw_capsule = !draw_capsule;
+    if (::is_key_triggered('Y'))
+      draw_sphere = !draw_sphere;
+
+#if 0
+    float factor = 1.f / 10.f;
+    vector3f displace = { 1.74800014, -0.329665393, 0.231215015};
+    if (::is_key_triggered('7')) {
+      debug_position.data[0] += displace.data[0];
+      debug_position.data[1] += displace.data[1];
+      debug_position.data[2] += displace.data[2];
+    }
+    if (::is_key_triggered('8')) {
+      debug_position.data[0] -= displace.data[0];
+      debug_position.data[1] -= displace.data[1];
+      debug_position.data[2] -= displace.data[2];
+    }
+#endif
+
+    {
+      char delta_str[128] = { 0 };
+      sprintf(delta_str, "av_penetration: %f %f %f instances: %i", 
+        av_penetration.data[0], 
+        av_penetration.data[1], 
+        av_penetration.data[2], 
+        instances);
+
+      color_t white = { 1.f, 1.f, 1.f, 1.f };
+      // display simple instructions.
+      std::vector<const char*> text;
+      text.push_back(delta_str);
+      render_text_to_screen(
+        font,
+        font_image_id,
+        &pipeline,
+        &text[0],
+        (uint32_t)text.size(),
+        &white,
+        300.f, 0.f);
+    }
   }
 #endif
 ////////////////////////////////////////////////////////////////////////
@@ -426,9 +699,6 @@ application::update()
     text.push_back("[C] RESET CAMERA");
     text.push_back("[~] CAMERA UNLOCK/LOCK");
     text.push_back("[1/2/WASD/EQ] CAMERA SPEED/MOVEMENT");
-    text.push_back("[3/4] RENDER COLLISION QUERIES");
-    text.push_back("[5] SHOW SNAPPING/FALLING STATE");
-    text.push_back("[6] SHOW SNAPPING FACE");
     render_text_to_screen(
       font, 
       font_image_id, 

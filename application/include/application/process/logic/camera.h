@@ -38,13 +38,7 @@ int32_t
 is_falling(
   capsule_t capsule,
   bvh_t* bvh,
-  float expand_down,
-  pipeline_t* pipeline,
-  vector3f* to_add,
-  uint32_t* face_collided,
-  float* shift_vertical,
-  int32_t draw_collision_query,
-  int32_t draw_collision_face);
+  vector3f* to_add);
 
 void
 recenter_camera_cursor(void);

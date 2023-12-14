@@ -33,7 +33,6 @@
 #define KEY_COLLISION_QUERY       '3'
 #define KEY_COLLISION_FACE        '4'
 #define KEY_DRAW_STATUS           '5'
-#define KEY_DRAW_SNAPPING_FACE    '6'
 #define KEY_JUMP                  0x20
 #define KEY_STRAFE_LEFT           'A'
 #define KEY_STRAFE_RIGHT          'D'
@@ -45,6 +44,7 @@
 
 #define SNAP_THRESHOLD            0.1f
 #define SNAP_EXTENT               25
+#define SNAP_UP_EXTENT            10
 #define PROTRUSION_RATIO          0.5f
 #define SORTED_ITERATIONS         16
 #define ITERATIONS                6
@@ -60,7 +60,6 @@ static int32_t prev_mouse_y = -1;
 static int32_t draw_collision_query = 0;
 static int32_t draw_collided_face = 0;
 static int32_t draw_status = 0;
-static int32_t draw_snapping_face = 0;
 static vector3f cam_acc = { 5.f, 5.f, 5.f };
 static vector3f cam_speed = { 0.f, 0.f, 0.f };
 static vector3f cam_speed_limit = { 10.f, 20.f, 10.f };
@@ -69,7 +68,7 @@ static const float friction_dec = 2.f;
 static const float friction_k = 1.f;
 static const float jump_speed = 20.f;
 
-// 0 is walking, 1 is flying...
+// 0 is walking, 1 is flying (not yet used).
 static uint32_t movement_mode = 0;
 
 static color_t red = { 1.f, 0.f, 0.f, 1.f };
@@ -97,14 +96,13 @@ static
 void
 handle_input(float delta_time, camera_t* camera)
 {
-  static float    y_limit = 0.f;
+  static float y_limit = 0.f;
   float multiplier = delta_time / REFERENCE_FRAME_TIME;
   
   matrix4f crossup, camerarotateY, camerarotatetemp, tmpmatrix;
   float dx, dy, d, tempangle;
   int32_t mouse_x, mouse_y = 0;
   
-  // static bool falling = false;
   float length;
   int32_t mx, my;
   vector3f tmp, tmp2;
@@ -130,9 +128,6 @@ handle_input(float delta_time, camera_t* camera)
 
   if (is_key_triggered(KEY_DRAW_STATUS))
     draw_status = !draw_status;
-
-  if (is_key_triggered(KEY_DRAW_SNAPPING_FACE))
-    draw_snapping_face = !draw_snapping_face;
 
   if (is_key_pressed(KEY_SPEED_PLUS))
     cam_speed_limit.data[0] = cam_speed_limit.data[2] += 0.25f;
@@ -326,55 +321,105 @@ populate_capsule_aabb(bvh_aabb_t* aabb, const capsule_t* capsule)
   }
 }
 
+// TODO: move this function to the collision packag.
 static
 float
-snap_to_floor(
-  capsule_t capsule,
-  bvh_t* bvh,
-  float expand_down,
-  pipeline_t* pipeline)
+find_intersection_time(
+  sphere_t sphere, 
+  face_t* face,
+  vector3f* normal,
+  const float expand_down)
 {
-  bvh_aabb_t capsule_aabb;
-  float displacement = 0.f;
-  float current_distance;
-  int32_t hits = 0;
+  const uint32_t iteration_max = 16;
+  const float distance_limit = 1.f;
+  float starting_y = sphere.center.data[1];
+
+  {
+    float start = 0.f, end = 1.f, mid_point;
+    uint32_t iteration = 0;
+    vector3f penetration;
+    sphere_face_classification_t classification = classify_sphere_face(
+      &sphere, face, normal, 0, &penetration);
+
+    assert(
+      classification == SPHERE_FACE_NO_COLLISION && 
+      "the initial test should always return no collision!");
+
+    {
+      float distance = get_sphere_face_distance(&sphere, face, normal);
+
+      do {
+        mid_point = start + (end - start) / 2.f;
+        sphere.center.data[1] = starting_y - mid_point * expand_down;
+        classification = classify_sphere_face(
+          &sphere, face, normal, 0, &penetration);
+        if (classification == SPHERE_FACE_NO_COLLISION) {
+          start = mid_point;
+          distance = get_sphere_face_distance(&sphere, face, normal);
+        }
+        else
+          end = mid_point;
+      } while (distance > distance_limit && ++iteration < iteration_max);
+    }
+
+    return start;
+  }
+}
+
+// NOTE: The initial position of the capsule should not intersect any floor.
+// This condition must be ensured by the calling function.
+static
+uint32_t
+collides_with_floor(
+  const capsule_t* capsule, 
+  bvh_t* bvh,
+  const float expand_down,
+  float* distance)
+{
+  capsule_t swept_sphere;
+  bvh_aabb_t swept_aabb;
   uint32_t array[256];
   uint32_t used = 0;
-  
-  // find the aabb leaves we share space with.
-  float multiplier = 1.25f;
+  // to simplify the calculations we limit the faces to 256 total.
+  uint32_t faces[256];
+  uint32_t faces_total = 0;
+
+  // intersect the aabb to limit our calculations to the faces we care about.
   bvh_aabb_t bounds;
   vector3f min, max, sphere_center;
   vector3f_set_3f(
     &sphere_center, 
-    capsule.center.data[0], 
-    capsule.center.data[1] - capsule.half_height, 
-    capsule.center.data[2]);
+    capsule->center.data[0], 
+    capsule->center.data[1] - capsule->half_height, 
+    capsule->center.data[2]);
   bounds.min_max[0] = bounds.min_max[1] = sphere_center;
   vector3f_set_3f(
     &min, 
-    -capsule.radius * multiplier, 
-    (-capsule.radius - expand_down) * multiplier, 
-    -capsule.radius * multiplier);
+    -capsule->radius, 
+    -capsule->radius - expand_down, 
+    -capsule->radius);
   vector3f_set_3f(
-    &max, 
-    capsule.radius * multiplier, 
-    capsule.radius * multiplier, 
-    capsule.radius * multiplier);
+    &max,
+    capsule->radius, 
+    capsule->radius, 
+    capsule->radius);
   add_set_v3f(bounds.min_max, &min);
   add_set_v3f(bounds.min_max + 1, &max);
 
-  populate_capsule_aabb(&capsule_aabb, &capsule);
   query_intersection(bvh, &bounds, array, &used);
-  
-  if (used) {
-    vector3f penetration;
-    sphere_face_classification_t classification;
-    sphere_t sphere;
-    face_t face;
 
-    sphere.center = sphere_center;
-    sphere.radius = capsule.radius;
+  // this swept sphere will be used to limit the faces we look at.
+  swept_sphere.radius = capsule->radius;
+  swept_sphere.center = sphere_center;
+  swept_sphere.center.data[1] -= expand_down/2.f;
+  swept_sphere.half_height = expand_down/2.f;
+  populate_capsule_aabb(&swept_aabb, &swept_sphere);
+
+  if (used) {
+    face_t face;
+    vector3f penetration;
+    capsule_face_classification_t classification;
+    point3f center;
 
     for (uint32_t used_index = 0; used_index < used; ++used_index) {
       bvh_node_t* node = bvh->nodes + array[used_index];
@@ -382,7 +427,7 @@ snap_to_floor(
         if (!bvh->faces[i].is_valid || !bvh->faces[i].is_floor)
           continue;
 
-        if (!bounds_intersect(&capsule_aabb, &bvh->faces[i].aabb))
+        if (!bounds_intersect(&swept_aabb, &bvh->faces[i].aabb))
           continue;
         
         // TODO: we can avoid a copy here.
@@ -390,68 +435,52 @@ snap_to_floor(
         face.points[1] = bvh->faces[i].points[1];
         face.points[2] = bvh->faces[i].points[2];
 
-        current_distance = 
-          get_point_distance(&face, &bvh->faces[i].normal, &sphere.center);
+        classification = classify_capsule_face(
+          &swept_sphere, 
+          &face, 
+          &bvh->faces[i].normal, 
+          0, 
+          &penetration, 
+          &center);
 
-        classification = 
-          classify_sphere_face(
-            &sphere, 
-            &face, 
-            &bvh->faces[i].normal, 
-            0,
-            &penetration);
-
-        // NOTE: We know we do not collide with any face, so we restrict
-        // ourselves to distances greater than our radius. This is error prone 
-        // but not terribly so, so for now it has to do.
-        if (
-          classification != SPHERE_FACE_NO_COLLISION &&
-          current_distance < sphere.radius) {
-          // find the deepest penetration point to the face, then do segment
-          // face intersection.
-          segment_plane_classification_t seg_classify;
-          float t = 0.f;
-          point3f intersection;
-          segment_t segment;
-          segment.points[0] = sphere_center;
-          vector3f dist = bvh->faces[i].normal;
-          mult_set_v3f(&dist, sphere.radius);
-          diff_set_v3f(segment.points, &dist);
-          segment.points[1] = segment.points[0];
-          segment.points[1].data[1] += 2 * sphere.radius;
-
-          // find the intersection of the segment with the face.
-          seg_classify = classify_segment_face(
-            &face, &bvh->faces[i].normal, &segment, &intersection, &t);
-          if (
-            seg_classify == SEGMENT_PLANE_INTERSECT_ON_SEGMENT || 
-            seg_classify == SEGMENT_PLANE_INTERSECT_OFF_SEGMENT) {
-            vector3f diff = diff_v3f(&intersection, segment.points);
-            current_distance = length_v3f(&diff);
-          } else
-            assert(0);
-
-          displacement = 
-            displacement < current_distance ? current_distance : displacement;
+        if (classification != CAPSULE_FACE_NO_COLLISION) {
+          faces[faces_total++] = i;
+          assert(faces_total < 256 && "no more than 256 faces are supported!");
         }
       }
     }
   }
 
-  return displacement;
+  if (!faces_total)
+    return 0;
+
+  {
+    float t = 1.f, tmp = 1.f;
+    face_t face;
+    sphere_t sphere;
+    sphere.center = sphere_center;
+    sphere.radius = capsule->radius;
+
+    for (uint32_t i = 0; i < faces_total; ++i) {
+      face.points[0] = bvh->faces[faces[i]].points[0];
+      face.points[1] = bvh->faces[faces[i]].points[1];
+      face.points[2] = bvh->faces[faces[i]].points[2];
+      tmp = find_intersection_time(
+        sphere, &face, &bvh->faces[faces[i]].normal, expand_down);
+      t = fmin(t, tmp);
+    }
+
+    assert(distance);
+    *distance = t * expand_down;
+    return 1;
+  }
 }
 
 int32_t
 is_falling(
   capsule_t capsule,
   bvh_t* bvh,
-  float expand_down,
-  pipeline_t* pipeline,
-  vector3f* to_add,
-  uint32_t* face_collided,
-  float* shift_vertical,
-  int32_t draw_collision_query,
-  int32_t draw_collision_face)
+  vector3f* to_add)
 {
   uint32_t array[256];
   uint32_t used = 0;
@@ -464,7 +493,7 @@ is_falling(
   vector3f_set_3f(
     &min, 
     -capsule.radius * multiplier, 
-    (-capsule.half_height - capsule.radius - expand_down) * multiplier, 
+    (-capsule.half_height - capsule.radius) * multiplier, 
     -capsule.radius * multiplier);
   vector3f_set_3f(
     &max, 
@@ -498,17 +527,7 @@ is_falling(
 
         if (!bounds_intersect(&capsule_aabb, &bvh->faces[i].aabb))
           continue;
-
-        if (draw_collision_query) {
-          draw_face(
-            bvh->faces + i,
-            &bvh->faces[i].normal,
-            (bvh->faces[i].is_floor) ? &green : 
-              ((bvh->faces[i].is_ceiling) ? &white : &red),
-            (bvh->faces[i].is_floor) ? 3 : 2,
-            pipeline);
-        }
-
+        
         // TODO: we can avoid a copy here.
         face.points[0] = bvh->faces[i].points[0];
         face.points[1] = bvh->faces[i].points[1];
@@ -540,32 +559,6 @@ is_falling(
               &bvh->faces[i].normal, 
               &segment_intersection, 
               &segment_closest) == COPLANAR_POINT_ON_OR_INSIDE) {
-            
-            if (draw_collision_face)
-              draw_face(
-                bvh->faces + i,
-                &bvh->faces[i].normal,
-                &blue,
-                5,
-                pipeline);
-            
-            {
-              // set the extrusion data.
-              assert(face_collided && "face collided pointer cannot be null");
-              assert(shift_vertical && "distance pointer cannot be null");
-
-              {
-                point3f pt = segment_intersection;
-                pt.data[1] += capsule.radius;
-                float dist = get_point_distance(
-                  &face, &bvh->faces[i].normal, &pt);
-                dist = dist < capsule.radius ? capsule.radius - dist : 0.f;
-                *face_collided = i;
-                *shift_vertical = 
-                  (segment_intersection.data[1] + capsule.radius + dist) - 
-                  segment.points[0].data[1];
-              }
-            }
             
             vector3f_set_1f(to_add, 0.f);
             return 0;
@@ -813,35 +806,28 @@ handle_physics(
   vector3f to_add[2];
   int32_t falling = 0;
   int32_t falling2 = 0;
-  uint32_t face_collided = 0;
-  float shift_vertical = 0.f;
 
   capsule_t copy = *capsule;
   copy.center = camera->position;
-  falling = is_falling(
-    copy, bvh, 0, pipeline, to_add, &face_collided, &shift_vertical, 0, 0);
+  falling = is_falling(copy, bvh, to_add);
   copy.center.data[1] -= snap_extent;
-  falling2 = is_falling(
-    copy, bvh, 0, pipeline, to_add + 1, &face_collided, &shift_vertical, 0, 0);
+  falling2 = is_falling(copy, bvh, to_add + 1);
 
   // snap the capsule to the nearst floor.
-  if (falling && !falling2 && cam_speed.data[1] <= 0.f) {
-    copy.center.data[1] += shift_vertical;
-    float distance = snap_to_floor(
-      copy, bvh, snap_extent, pipeline);
-    copy.center.data[1] += distance;
+  if ((!falling || !falling2) && cam_speed.data[1] <= 0.f) {
+    uint32_t collides = 0;
+    float distance = 0.f;
+    copy.center = camera->position;
+    {
+      copy.center.data[1] += 10;
+      collides = collides_with_floor(
+        &copy, bvh, snap_extent + 10.f, &distance);
+      copy.center.data[1] -= distance;
+    }
+    
     falling = 0;
     cam_speed.data[1] = 0.f;
     camera->position.data[1] = copy.center.data[1];
-
-    if (draw_snapping_face) {
-      draw_face(
-        bvh->faces + face_collided,
-        &bvh->faces[face_collided].normal,
-        &yellow,
-        5,
-        pipeline);
-    }
 
     if (draw_status) {
       char text[512];
@@ -929,17 +915,6 @@ draw_text(
       draw_status ? &red : &white,
       0, 160.f);
   }
-  {
-    const char* text = "[6] SHOW SNAPPING FACE";
-    render_text_to_screen(
-      font,
-      font_image_id,
-      pipeline,
-      &text,
-      1,
-      draw_snapping_face ? &red : &white,
-      0, 180.f);
-  }
 }
 
 void
@@ -953,10 +928,6 @@ camera_update(
   const uint32_t font_image_id)
 {
   handle_input(delta_time, camera);
-
-  handle_physics(
-    delta_time, camera, bvh, capsule, pipeline, font, font_image_id,
-    SNAP_EXTENT, SNAP_THRESHOLD);
 
   {
     // handle collision and ceiling collision.
@@ -973,6 +944,10 @@ camera_update(
       cam_speed.data[1] > 0.f)
       cam_speed.data[1] = 0.f;
   }
+
+  handle_physics(
+    delta_time, camera, bvh, capsule, pipeline, font, font_image_id,
+    SNAP_EXTENT, SNAP_THRESHOLD);
 
   draw_text(pipeline, font, font_image_id);
 }

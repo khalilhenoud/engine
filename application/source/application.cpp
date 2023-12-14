@@ -246,7 +246,8 @@ application::application(
       assert(vertices && "allocation failed!");
       indices = (uint32_t**)allocator.mem_alloc(sizeof(uint32_t*) * mesh_count);
       assert(indices && "allocation failed!");
-      indices_count = (uint32_t*)allocator.mem_alloc(sizeof(uint32_t) * mesh_count); 
+      indices_count = (uint32_t*)allocator.mem_alloc(
+        sizeof(uint32_t) * mesh_count); 
       assert(indices && "allocation failed!");
 
       for (uint32_t i = 0, k = 0; i < scene->mesh_repo.count; ++i) {
@@ -343,7 +344,6 @@ application::update()
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
 #if 0
   static bool draw_sphere = 0;
   static bool draw_capsule = 1;
@@ -415,7 +415,8 @@ application::update()
       float dotproduct = dot_product_v3f(&of_interest_normals[i], &normal);
       if (
         IS_SAME_LP(dotproduct, 1.f) &&
-        IS_ZERO_LP(get_point_distance(&considered[i], &of_interest_normals[i], current.points)))
+        IS_ZERO_LP(get_point_distance(
+          &considered[i], &of_interest_normals[i], current.points)))
         return true;
     }
 
@@ -515,7 +516,7 @@ application::update()
 
     mult_set_v3f(&av_penetration, 1.f / instances);
 
-#if 1
+#if 0
     {
       segment_t segment;
       get_capsule_segment(&capsule, &segment);
@@ -607,6 +608,7 @@ application::update()
   }
 #endif
 
+#if 0
   if (m_disable_input) {
     if (::is_key_pressed('W'))
       debug_position.data[0] += 2.f;
@@ -625,7 +627,6 @@ application::update()
     if (::is_key_triggered('Y'))
       draw_sphere = !draw_sphere;
 
-#if 0
     float factor = 1.f / 10.f;
     vector3f displace = { 1.74800014, -0.329665393, 0.231215015};
     if (::is_key_triggered('7')) {
@@ -640,6 +641,7 @@ application::update()
     }
 #endif
 
+#if 0
     {
       char delta_str[128] = { 0 };
       sprintf(delta_str, "av_penetration: %f %f %f instances: %i", 
@@ -663,7 +665,7 @@ application::update()
     }
   }
 #endif
-////////////////////////////////////////////////////////////////////////
+#endif
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 

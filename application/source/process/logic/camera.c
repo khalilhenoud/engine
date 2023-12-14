@@ -370,7 +370,7 @@ find_intersection_time(
 // This condition must be ensured by the calling function.
 static
 uint32_t
-collides_with_floor(
+snaps_to_floor_at(
   const capsule_t* capsule, 
   bvh_t* bvh,
   const float expand_down,
@@ -476,7 +476,12 @@ collides_with_floor(
   }
 }
 
-int32_t
+// NOTE: This function is different then a simple collision check, as it takes
+// into account whether the capsule segment intersects the face in question or
+// not.
+// NOTE: to_add is the vector used to shift the capsule outside of collision 
+// with the side of platforms. 
+uint32_t
 is_falling(
   capsule_t capsule,
   bvh_t* bvh,
@@ -800,40 +805,44 @@ handle_physics(
   font_runtime_t* font,
   const uint32_t font_image_id,
   const float snap_extent,
+  const float snap_up_extent,
   const float snap_threshold)
 {
   float multiplier = delta_time / REFERENCE_FRAME_TIME;
-  vector3f to_add[2];
-  int32_t falling = 0;
-  int32_t falling2 = 0;
+  uint32_t currently_falling = 0, remains_falling = 0;
+  vector3f to_add;
 
-  capsule_t copy = *capsule;
-  copy.center = camera->position;
-  falling = is_falling(copy, bvh, to_add);
-  copy.center.data[1] -= snap_extent;
-  falling2 = is_falling(copy, bvh, to_add + 1);
-
-  // snap the capsule to the nearst floor.
-  if ((!falling || !falling2) && cam_speed.data[1] <= 0.f) {
-    uint32_t collides = 0;
-    float distance = 0.f;
+  {
+    // check if we are on a walking surface or not.
+    capsule_t copy = *capsule;
     copy.center = camera->position;
-    {
-      copy.center.data[1] += 10;
-      collides = collides_with_floor(
-        &copy, bvh, snap_extent + 10.f, &distance);
-      copy.center.data[1] -= distance;
-    }
-    
-    falling = 0;
+    currently_falling = is_falling(copy, bvh, &to_add);
+    copy.center.data[1] -= snap_extent;
+    remains_falling = is_falling(copy, bvh, &to_add);
+  }
+
+  // snap the capsule to the nearst floor if it is no longer falling.
+  if ((!currently_falling || !remains_falling) && cam_speed.data[1] <= 0.f) {
+    float distance = 0.f;
+    uint32_t collides = 0;
+    capsule_t copy = *capsule;
+    copy.center = camera->position;
+    copy.center.data[1] += snap_up_extent;
+    collides = snaps_to_floor_at(
+      &copy, bvh, snap_extent + snap_up_extent, &distance);
+
+    assert(collides && "has to collide at this point!");
+
+    currently_falling = 0;
     cam_speed.data[1] = 0.f;
+    copy.center.data[1] -= distance;
     camera->position.data[1] = copy.center.data[1];
 
     if (draw_status) {
       char text[512];
       const char* ptext = text;
       memset(text, 0, sizeof(text));
-      sprintf(text, "SNAPPING %f", distance);
+      sprintf(text, "SNAPPING %f", distance - snap_up_extent);
       render_text_to_screen(
         font,
         font_image_id,
@@ -845,23 +854,23 @@ handle_physics(
     }
   }
 
-  if (is_key_triggered(KEY_JUMP) && !falling) {
-    falling = 1;
+  if (is_key_triggered(KEY_JUMP) && !currently_falling) {
+    currently_falling = 1;
     cam_speed.data[1] = jump_speed;
   }
 
-  if (falling) {
+  if (currently_falling) {
     cam_speed.data[1] -= gravity_acc * multiplier;
     cam_speed.data[1] = fmax(cam_speed.data[1], -cam_speed_limit.data[1]);
     camera->position.data[1] += cam_speed.data[1] * multiplier;
-    if (falling2) {
-      // since the snap extent is considerable, use a multiplier to smooth the 
-      // protrusion effect.
-      mult_set_v3f(to_add + 1, PROTRUSION_RATIO);
-      add_set_v3f(&camera->position, to_add + 1);
+
+    // smooth the protrusion effect, as the snap extent might be considerable.
+    if (remains_falling) {
+      mult_set_v3f(&to_add, PROTRUSION_RATIO);
+      add_set_v3f(&camera->position, &to_add);
     }
 
-    if (falling && falling2 && draw_status) {
+    if (currently_falling && remains_falling && draw_status) {
       const char* text = "FALLING";
       render_text_to_screen(
         font,
@@ -947,7 +956,7 @@ camera_update(
 
   handle_physics(
     delta_time, camera, bvh, capsule, pipeline, font, font_image_id,
-    SNAP_EXTENT, SNAP_THRESHOLD);
+    SNAP_EXTENT, SNAP_UP_EXTENT, SNAP_THRESHOLD);
 
   draw_text(pipeline, font, font_image_id);
 }

@@ -31,7 +31,6 @@ target_link_libraries(${PROJECT_NAME}
 						PRIVATE winmm
             PRIVATE serializer)
 
-# TODO: add the math library
 target_include_directories(${PROJECT_NAME} PUBLIC 
 							"${PROJECT_BINARY_DIR}"
 							"${PROJECT_SOURCE_DIR}/include"

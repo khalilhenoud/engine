@@ -28,7 +28,7 @@ application {
 
   //////////////////////////////////////////////////////////////////////////////
   std::string m_dataset;
-  bool    m_disable_input = false;
+  bool m_disable_input = false;
 };
 
 #endif

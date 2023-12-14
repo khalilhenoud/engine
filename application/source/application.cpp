@@ -43,7 +43,6 @@
 #include <collision/capsule.h>
 #include <collision/segment.h>
 #include <collision/face.h>
-#include <collision/sphere.h>
 #include <serializer/serializer_bin.h>
 
 
@@ -83,7 +82,7 @@ prep_packaged_render_data(
   packaged_scene_render_data_t* render_data, 
   const allocator_t* allocator)
 {
-  // start with the mesh_data
+  // load the images and upload them to the gpu.
   for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
     texture_runtime_t* runtime = render_data->mesh_data.texture_runtimes + i;
     if (strlen(runtime->texture.path.data)) {
@@ -97,7 +96,7 @@ prep_packaged_render_data(
     }
   }
 
-  // then do the font_data.
+  // do the same for the fonts.
   for (uint32_t i = 0; i < render_data->font_data.count; ++i) {
     load_font_inplace(
       data_set, 
@@ -152,10 +151,6 @@ capsule_t capsule;
 mesh_t* capsule_mesh;
 packaged_mesh_data_t* capsule_render_data;
 
-sphere_t sphere;
-mesh_t* sphere_mesh;
-packaged_mesh_data_t* sphere_render_data;
-
 // The font in question.
 font_runtime_t* font;
 uint32_t font_image_id;
@@ -180,6 +175,7 @@ application::application(
   allocator.mem_realloc = nullptr;
 
   {
+    // TODO: this can be encapsulated...
     // load the scene from a bin file.
     auto fullpath = m_dataset + "media\\cooked\\map3.bin";
     serializer_scene_data_t *scene_bin = ::deserialize_bin(
@@ -222,15 +218,7 @@ application::application(
   }
 
   {
-    // load the sphere mesh.
-    memset(sphere.center.data, 0, sizeof(sphere.center.data));
-    sphere.radius = 25;
-    sphere_mesh = create_unit_sphere(30, &allocator);
-    sphere_render_data = load_mesh_renderer_data(
-      sphere_mesh, color_rgba_t{ 0.f, 1.f, 1.f, 0.5f }, &allocator);
-  }
-
-  {
+    // create the bvh structure.
     float** vertices = NULL;
     uint32_t** indices = NULL;
     uint32_t* indices_count = NULL;
@@ -296,8 +284,6 @@ application::~application()
   cleanup_packaged_render_data(scene_render_data, &allocator);
   free_mesh(capsule_mesh, &allocator);
   free_mesh_render_data(capsule_render_data, &allocator);
-  free_mesh(sphere_mesh, &allocator);
-  free_mesh_render_data(sphere_render_data, &allocator);
   renderer_cleanup();
   free_bvh(bvh, &allocator);
 

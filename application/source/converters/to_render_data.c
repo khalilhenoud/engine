@@ -140,6 +140,25 @@ free_packaged_camera_data_internal(
   allocator->mem_free(camera_data->cameras);
 }
 
+static
+void
+free_packaged_node_data_internal(
+  packaged_node_data_t* node_data, 
+  const allocator_t* allocator)
+{
+  assert(node_data && allocator);
+
+  {
+    for (uint32_t i = 0; i < node_data->count; ++i) {
+      node_t* current = node_data->nodes + i;
+      allocator->mem_free(current->nodes.indices);
+      allocator->mem_free(current->meshes.indices);
+    }
+
+    allocator->mem_free(node_data->nodes);
+  }
+}
+
 void
 free_render_data(
   packaged_scene_render_data_t* render_data, 
@@ -148,6 +167,7 @@ free_render_data(
   assert(render_data && allocator);
   
   {
+    free_packaged_node_data_internal(&render_data->node_data, allocator);
     free_packaged_mesh_data_internal(&render_data->mesh_data, allocator);
     free_packaged_font_data_internal(&render_data->font_data, allocator);
     free_packaged_camera_data_internal(&render_data->camera_data, allocator);  
@@ -326,6 +346,53 @@ load_scene_camera_data(
   } 
 }
 
+static
+void
+load_scene_node_data(
+  scene_t* scene, 
+  packaged_node_data_t* node_data, 
+  const allocator_t* allocator)
+{
+  assert(scene && node_data && allocator);
+
+  {
+    node_data->count = scene->node_repo.count;
+    node_data->nodes = 
+      (node_t*)allocator->mem_cont_alloc(
+        scene->node_repo.count, sizeof(node_t));
+
+    for (uint32_t i = 0; i < node_data->count; ++i) {
+      node_t* target = node_data->nodes + i;
+      node_t* source = scene->node_repo.nodes + i;
+
+      // copy the name and the matrix.
+      memcpy(target->name.data, source->name.data, sizeof(target->name.data));
+      memcpy(
+        target->transform.data, 
+        source->transform.data, 
+        sizeof(target->transform.data));
+
+      // copy the children node indices.
+      target->nodes.count = source->nodes.count;
+      target->nodes.indices = (uint32_t*)allocator->mem_cont_alloc(
+        target->nodes.count, sizeof(uint32_t));
+      memcpy(
+        target->nodes.indices, 
+        source->nodes.indices, 
+        sizeof(uint32_t) * target->nodes.count);
+
+      // copy the mesh payload indices.
+      target->meshes.count = source->meshes.count;
+      target->meshes.indices = (uint32_t*)allocator->mem_cont_alloc(
+        target->meshes.count, sizeof(uint32_t));
+      memcpy(
+        target->meshes.indices, 
+        source->meshes.indices, 
+        sizeof(uint32_t) * target->meshes.count);
+    }
+  }
+}
+
 // TODO: Right now this is limited to a single texture. Improve this.
 packaged_scene_render_data_t* 
 load_scene_render_data(
@@ -339,6 +406,7 @@ load_scene_render_data(
       allocator->mem_alloc(sizeof(packaged_scene_render_data_t));
     memset(render_data, 0, sizeof(packaged_scene_render_data_t));
 
+    load_scene_node_data(scene, &render_data->node_data, allocator);
     load_scene_mesh_data(scene, &render_data->mesh_data, allocator);
     load_scene_font_data(scene, &render_data->font_data, allocator);
     load_scene_camera_data(scene, &render_data->camera_data, allocator);

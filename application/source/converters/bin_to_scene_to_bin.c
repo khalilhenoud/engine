@@ -25,6 +25,7 @@
 #include <entity/c/scene/camera.h>
 #include <entity/c/scene/camera_utils.h>
 #include <serializer/serializer_scene_data.h>
+#include <serializer/serializer_bin.h>
 #include <application/converters/bin_to_scene_to_bin.h>
 
 
@@ -628,5 +629,32 @@ scene_to_bin(
     populate_serializer_font_data(scene, serializer_scene, allocator);
     populate_serializer_camera_data(scene, serializer_scene, allocator);
     return serializer_scene;
+  }
+}
+
+scene_t*
+load_scene_from_bin(
+  const char* dataset, 
+  const char* file, 
+  uint32_t override_ambient, 
+  color_rgba_t ambient, 
+  const allocator_t* allocator)
+{
+  // TODO: This is temporary, this needs to be generalized in packaged content.
+  char fullpath[1024] = {0};
+  snprintf(fullpath, 1024, "%smedia\\cooked\\%s", dataset, file);
+  
+  {
+    scene_t* local = NULL;
+    serializer_scene_data_t *scene_bin = deserialize_bin(fullpath, allocator);
+    if (override_ambient) {
+      scene_bin->material_repo.data[0].ambient.data[0] = ambient.data[0];
+      scene_bin->material_repo.data[0].ambient.data[1] = ambient.data[1];
+      scene_bin->material_repo.data[0].ambient.data[2] = ambient.data[2];
+      scene_bin->material_repo.data[0].ambient.data[3] = ambient.data[3];
+    }
+    local = bin_to_scene(scene_bin, allocator);
+    free_bin(scene_bin, allocator);
+    return local;
   }
 }

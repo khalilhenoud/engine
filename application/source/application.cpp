@@ -37,13 +37,15 @@
 #include <application/process/text/utils.h>
 #include <application/process/logic/camera.h>
 #include <application/process/spatial/bvh.h>
+#include <application/process/spatial/bvh_utils.h>
+#include <application/process/render_data/utils.h>
 #include <math/c/vector3f.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <collision/capsule.h>
 #include <collision/segment.h>
 #include <collision/face.h>
-#include <serializer/serializer_bin.h>
+#include <library/allocator/allocator.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -75,81 +77,12 @@ void free_block(void* block)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-static
-void
-prep_packaged_render_data(
-  const char* data_set,
-  packaged_scene_render_data_t* render_data, 
-  const allocator_t* allocator)
-{
-  // load the images and upload them to the gpu.
-  for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
-    texture_runtime_t* runtime = render_data->mesh_data.texture_runtimes + i;
-    if (strlen(runtime->texture.path.data)) {
-      load_image_buffer(data_set, runtime, allocator);
-      render_data->mesh_data.texture_ids[i] = ::upload_to_gpu(
-        runtime->texture.path.data,
-        runtime->buffer,
-        runtime->width,
-        runtime->height,
-        (renderer_image_format_t)runtime->format);
-    }
-  }
-
-  // do the same for the fonts.
-  for (uint32_t i = 0; i < render_data->font_data.count; ++i) {
-    load_font_inplace(
-      data_set, 
-      &render_data->font_data.fonts[i].font,
-      &render_data->font_data.fonts[i], 
-      allocator);
-    // TODO: Ultimately we need a system for this, we need to be able to handle
-    // deduplication.
-    texture_runtime_t* runtime = render_data->font_data.texture_runtimes + i;
-    if (strlen(runtime->texture.path.data)) {
-      load_image_buffer(data_set, runtime, allocator);
-      render_data->font_data.texture_ids[i] = ::upload_to_gpu(
-        runtime->texture.path.data,
-        runtime->buffer,
-        runtime->width,
-        runtime->height,
-        (renderer_image_format_t)runtime->format);
-    }
-  }
-}
-
-static
-void
-cleanup_packaged_render_data(
-  packaged_scene_render_data_t* render_data, 
-  const allocator_t* allocator)
-{
-  for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
-    if (render_data->mesh_data.texture_ids[i])
-      ::evict_from_gpu(render_data->mesh_data.texture_ids[i]);
-  }
-
-  for (uint32_t i = 0; i < render_data->font_data.count; ++i) {
-    if (render_data->font_data.texture_ids[i])
-      ::evict_from_gpu(render_data->font_data.texture_ids[i]);
-  }
-
-  free_render_data(render_data, allocator);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
 framerate_controller controller;
 pipeline_t pipeline;
 
 // the scene and its renderer data.
 scene_t* scene;
 packaged_scene_render_data_t* scene_render_data;
-
-// the capsule and its renderer data.
-capsule_t capsule;
-mesh_t* capsule_mesh;
-packaged_mesh_data_t* capsule_render_data;
 
 // The font in question.
 font_runtime_t* font;
@@ -166,7 +99,7 @@ application::application(
   const char* dataset)
   : m_dataset(dataset)
 {
-  ::renderer_initialize();
+  renderer_initialize();
 
   allocator.mem_alloc = allocate;
   allocator.mem_cont_alloc = container_allocate;
@@ -174,19 +107,12 @@ application::application(
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
 
-  {
-    // TODO: this can be encapsulated...
-    // load the scene from a bin file.
-    auto fullpath = m_dataset + "media\\cooked\\map3.bin";
-    serializer_scene_data_t *scene_bin = ::deserialize_bin(
-      fullpath.c_str(), &allocator);
-    scene_bin->material_repo.data[0].ambient.data[0] = 0.2f;
-    scene_bin->material_repo.data[0].ambient.data[1] = 0.2f;
-    scene_bin->material_repo.data[0].ambient.data[2] = 0.2f;
-    scene_bin->material_repo.data[0].ambient.data[3] = 1.f;
-    scene = bin_to_scene(scene_bin, &allocator);
-    ::free_bin(scene_bin, &allocator);
-  }
+  scene = load_scene_from_bin(
+    dataset, 
+    "map_textured2.bin", 
+    1, 
+    { 0.2f, 0.2f, 0.2f, 1.f}, 
+    &allocator);
 
   // load the scene render data.
   scene_render_data = load_scene_render_data(scene, &allocator);
@@ -195,95 +121,32 @@ application::application(
   // guaranteed to exist, same with the font.
   camera = scene_render_data->camera_data.cameras;
 
-  {
-    // long corridor edge case.
-    camera->position.data[0] = -684.951416;
-    camera->position.data[1] = -24.8954372;
-    camera->position.data[2] = -2169.10913;
-  }
-
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
   font_image_id = scene_render_data->font_data.texture_ids[0];
 
-  {
-    // load the capsule mesh.
-    memset(capsule.center.data, 0, sizeof(capsule.center.data));
-    capsule.half_height = 30;
-    capsule.radius = 25;
-    capsule_mesh = create_unit_capsule(
-      30, capsule.half_height / capsule.radius, &allocator);
-    capsule_render_data = load_mesh_renderer_data(
-      capsule_mesh, color_rgba_t{ 1.f, 1.f, 0.f, 0.2f }, &allocator);
-  }
+  bvh = create_bvh_from_scene(scene, &allocator);
 
-  {
-    // create the bvh structure.
-    float** vertices = NULL;
-    uint32_t** indices = NULL;
-    uint32_t* indices_count = NULL;
-    uint32_t mesh_count = 0;
-
-    for (uint32_t i = 0; i < scene->mesh_repo.count; ++i) {
-      if (scene->mesh_repo.meshes[i].indices_count)
-        ++mesh_count;
-    }
-
-    if (mesh_count) {
-      vertices = (float**)allocator.mem_alloc(sizeof(float*) * mesh_count);
-      assert(vertices && "allocation failed!");
-      indices = (uint32_t**)allocator.mem_alloc(sizeof(uint32_t*) * mesh_count);
-      assert(indices && "allocation failed!");
-      indices_count = (uint32_t*)allocator.mem_alloc(
-        sizeof(uint32_t) * mesh_count); 
-      assert(indices && "allocation failed!");
-
-      for (uint32_t i = 0, k = 0; i < scene->mesh_repo.count; ++i) {
-        if (scene->mesh_repo.meshes[i].indices_count) {
-          mesh_t* mesh = scene->mesh_repo.meshes + i;
-          vertices[k] = mesh->vertices;
-          indices[k] = mesh->indices;
-          indices_count[k] = mesh->indices_count;
-          ++k;
-        }
-      }
-
-      bvh = create_bvh(
-        vertices, 
-        indices, 
-        indices_count, 
-        mesh_count, 
-        &allocator, 
-        BVH_CONSTRUCT_NAIVE);
-
-      allocator.mem_free(vertices);
-      allocator.mem_free(indices);
-      allocator.mem_free(indices_count);
-    }
-  }
-
-  ::pipeline_set_default(&pipeline);
-  ::set_viewport(&pipeline, 0.f, 0.f, float(width), float(height));
-  ::update_viewport(&pipeline);
+  pipeline_set_default(&pipeline);
+  set_viewport(&pipeline, 0.f, 0.f, float(width), float(height));
+  update_viewport(&pipeline);
 
   /// "http://stackoverflow.com/questions/12943164/replacement-for-gluperspective-with-glfrustrum"
   float znear = 0.1f, zfar = 4000.f, aspect = (float)width / height;
   float fh = (float)tan((double)60.f / 2.f / 180.f * K_PI) * znear;
   float fw = fh * aspect;
-  ::set_perspective(&pipeline, -fw, fw, -fh, fh, znear, zfar);
-  ::update_projection(&pipeline);
+  set_perspective(&pipeline, -fw, fw, -fh, fh, znear, zfar);
+  update_projection(&pipeline);
 
   controller.lock_framerate(60);
 
-  ::show_cursor(0);
+  show_cursor(0);
 }
 
 application::~application()
 {
   free_scene(scene, &allocator);
   cleanup_packaged_render_data(scene_render_data, &allocator);
-  free_mesh(capsule_mesh, &allocator);
-  free_mesh_render_data(capsule_render_data, &allocator);
   renderer_cleanup();
   free_bvh(bvh, &allocator);
 
@@ -296,37 +159,10 @@ application::update()
   uint64_t frame_rate = controller.end();
   float dt_seconds = controller.start();
 
-  ::input_update();
-  ::clear_color_and_depth_buffers();
+  input_update();
+  clear_color_and_depth_buffers();
 
-  matrix4f out;
-  memset(&out, 0, sizeof(matrix4f));
-  ::get_view_transformation(camera, &out);
-  ::set_matrix_mode(&pipeline, MODELVIEW);
-  ::load_identity(&pipeline);
-  ::post_multiply(&pipeline, &out);
-
-#if SHOW_GRID
-  // draw grid.
-  {
-    ::push_matrix(&pipeline);
-    ::pre_translate(&pipeline, 0, -100, 0);
-    ::draw_grid(&pipeline, 5000.f, 100);
-    ::pop_matrix(&pipeline);
-  }
-#endif
-
-  if (scene) {
-    ::push_matrix(&pipeline);
-    ::pre_translate(&pipeline, 0, 0, 0);
-    ::pre_scale(&pipeline, 1, 1, 1);
-    ::draw_meshes(
-      scene_render_data->mesh_data.mesh_render_data, 
-      scene_render_data->mesh_data.texture_ids, 
-      scene_render_data->mesh_data.count, 
-      &pipeline);
-    ::pop_matrix(&pipeline);
-  }
+  render_packaged_scene_data(scene_render_data, &pipeline, camera);
 
   {
     // disable/enable input with '~' key.
@@ -342,8 +178,7 @@ application::update()
       camera_update(
         dt_seconds, 
         camera, 
-        bvh, 
-        &capsule, 
+        bvh,
         &pipeline, 
         font, 
         font_image_id);

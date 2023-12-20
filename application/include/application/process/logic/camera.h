@@ -28,8 +28,7 @@ void
 camera_update(
   float delta_time,
   camera_t* camera, 
-  bvh_t* bvh, 
-  capsule_t* capsule, 
+  bvh_t* bvh,
   pipeline_t* pipeline, 
   font_runtime_t* font, 
   const uint32_t font_image_id);

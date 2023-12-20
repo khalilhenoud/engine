@@ -15,6 +15,9 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+#include <entity/c/mesh/color.h>
+
 
 typedef struct serializer_scene_data_t serializer_scene_data_t;
 typedef struct scene_t scene_t;
@@ -28,6 +31,14 @@ bin_to_scene(
 serializer_scene_data_t*
 scene_to_bin(
   scene_t* scene, 
+  const allocator_t* allocator);
+
+scene_t*
+load_scene_from_bin(
+  const char* dataset, 
+  const char* file, 
+  uint32_t override_ambient, 
+  color_rgba_t ambient, 
   const allocator_t* allocator);
 
 #ifdef __cplusplus

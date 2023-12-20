@@ -20,7 +20,11 @@ extern "C" {
 #include <entity/c/mesh/color.h>
 
 
+// NOTE: This is all extremely rudimentary until the time when I implement a 
+// scene graph module that can replace this.
+
 typedef struct scene_t scene_t; 
+typedef struct node_t node_t;
 typedef struct mesh_t mesh_t;
 typedef struct allocator_t allocator_t;
 typedef struct mesh_render_data_t mesh_render_data_t;
@@ -28,7 +32,6 @@ typedef struct font_runtime_t font_runtime_t;
 typedef struct camera_t camera_t;
 typedef struct texture_runtime_t texture_runtime_t;
 
-// TODO(khalil): support matrix hierarchy when rendering.
 typedef
 struct packaged_mesh_data_t {
   uint32_t count;
@@ -47,12 +50,21 @@ struct packaged_font_data_t {
 
 typedef
 struct packaged_camera_data_t {
-  camera_t* cameras;
   uint32_t count;
+  camera_t* cameras;
 } packaged_camera_data_t;
+
+// NOTE: a node has a transform and a list of packaged mesh or other nodes.
+// these are indices into the main packaged_scene_render_data_t struct.
+typedef
+struct packaged_node_data_t {
+  uint32_t count;
+  node_t* nodes;
+} packaged_node_data_t;
 
 typedef
 struct packaged_scene_render_data_t {
+  packaged_node_data_t node_data;
   packaged_mesh_data_t mesh_data;
   packaged_font_data_t font_data;
   packaged_camera_data_t camera_data;

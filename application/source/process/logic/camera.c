@@ -931,17 +931,18 @@ camera_update(
   float delta_time,
   camera_t* camera,
   bvh_t* bvh,
-  capsule_t* capsule,
   pipeline_t* pipeline,
   font_runtime_t* font,
   const uint32_t font_image_id)
 {
+  static capsule_t capsule = { { 0.f, 0.f, 0.f }, 30.f, 25.f };
+
   handle_input(delta_time, camera);
 
   {
     // handle collision and ceiling collision.
     collision_flags_t flags = handle_collision(
-      camera, bvh, capsule, pipeline,
+      camera, bvh, &capsule, pipeline,
       SORTED_ITERATIONS,
       ITERATIONS,
       BINS,
@@ -955,7 +956,7 @@ camera_update(
   }
 
   handle_physics(
-    delta_time, camera, bvh, capsule, pipeline, font, font_image_id,
+    delta_time, camera, bvh, &capsule, pipeline, font, font_image_id,
     SNAP_EXTENT, SNAP_UP_EXTENT, SNAP_THRESHOLD);
 
   draw_text(pipeline, font, font_image_id);

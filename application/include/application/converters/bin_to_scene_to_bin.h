@@ -36,7 +36,8 @@ scene_to_bin(
 scene_t*
 load_scene_from_bin(
   const char* dataset, 
-  const char* file, 
+  const char* folder, 
+  const char* file,
   uint32_t override_ambient, 
   color_rgba_t ambient, 
   const allocator_t* allocator);

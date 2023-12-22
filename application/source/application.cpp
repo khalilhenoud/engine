@@ -107,16 +107,21 @@ application::application(
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
 
+  const char* map = "rooms\\map_textured2";
+  std::string file = map;
+  file = file.substr(file.find_last_of("/\\") + 1);
+
   scene = load_scene_from_bin(
-    dataset, 
-    "map_textured2.bin", 
+    dataset,
+    map,
+    file.c_str(),
     1, 
     { 0.2f, 0.2f, 0.2f, 1.f}, 
     &allocator);
 
   // load the scene render data.
   scene_render_data = load_scene_render_data(scene, &allocator);
-  prep_packaged_render_data(m_dataset.c_str(), scene_render_data, &allocator);
+  prep_packaged_render_data(dataset, map, scene_render_data, &allocator);
 
   // guaranteed to exist, same with the font.
   camera = scene_render_data->camera_data.cameras;

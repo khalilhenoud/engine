@@ -1,1 +1,1 @@
-build\debug\application ./
+build\debug\application ..\data\

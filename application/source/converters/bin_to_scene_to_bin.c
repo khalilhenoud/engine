@@ -451,8 +451,8 @@ copy_default_font(font_t* font)
   assert(font);
 
   {
-    const char* default_data_file = "media\\font\\FontData.csv";
-    const char* default_image_file = "media\\font\\ExportedFont.png";
+    const char* default_data_file = "\\font\\FontData.csv";
+    const char* default_image_file = "\\font\\ExportedFont.png";
     memset(font->data_file.data, 0, sizeof(font->data_file.data));
     memcpy(
       font->data_file.data, 
@@ -635,14 +635,15 @@ scene_to_bin(
 scene_t*
 load_scene_from_bin(
   const char* dataset, 
-  const char* file, 
+  const char* folder, 
+  const char* file,
   uint32_t override_ambient, 
   color_rgba_t ambient, 
   const allocator_t* allocator)
 {
   // TODO: This is temporary, this needs to be generalized in packaged content.
   char fullpath[1024] = {0};
-  snprintf(fullpath, 1024, "%smedia\\cooked\\%s", dataset, file);
+  snprintf(fullpath, 1024, "%s\\%s\\%s.bin", dataset, folder, file);
   
   {
     scene_t* local = NULL;

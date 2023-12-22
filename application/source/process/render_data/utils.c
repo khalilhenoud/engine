@@ -27,12 +27,12 @@
 void
 prep_packaged_render_data(
   const char* data_set,
+  const char* folder,
   packaged_scene_render_data_t* render_data, 
   const allocator_t* allocator)
 {
-  // TODO: this is temporary, the packaging format should be spec-ed.
   char texture_path[1024] = { 0 };
-  snprintf(texture_path, sizeof(texture_path), "%smedia\\textures\\", data_set);
+  snprintf(texture_path, sizeof(texture_path), "%s\\%s\\", data_set, folder);
 
   // load the images and upload them to the gpu.
   for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {

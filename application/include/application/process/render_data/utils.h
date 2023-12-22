@@ -25,6 +25,7 @@ typedef struct camera_t camera_t;
 void
 prep_packaged_render_data(
   const char* data_set,
+  const char* folder,
   packaged_scene_render_data_t* render_data, 
   const allocator_t* allocator);
 

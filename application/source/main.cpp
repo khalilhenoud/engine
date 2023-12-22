@@ -107,7 +107,8 @@ WinMain(
 	g_hWindowDC = GetDC(g_hWnd);
   opengl_parameters_t params{&g_hWindowDC};
   opengl_initialize(&params);
-	auto app = std::make_unique<application>(client_width, client_height, lpCmdLine);
+	auto app = 
+    std::make_unique<application>(client_width, client_height, lpCmdLine);
   
   char array[100] = { 0 };
 	MSG msg;

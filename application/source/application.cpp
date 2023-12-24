@@ -107,7 +107,7 @@ application::application(
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
 
-  const char* map = "rooms\\map_textured2"; // simple_map.fbx
+  const char* map = "rooms\\test_jump"; // simple_map.fbx
   // TODO: this could be done inside the load_scene_from_bin() function in c.
   std::string file = map;
   file = file.substr(file.find_last_of("/\\") + 1);

@@ -21,7 +21,6 @@ typedef struct font_runtime_t font_runtime_t;
 typedef struct allocator_t allocator_t;
 
 // data_set is the base directory.
-// call free_font() to delete the font.
 font_runtime_t*
 load_font(
   const char* data_set,

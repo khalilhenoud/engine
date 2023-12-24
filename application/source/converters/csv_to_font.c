@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <library/string/fixed_string.h>
+#include <library/string/string.h>
 #include <library/allocator/allocator.h>
 #include <application/converters/csv_to_font.h>
 #include <loaders/loader_csv.h>
@@ -32,7 +33,7 @@ load_font_inplace(
   {
     fixed_str_t csv_file;
     memset(csv_file.data, 0, sizeof(csv_file.data));
-    sprintf(csv_file.data, "%s%s", data_set, font->data_file.data);
+    sprintf(csv_file.data, "%s%s", data_set, font->data_file->str);
     loader_csv_font_data_t* data_font = load_csv(csv_file.data, allocator);
     
     runtime->image_width  = data_font->image_width;

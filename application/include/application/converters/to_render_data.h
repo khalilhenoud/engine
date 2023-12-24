@@ -16,7 +16,6 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <library/string/fixed_string.h>
 #include <entity/c/mesh/color.h>
 
 

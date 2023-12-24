@@ -12,14 +12,18 @@
 #include <string.h>
 #include <stdint.h>
 #include <library/allocator/allocator.h>
+#include <library/string/string.h>
 #include <entity/c/scene/node.h>
 #include <entity/c/scene/node_utils.h>
 #include <entity/c/mesh/mesh.h>
 #include <entity/c/mesh/mesh_utils.h>
 #include <entity/c/mesh/texture.h>
+#include <entity/c/mesh/texture_utils.h>
 #include <entity/c/mesh/material.h>
+#include <entity/c/mesh/material_utils.h>
 #include <entity/c/mesh/color.h>
 #include <entity/c/misc/font.h>
+#include <entity/c/misc/font_utils.h>
 #include <entity/c/scene/scene.h>
 #include <entity/c/scene/scene_utils.h>
 #include <entity/c/scene/camera.h>
@@ -53,8 +57,8 @@ populate_serializer_texture_data(
           sizeof(target->texture_repo.data[i].path.data));
         memcpy(
           target->texture_repo.data[i].path.data, 
-          scene->texture_repo.textures[i].path.data, 
-          sizeof(target->texture_repo.data[i].path.data));
+          scene->texture_repo.textures[i].path->str, 
+          scene->texture_repo.textures[i].path->size);
       }
     }
   }
@@ -73,17 +77,11 @@ copy_texture_data(
     target->texture_repo.count = scene->texture_repo.used;
     if (scene->texture_repo.used) {
       target->texture_repo.textures = 
-        allocator->mem_cont_alloc(scene->texture_repo.used, sizeof(texture_t));
+        allocate_texture_array(scene->texture_repo.used, allocator);
 
       for (uint32_t i = 0; i < scene->texture_repo.used; ++i) {
-        memset(
-          target->texture_repo.textures[i].path.data, 
-          0, 
-          sizeof(target->texture_repo.textures[i].path.data));
-        memcpy(
-          target->texture_repo.textures[i].path.data, 
-          scene->texture_repo.data[i].path.data, 
-          sizeof(target->texture_repo.textures[i].path.data));
+        target->texture_repo.textures[i].path = 
+          create_string(scene->texture_repo.data[i].path.data, allocator);
       }
     }
   }
@@ -112,7 +110,7 @@ populate_serializer_material_data(
 
         // will only keep 128 characters.
         memset(mat->name.data, 0, sizeof(mat->name.data));
-        memcpy(mat->name.data, source->name.data, sizeof(source->name.data));
+        memcpy(mat->name.data, source->name->str, sizeof(source->name->size));
         memcpy(
           mat->ambient.data, 
           source->ambient.data, 
@@ -160,17 +158,14 @@ copy_material_data(
     target->material_repo.count = scene->material_repo.used;
     if (scene->material_repo.used) {
       target->material_repo.materials = 
-        allocator->mem_cont_alloc(
-          scene->material_repo.used, 
-          sizeof(material_t));
+        allocate_material_array(scene->material_repo.used, allocator);
       
       for (uint32_t i = 0; i < scene->material_repo.used; ++i) {
         material_t* mat = target->material_repo.materials + i;
         serializer_material_data_t* source = scene->material_repo.data + i;
 
         // will only keep 128 characters.
-        memset(mat->name.data, 0, sizeof(mat->name.data));
-        memcpy(mat->name.data, source->name.data, sizeof(mat->name.data));
+        mat->name = create_string(source->name.data, allocator);
         memcpy(
           mat->ambient.data, 
           source->ambient.data, 
@@ -268,9 +263,8 @@ copy_mesh_data(
 
   {
     target->mesh_repo.count = scene->mesh_repo.used;
-    target->mesh_repo.meshes = allocate_mesh_array(
-      scene->mesh_repo.used, 
-      allocator);
+    target->mesh_repo.meshes = 
+      allocate_mesh_array(scene->mesh_repo.used, allocator);
 
     for (uint32_t i = 0; i < target->mesh_repo.count; ++i) {
       mesh_t *mesh = target->mesh_repo.meshes + i;
@@ -330,7 +324,7 @@ populate_serializer_model_data(
 
       // this will discard anything but 128 characters.
       memset(model->name.data, 0, sizeof(model->name.data));
-      memcpy(model->name.data, source->name.data, sizeof(source->name.data));
+      memcpy(model->name.data, source->name->str, sizeof(source->name->size));
 
       {
         uint32_t elem_count = sizeof(model->models.indices)/sizeof(uint32_t);
@@ -381,9 +375,7 @@ copy_node_data(
       node->transform = source->transform;
 
       // this will discard anything but 128 characters.
-      memset(node->name.data, 0, sizeof(node->name.data));
-      memcpy(node->name.data, source->name.data, sizeof(node->name.data));
-
+      node->name = create_string(source->name.data, allocator);
       node->meshes.count = source->meshes.used;
       if (node->meshes.count) {
         node->meshes.indices =
@@ -431,14 +423,14 @@ populate_serializer_font_data(
         memset(font->data_file.data, 0, sizeof(font->data_file.data));
         memcpy(
           font->data_file.data, 
-          source->data_file.data, 
-          strlen(source->data_file.data));
+          source->data_file->str, 
+          source->data_file->size);
 
         memset(font->image_file.data, 0, sizeof(font->image_file.data));
         memcpy(
           font->image_file.data, 
-          source->image_file.data, 
-          strlen(source->image_file.data));
+          source->image_file->str, 
+          source->image_file->size);
       }
     }
   }
@@ -446,24 +438,15 @@ populate_serializer_font_data(
 
 static
 void
-copy_default_font(font_t* font)
+copy_default_font(font_t* font, const allocator_t* allocator)
 {
   assert(font);
 
   {
     const char* default_data_file = "\\font\\FontData.csv";
     const char* default_image_file = "\\font\\ExportedFont.png";
-    memset(font->data_file.data, 0, sizeof(font->data_file.data));
-    memcpy(
-      font->data_file.data, 
-      default_data_file, 
-      strlen(default_data_file));
-
-    memset(font->image_file.data, 0, sizeof(font->image_file.data));
-    memcpy(
-      font->image_file.data, 
-      default_image_file, 
-      strlen(default_image_file));
+    font->data_file = create_string(default_data_file, allocator);
+    font->image_file = create_string(default_image_file, allocator);
   }
 }
 
@@ -481,33 +464,22 @@ copy_font_data(
     target->font_repo.fonts = NULL;
     if (scene->font_repo.used) {
       target->font_repo.fonts = 
-        (font_t*)allocator->mem_cont_alloc(
-          scene->font_repo.used, sizeof(font_t));
+        allocate_font_array(scene->font_repo.used, allocator);
 
       for (uint32_t i = 0; i < scene->font_repo.used; ++i) {
         serializer_font_t* source = scene->font_repo.data + i;
         font_t* font = target->font_repo.fonts + i;
 
-        memset(font->data_file.data, 0, sizeof(font->data_file.data));
-        memcpy(
-          font->data_file.data, 
-          source->data_file.data, 
-          strlen(source->data_file.data));
-
-        memset(font->image_file.data, 0, sizeof(font->image_file.data));
-        memcpy(
-          font->image_file.data, 
-          source->image_file.data, 
-          strlen(source->image_file.data));
+        font->data_file = create_string(source->data_file.data, allocator);
+        font->image_file = create_string(source->image_file.data, allocator);
       }
     } else {
       // ensure at least the default font in the scene.
       target->font_repo.count = 1;
       target->font_repo.fonts = 
-        (font_t*)allocator->mem_cont_alloc(
-          target->font_repo.count, sizeof(font_t));
+        allocate_font_array(target->font_repo.count, allocator);
 
-      copy_default_font(target->font_repo.fonts);
+      copy_default_font(target->font_repo.fonts, allocator);
     }
   }
 }

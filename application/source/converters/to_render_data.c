@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <string.h>
 #include <library/allocator/allocator.h>
+#include <library/string/string.h>
 #include <application/converters/to_render_data.h>
 #include <entity/c/scene/node.h>
 #include <entity/c/scene/node_utils.h>
@@ -62,6 +63,23 @@ free_mesh_render_data_array(
 
 static
 void
+free_font_runtime_array(
+  font_runtime_t* runtime, 
+  uint32_t count, 
+  const allocator_t* allocator)
+{
+  assert(runtime && count && allocator);
+
+  {
+    for (uint32_t i = 0; i < count; ++i)
+      free_font_runtime_internal(runtime + i, allocator);
+
+    allocator->mem_free(runtime);
+  }
+}
+
+static
+void
 free_texture_runtime_array(
   texture_runtime_t* runtime, 
   uint32_t count, 
@@ -70,10 +88,8 @@ free_texture_runtime_array(
   assert(runtime && count && allocator);
 
   {
-    for (uint32_t i = 0; i < count; ++i) {
-      if (runtime[i].buffer)
-        free_runtime_buffer(runtime + i, allocator);
-    }
+    for (uint32_t i = 0; i < count; ++i)
+      free_texture_runtime_internal(runtime + i, allocator);
 
     allocator->mem_free(runtime);
   }
@@ -118,8 +134,11 @@ free_packaged_font_data_internal(
   const allocator_t* allocator)
 {
   assert(font_data && allocator);
-
-  allocator->mem_free(font_data->fonts);
+  
+  free_font_runtime_array(
+    font_data->fonts, 
+    font_data->count, 
+    allocator);
   
   free_texture_runtime_array(
     font_data->texture_runtimes, 
@@ -151,6 +170,7 @@ free_packaged_node_data_internal(
   {
     for (uint32_t i = 0; i < node_data->count; ++i) {
       node_t* current = node_data->nodes + i;
+      free_string(current->name);
       allocator->mem_free(current->nodes.indices);
       allocator->mem_free(current->meshes.indices);
     }
@@ -228,10 +248,7 @@ load_scene_mesh_data(
     memcpy(r_data->indices, mesh->indices, array_size);
 
     // Set the default texture and material colors to grey.
-    memset(
-      mesh_data->texture_runtimes[i].texture.path.data, 
-      0, 
-      sizeof(mesh_data->texture_runtimes[i].texture.path.data));
+    mesh_data->texture_runtimes[i].texture.path = NULL;
     // set a default ambient color.
     r_data->ambient.data[0] = 
     r_data->ambient.data[1] = r_data->ambient.data[2] = 0.5f;
@@ -253,10 +270,8 @@ load_scene_mesh_data(
       if (mat->textures.used) {
         texture_t* texture = 
           scene->texture_repo.textures + mat->textures.data->index;
-        memcpy(
-          mesh_data->texture_runtimes[i].texture.path.data, 
-          texture->path.data, 
-          sizeof(mesh_data->texture_runtimes[i].texture.path.data));
+        mesh_data->texture_runtimes[i].texture.path = 
+          create_string(texture->path->str, allocator);
       }
     }
   }
@@ -295,28 +310,12 @@ load_scene_font_data(
     texture_runtime_t* target_image = font_data->texture_runtimes + i;
     font_t* source = scene->font_repo.fonts + i;
 
-    memset(
-      target->font.data_file.data, 0, sizeof(target->font.data_file.data));
-    memcpy(
-      target->font.data_file.data, 
-      source->data_file.data, 
-      strlen(source->data_file.data));
-    memset(
-      target->font.image_file.data, 0, sizeof(target->font.image_file.data));
-    memcpy(
-      target->font.image_file.data, 
-      source->image_file.data, 
-      strlen(source->image_file.data));
+    target->font.data_file = create_string(source->data_file->str, allocator);
+    target->font.image_file = create_string(source->image_file->str, allocator);
 
     // Set the texture runtime of the font, still unloaded.
-    memset(
-      target_image->texture.path.data, 
-      0, 
-      sizeof(target_image->texture.path.data));
-    memcpy(
-      target_image->texture.path.data, 
-      source->image_file.data, 
-      strlen(source->image_file.data));
+    target_image->texture.path = 
+      create_string(source->image_file->str, allocator);
   }
 }
 
@@ -366,7 +365,7 @@ load_scene_node_data(
       node_t* source = scene->node_repo.nodes + i;
 
       // copy the name and the matrix.
-      memcpy(target->name.data, source->name.data, sizeof(target->name.data));
+      target->name = create_string(source->name->str, allocator);
       memcpy(
         target->transform.data, 
         source->transform.data, 
@@ -468,10 +467,7 @@ load_mesh_renderer_data(
     memcpy(r_data->indices, mesh->indices, array_size);
 
     // Set the default texture and material colors to grey.
-    memset(
-      mesh_data->texture_runtimes[0].texture.path.data, 
-      0, 
-      sizeof(mesh_data->texture_runtimes[0].texture.path.data));
+    mesh_data->texture_runtimes[0].texture.path = NULL;
     // set a default ambient color.
     r_data->ambient.data[0] = color.data[0];
     r_data->ambient.data[1] = color.data[1];

@@ -44,13 +44,16 @@ framerate_controller {
 
     time_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = time_end - time_start;
-    std::chrono::milliseconds in_millisec = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
+    std::chrono::milliseconds in_millisec = 
+      std::chrono::duration_cast<std::chrono::milliseconds>(duration);
     uint64_t divider = in_millisec.count();
     divider = divider == 0 ? 1 : divider;
     m_current_framerate = 1000ll / divider;
 
     if (m_locked && m_target_milliseconds > (divider + buffer_time))
-      std::this_thread::sleep_for(std::chrono::milliseconds(m_target_milliseconds - (divider + buffer_time)));
+      std::this_thread::sleep_for(
+        std::chrono::milliseconds(
+          m_target_milliseconds - (divider + buffer_time)));
 
     return previous_framerate;
   }

@@ -47,6 +47,7 @@
 #include <collision/face.h>
 #include <library/allocator/allocator.h>
 #include <library/filesystem/filesystem.h>
+#include <application/process/levels/level1.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -110,60 +111,21 @@ application::application(
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
 
-  dir_entries_t entries;
-  char fullpath[1024] = { 0 };
-  snprintf(fullpath, 1024, "%srooms\\*", dataset);
-  get_subdirectories(fullpath, &entries);
-
-  const char* map = "rooms\\test_jump"; // simple_map.fbx
-  // TODO: this could be done inside the load_scene_from_bin() function in c.
-  // Basically I need a strtok equivalent.
-  std::string file = map;
-  file = file.substr(file.find_last_of("/\\") + 1);
-
-  scene = load_scene_from_bin(
-    dataset,
-    map,
-    file.c_str(),
-    1, 
-    { 0.2f, 0.2f, 0.2f, 1.f}, 
+  load_level(
+    dataset, 
+    "test_jump", 
+    (float)width, 
+    (float)height, 
     &allocator);
 
-  // load the scene render data.
-  scene_render_data = load_scene_render_data(scene, &allocator);
-  prep_packaged_render_data(dataset, map, scene_render_data, &allocator);
-
-  // guaranteed to exist, same with the font.
-  camera = scene_render_data->camera_data.cameras;
-
-  // need to load the images required by the scene.
-  font = scene_render_data->font_data.fonts;
-  font_image_id = scene_render_data->font_data.texture_ids[0];
-
-  bvh = create_bvh_from_scene(scene, &allocator);
-
-  pipeline_set_default(&pipeline);
-  set_viewport(&pipeline, 0.f, 0.f, float(width), float(height));
-  update_viewport(&pipeline);
-
-  /// "http://stackoverflow.com/questions/12943164/replacement-for-gluperspective-with-glfrustrum"
-  float znear = 0.1f, zfar = 4000.f, aspect = (float)width / height;
-  float fh = (float)tan((double)60.f / 2.f / 180.f * K_PI) * znear;
-  float fw = fh * aspect;
-  set_perspective(&pipeline, -fw, fw, -fh, fh, znear, zfar);
-  update_projection(&pipeline);
-
   controller.lock_framerate(60);
-
-  show_cursor(0);
 }
 
 application::~application()
 {
-  free_scene(scene, &allocator);
-  cleanup_packaged_render_data(scene_render_data, &allocator);
+  unload_level(&allocator);
+
   renderer_cleanup();
-  free_bvh(bvh, &allocator);
 
   assert(allocated.size() == 0 && "Memory leak detected!");
 }
@@ -174,58 +136,7 @@ application::update()
   uint64_t frame_rate = controller.end();
   float dt_seconds = controller.start();
 
-  input_update();
-  clear_color_and_depth_buffers();
-
-  render_packaged_scene_data(scene_render_data, &pipeline, camera);
-
-  {
-    // disable/enable input with '~' key.
-    if (::is_key_triggered(VK_OEM_3)) {
-      m_disable_input = !m_disable_input;
-      ::show_cursor((int32_t)m_disable_input);
-
-      if (m_disable_input)
-        recenter_camera_cursor();
-    }
-
-    if (!m_disable_input) {
-      camera_update(
-        dt_seconds, 
-        camera, 
-        bvh,
-        &pipeline, 
-        font, 
-        font_image_id);
-    }
-  }
-
-  {
-    char delta_str[128] = { 0 };
-    sprintf(delta_str, "delta: %f", dt_seconds);
-    char frame_str[128] = { 0 };
-    sprintf(frame_str, "fps: %llu", frame_rate);
-
-    color_t white = { 1.f, 1.f, 1.f, 1.f };
-    // display simple instructions.
-    std::vector<const char*> text;
-    text.push_back(delta_str);
-    text.push_back(frame_str);
-    text.push_back("----------------");
-    text.push_back("[C] RESET CAMERA");
-    text.push_back("[~] CAMERA UNLOCK/LOCK");
-    text.push_back("[1/2/WASD/EQ] CAMERA SPEED/MOVEMENT");
-    render_text_to_screen(
-      font, 
-      font_image_id, 
-      &pipeline, 
-      &text[0], 
-      (uint32_t)text.size(),
-      &white, 
-      0.f, 0.f);
-  }
-
-  ::flush_operations();
+  update_level(dt_seconds, frame_rate, &allocator);
   
   return frame_rate;
 }

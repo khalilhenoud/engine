@@ -46,6 +46,7 @@
 #include <collision/segment.h>
 #include <collision/face.h>
 #include <library/allocator/allocator.h>
+#include <library/filesystem/filesystem.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -54,6 +55,7 @@ std::vector<uintptr_t> allocated;
 void* allocate(size_t size)
 {
   void* block = malloc(size);
+  assert(block);
   allocated.push_back(uintptr_t(block));
   return block;
 }
@@ -61,6 +63,7 @@ void* allocate(size_t size)
 void* container_allocate(size_t count, size_t elem_size)
 {
   void* block = calloc(count, elem_size);
+  assert(block);
   allocated.push_back(uintptr_t(block));
   return block;
 }
@@ -107,8 +110,14 @@ application::application(
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
 
+  dir_entries_t entries;
+  char fullpath[1024] = { 0 };
+  snprintf(fullpath, 1024, "%srooms\\*", dataset);
+  get_subdirectories(fullpath, &entries);
+
   const char* map = "rooms\\test_jump"; // simple_map.fbx
   // TODO: this could be done inside the load_scene_from_bin() function in c.
+  // Basically I need a strtok equivalent.
   std::string file = map;
   file = file.substr(file.find_last_of("/\\") + 1);
 

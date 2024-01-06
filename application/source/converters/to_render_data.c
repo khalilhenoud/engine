@@ -271,7 +271,7 @@ load_scene_mesh_data(
         texture_t* texture = 
           scene->texture_repo.textures + mat->textures.data->index;
         mesh_data->texture_runtimes[i].texture.path = 
-          create_string(texture->path->str, allocator);
+          allocate_string(texture->path->str, allocator);
       }
     }
   }
@@ -310,12 +310,12 @@ load_scene_font_data(
     texture_runtime_t* target_image = font_data->texture_runtimes + i;
     font_t* source = scene->font_repo.fonts + i;
 
-    target->font.data_file = create_string(source->data_file->str, allocator);
-    target->font.image_file = create_string(source->image_file->str, allocator);
+    target->font.data_file = allocate_string(source->data_file->str, allocator);
+    target->font.image_file = allocate_string(source->image_file->str, allocator);
 
     // Set the texture runtime of the font, still unloaded.
     target_image->texture.path = 
-      create_string(source->image_file->str, allocator);
+      allocate_string(source->image_file->str, allocator);
   }
 }
 
@@ -365,7 +365,7 @@ load_scene_node_data(
       node_t* source = scene->node_repo.nodes + i;
 
       // copy the name and the matrix.
-      target->name = create_string(source->name->str, allocator);
+      target->name = allocate_string(source->name->str, allocator);
       memcpy(
         target->transform.data, 
         source->transform.data, 

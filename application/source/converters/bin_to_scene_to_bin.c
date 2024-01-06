@@ -81,7 +81,7 @@ copy_texture_data(
 
       for (uint32_t i = 0; i < scene->texture_repo.used; ++i) {
         target->texture_repo.textures[i].path = 
-          create_string(scene->texture_repo.data[i].path.data, allocator);
+          allocate_string(scene->texture_repo.data[i].path.data, allocator);
       }
     }
   }
@@ -165,7 +165,7 @@ copy_material_data(
         serializer_material_data_t* source = scene->material_repo.data + i;
 
         // will only keep 128 characters.
-        mat->name = create_string(source->name.data, allocator);
+        mat->name = allocate_string(source->name.data, allocator);
         memcpy(
           mat->ambient.data, 
           source->ambient.data, 
@@ -375,7 +375,7 @@ copy_node_data(
       node->transform = source->transform;
 
       // this will discard anything but 128 characters.
-      node->name = create_string(source->name.data, allocator);
+      node->name = allocate_string(source->name.data, allocator);
       node->meshes.count = source->meshes.used;
       if (node->meshes.count) {
         node->meshes.indices =
@@ -445,8 +445,8 @@ copy_default_font(font_t* font, const allocator_t* allocator)
   {
     const char* default_data_file = "\\font\\FontData.csv";
     const char* default_image_file = "\\font\\ExportedFont.png";
-    font->data_file = create_string(default_data_file, allocator);
-    font->image_file = create_string(default_image_file, allocator);
+    font->data_file = allocate_string(default_data_file, allocator);
+    font->image_file = allocate_string(default_image_file, allocator);
   }
 }
 
@@ -470,8 +470,8 @@ copy_font_data(
         serializer_font_t* source = scene->font_repo.data + i;
         font_t* font = target->font_repo.fonts + i;
 
-        font->data_file = create_string(source->data_file.data, allocator);
-        font->image_file = create_string(source->image_file.data, allocator);
+        font->data_file = allocate_string(source->data_file.data, allocator);
+        font->image_file = allocate_string(source->image_file.data, allocator);
       }
     } else {
       // ensure at least the default font in the scene.

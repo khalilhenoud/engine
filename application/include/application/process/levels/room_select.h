@@ -1,5 +1,5 @@
 /**
- * @file level1.h
+ * @file room_select.h
  * @author khalilhenoud@gmail.com
  * @brief 
  * @version 0.1
@@ -8,8 +8,8 @@
  * @copyright Copyright (c) 2024
  * 
  */
-#ifndef APP_LEVEL1_H
-#define APP_LEVEL1_H
+#ifndef APP_ROOM_SELECT_H
+#define APP_ROOM_SELECT_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,12 +18,10 @@ extern "C" {
 #include <stdint.h>
 
 
-// TODO: levels needs a context that context global systems like memory
-// allocator and job managers.
 typedef struct allocator_t allocator_t;
 
 void
-load_level(
+load_room_select(
   const char* data_set, 
   const char* room, 
   float width,
@@ -31,16 +29,16 @@ load_level(
   const allocator_t* allocator);
 
 void
-update_level(
+update_room_select(
   float dt_seconds, 
   uint64_t framerate, 
   const allocator_t* allocator);
 
 void
-unload_level(const allocator_t* allocator);
+unload_room_select(const allocator_t* allocator);
 
-uint32_t
-should_unload();
+const char*
+should_unload_room_select();
 
 #ifdef __cplusplus
 }

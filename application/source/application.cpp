@@ -48,6 +48,7 @@
 #include <library/allocator/allocator.h>
 #include <library/filesystem/filesystem.h>
 #include <application/process/levels/level1.h>
+#include <application/process/levels/room_select.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -82,26 +83,36 @@ void free_block(void* block)
 
 ////////////////////////////////////////////////////////////////////////////////
 framerate_controller controller;
-pipeline_t pipeline;
-
-// the scene and its renderer data.
-scene_t* scene;
-packaged_scene_render_data_t* scene_render_data;
-
-// The font in question.
-font_runtime_t* font;
-uint32_t font_image_id;
-
-camera_t* camera;
 allocator_t allocator;
 
-bvh_t* bvh;
+static uint32_t in_level;
+static int32_t iwidth;
+static int32_t iheight;
+static const char* data_set;
+
+static
+void
+cleanup_level()
+{
+  if (in_level) {
+    in_level = 0;
+
+    unload_level(&allocator);
+    renderer_cleanup();
+    assert(allocated.size() == 0 && "Memory leak detected!");
+  } else {
+    in_level = 1;
+
+    unload_room_select(&allocator);
+    renderer_cleanup();
+    assert(allocated.size() == 0 && "Memory leak detected!");
+  }
+}
 
 application::application(
   int32_t width,
   int32_t height,
   const char* dataset)
-  : m_dataset(dataset)
 {
   renderer_initialize();
 
@@ -111,11 +122,16 @@ application::application(
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
 
-  load_level(
+  in_level = 0;
+  iwidth = width;
+  iheight = height;
+  data_set = dataset;
+
+  load_room_select(
     dataset, 
-    "test_jump", 
-    (float)width, 
-    (float)height, 
+    "room_select", 
+    (float)iwidth, 
+    (float)iheight, 
     &allocator);
 
   controller.lock_framerate(60);
@@ -123,11 +139,7 @@ application::application(
 
 application::~application()
 {
-  unload_level(&allocator);
-
-  renderer_cleanup();
-
-  assert(allocated.size() == 0 && "Memory leak detected!");
+  cleanup_level();
 }
 
 uint64_t 
@@ -136,7 +148,38 @@ application::update()
   uint64_t frame_rate = controller.end();
   float dt_seconds = controller.start();
 
-  update_level(dt_seconds, frame_rate, &allocator);
+  if (in_level) {
+    update_level(dt_seconds, frame_rate, &allocator);
+    
+    if (should_unload()) {
+      cleanup_level();
+
+      load_room_select(
+        data_set, 
+        "room_select", 
+        (float)iwidth, 
+        (float)iheight, 
+        &allocator);
+    }
+  } else {
+    update_room_select(dt_seconds, frame_rate, &allocator);
+    
+    if (should_unload_room_select() != NULL) {
+      const char* source = should_unload_room_select();
+      char to_load[256];
+      memset(to_load, 0, sizeof(to_load));
+      memcpy(to_load, source, strlen(source));
+      cleanup_level();
+
+      in_level = 1;
+      load_level(
+        data_set, 
+        to_load, 
+        (float)iwidth, 
+        (float)iheight, 
+        &allocator);
+    }
+  }
   
   return frame_rate;
 }

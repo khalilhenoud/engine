@@ -19,6 +19,7 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/process/spatial/bvh.c
       ./source/process/spatial/bvh_utils.c
       ./source/process/levels/level1.c
+      ./source/process/levels/room_select.c
 			./source/application.cpp
 			./source/main.cpp
       ./source/input.c

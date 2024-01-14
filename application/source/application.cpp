@@ -28,7 +28,6 @@
 #include <entity/c/scene/camera.h>
 #include <entity/c/scene/camera_utils.h>
 #include <application/application.h>
-#include <application/framerate_controller.h>
 #include <application/input.h>
 #include <application/converters/to_render_data.h>
 #include <application/converters/png_to_image.h>
@@ -47,6 +46,7 @@
 #include <collision/face.h>
 #include <library/allocator/allocator.h>
 #include <library/filesystem/filesystem.h>
+#include <application/process/levels/level.h>
 #include <application/process/levels/level1.h>
 #include <application/process/levels/room_select.h>
 
@@ -82,32 +82,58 @@ void free_block(void* block)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-framerate_controller_t controller;
+extern "C" {
+char to_load[256];
+
+void
+set_level_to_load(const char* source)
+{
+  memset(to_load, 0, sizeof(to_load));
+  memcpy(to_load, source, strlen(source));
+}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+level_t level;
 allocator_t allocator;
 
-static uint32_t in_level;
-static int32_t iwidth;
-static int32_t iheight;
+static uint32_t in_level_select;
+static int32_t viewport_width;
+static int32_t viewport_height;
 static const char* data_set;
 
 static
 void
 cleanup_level()
 {
-  if (in_level) {
-    in_level = 0;
-
-    unload_level(&allocator);
-    renderer_cleanup();
-    assert(allocated.size() == 0 && "Memory leak detected!");
-  } else {
-    in_level = 1;
-
-    unload_room_select(&allocator);
-    renderer_cleanup();
-    assert(allocated.size() == 0 && "Memory leak detected!");
-  }
+  level.unload(&allocator);
+  renderer_cleanup();
+  assert(allocated.size() == 0 && "Memory leak detected!");
+  in_level_select = !in_level_select;
 }
+
+static
+level_context_t get_context()
+{
+  level_context_t context;
+  context.data_set = data_set;
+  context.viewport.x = context.viewport.y = 0;
+  context.viewport.width = viewport_width;
+  context.viewport.height = viewport_height;
+  context.level = in_level_select ? "room_select" : to_load;
+  return context;
+}
+
+// TODO: This is why we need a factory pattern construction system.
+static
+void
+construct_level()
+{
+  if (in_level_select)
+    construct_level_selector(&level);
+  else
+    construct_level1(&level);
+} 
 
 application::application(
   int32_t width,
@@ -122,19 +148,13 @@ application::application(
   allocator.mem_alloc_alligned = nullptr;
   allocator.mem_realloc = nullptr;
 
-  in_level = 0;
-  iwidth = width;
-  iheight = height;
+  viewport_width = width;
+  viewport_height = height;
   data_set = dataset;
+  in_level_select = 1;
 
-  load_room_select(
-    dataset, 
-    "room_select", 
-    (float)iwidth, 
-    (float)iheight, 
-    &allocator);
-
-  initialize_controller(&controller, 60, 1u);
+  construct_level();
+  level.load(get_context(), &allocator);
 }
 
 application::~application()
@@ -142,44 +162,14 @@ application::~application()
   cleanup_level();
 }
 
-uint64_t 
+void 
 application::update()
 {
-  uint64_t frame_rate = (uint64_t)controller_end(&controller);
-  float dt_seconds = (float)controller_start(&controller);
+  level.update(&allocator);
 
-  if (in_level) {
-    update_level(dt_seconds, frame_rate, &allocator);
-    
-    if (should_unload()) {
-      cleanup_level();
-
-      load_room_select(
-        data_set, 
-        "room_select", 
-        (float)iwidth, 
-        (float)iheight, 
-        &allocator);
-    }
-  } else {
-    update_room_select(dt_seconds, frame_rate, &allocator);
-    
-    if (should_unload_room_select() != NULL) {
-      const char* source = should_unload_room_select();
-      char to_load[256];
-      memset(to_load, 0, sizeof(to_load));
-      memcpy(to_load, source, strlen(source));
-      cleanup_level();
-
-      in_level = 1;
-      load_level(
-        data_set, 
-        to_load, 
-        (float)iwidth, 
-        (float)iheight, 
-        &allocator);
-    }
+  if (level.should_unload()) {
+    cleanup_level();
+    construct_level();
+    level.load(get_context(), &allocator);
   }
-  
-  return frame_rate;
 }

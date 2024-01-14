@@ -8,7 +8,10 @@
  * @copyright Copyright (c) 2024
  * 
  */
+#include <assert.h>
+#include <application/process/levels/level.h>
 #include <application/input.h>
+#include <library/framerate_controller/framerate_controller.h>
 #include <renderer/pipeline.h>
 #include <renderer/renderer_opengl.h>
 #include <entity/c/runtime/font.h>
@@ -30,6 +33,7 @@
 #define KEY_EXIT_LEVEL           '0'
 
 
+static framerate_controller_t controller;
 static uint32_t exit_level = 0;
 static color_t white = { 1.f, 1.f, 1.f, 1.f };
 static color_rgba_t scene_color = { 0.2f, 0.2f, 0.2f, 1.f};
@@ -42,28 +46,27 @@ static font_runtime_t* font;
 static uint32_t font_image_id;
 static bvh_t* bvh;
 
+
 void
 load_level(
-  const char* data_set, 
-  const char* file, 
-  float width,
-  float height,
+  const level_context_t context,
   const allocator_t* allocator)
 {
   char room[256] = {0};
-  sprintf(room, "rooms\\%s", file);
+  sprintf(room, "rooms\\%s", context.level);
 
   scene = load_scene_from_bin(
-    data_set,
+    context.data_set,
     room,
-    file,
+    context.level,
     1, 
     scene_color, 
     allocator);
 
   // load the scene render data.
   scene_render_data = load_scene_render_data(scene, allocator);
-  prep_packaged_render_data(data_set, room, scene_render_data, allocator);
+  prep_packaged_render_data(
+    context.data_set, room, scene_render_data, allocator);
 
   // guaranteed to exist, same with the font.
   camera = scene_render_data->camera_data.cameras;
@@ -78,12 +81,15 @@ load_level(
   disable_input = 0;
 
   pipeline_set_default(&pipeline);
-  set_viewport(&pipeline, 0.f, 0.f, width, height);
+  set_viewport(
+    &pipeline, 0.f, 0.f, 
+    (float)context.viewport.width, (float)context.viewport.height);
   update_viewport(&pipeline);
 
   {
     // "http://stackoverflow.com/questions/12943164/replacement-for-gluperspective-with-glfrustrum"
-    float znear = 0.1f, zfar = 4000.f, aspect = (float)width / height;
+    float znear = 0.1f, zfar = 4000.f;
+    float aspect = (float)context.viewport.width / context.viewport.height;
     float fh = (float)tan((double)60.f / 2.f / 180.f * K_PI) * znear;
     float fw = fh * aspect;
     set_perspective(&pipeline, -fw, fw, -fh, fh, znear, zfar);
@@ -91,14 +97,16 @@ load_level(
   }
 
   show_cursor(0);
+
+  initialize_controller(&controller, 60, 1u);
 }
 
 void
-update_level(
-  float dt_seconds, 
-  uint64_t frame_rate, 
-  const allocator_t* allocator)
+update_level(const allocator_t* allocator)
 {
+  uint64_t frame_rate = (uint64_t)controller_end(&controller);
+  float dt_seconds = (float)controller_start(&controller);
+
   input_update();
   clear_color_and_depth_buffers();
 
@@ -177,7 +185,18 @@ unload_level(const allocator_t* allocator)
 }
 
 uint32_t
-should_unload()
+should_unload(void)
 {
   return exit_level;
+}
+
+void
+construct_level1(level_t* level)
+{
+  assert(level);
+
+  level->load = load_level;
+  level->update = update_level;
+  level->unload = unload_level;
+  level->should_unload = should_unload;
 }

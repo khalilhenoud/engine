@@ -23,7 +23,7 @@ application {
     const char* dataset);
   ~application();
     
-  uint64_t 
+  void 
   update();
 };
 

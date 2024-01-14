@@ -15,32 +15,12 @@
 extern "C" {
 #endif
 
-#include <stdint.h>
 
+typedef struct level_t level_t;
 
-// TODO: levels needs a context that context global systems like memory
-// allocator and job managers.
-typedef struct allocator_t allocator_t;
-
+// TODO: implement a factory construction system, this is why we need it.
 void
-load_level(
-  const char* data_set, 
-  const char* room, 
-  float width,
-  float height,
-  const allocator_t* allocator);
-
-void
-update_level(
-  float dt_seconds, 
-  uint64_t framerate, 
-  const allocator_t* allocator);
-
-void
-unload_level(const allocator_t* allocator);
-
-uint32_t
-should_unload();
+construct_level1(level_t* level);
 
 #ifdef __cplusplus
 }

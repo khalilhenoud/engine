@@ -18,27 +18,10 @@ extern "C" {
 #include <stdint.h>
 
 
-typedef struct allocator_t allocator_t;
+typedef struct level_t level_t;
 
 void
-load_room_select(
-  const char* data_set, 
-  const char* room, 
-  float width,
-  float height,
-  const allocator_t* allocator);
-
-void
-update_room_select(
-  float dt_seconds, 
-  uint64_t framerate, 
-  const allocator_t* allocator);
-
-void
-unload_room_select(const allocator_t* allocator);
-
-const char*
-should_unload_room_select();
+construct_level_selector(level_t* level);
 
 #ifdef __cplusplus
 }

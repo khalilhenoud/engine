@@ -11,80 +11,72 @@
 #ifndef FRAMERATE_CONTROLLER_H
 #define FRAMERATE_CONTROLLER_H
 
-#include <chrono>
-#include <thread>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdint.h>
+
+#define BUFFER_TIME_MS                1
 
 
-struct 
-framerate_controller {
+typedef
+enum framerate_duration_t {
+  FPS_DURATION_SECONDS,
+  FPS_DURATION_MS,
+  FPS_DURATION_COUNT
+} framerate_duration_t;
 
-  float 
-  start()
-  {
-    auto previous_start = time_start;
-    time_start = std::chrono::high_resolution_clock::now();
+typedef
+struct framerate_controller_internal_t {
+  double current_fps;
 
-    if (m_first) {
-      m_first = false;
-      previous_start = time_start;
-      return 0.f;
-    }
+  // cast to DWORD when working with timegettime.
+  uint64_t start;
+  uint64_t end;
+  uint64_t target_frame_ms;
 
-    std::chrono::duration<double> duration = time_start - previous_start;
-    std::chrono::milliseconds in_millisec = 
-      std::chrono::duration_cast<std::chrono::milliseconds>(duration);
-    auto seconds = (double)in_millisec.count()/1000.0;
-    return (float)seconds;
-  }
+  // performance counter specific
+  uint64_t ticks_per_second;
+  uint32_t freq_counters_supported;
+} framerate_controller_internal_t;
 
-  uint64_t 
-  end()
-  {
-    auto previous_framerate = m_current_framerate;
+typedef
+struct framerate_controller_t {
+  uint64_t target_fps;
+  uint32_t locked;
+  framerate_controller_internal_t internal;
+} framerate_controller_t;
 
-    time_end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> duration = time_end - time_start;
-    std::chrono::milliseconds in_millisec = 
-      std::chrono::duration_cast<std::chrono::milliseconds>(duration);
-    uint64_t divider = in_millisec.count();
-    divider = divider == 0 ? 1 : divider;
-    m_current_framerate = 1000ll / divider;
 
-    if (m_locked && m_target_milliseconds > (divider + buffer_time))
-      std::this_thread::sleep_for(
-        std::chrono::milliseconds(
-          m_target_milliseconds - (divider + buffer_time)));
+void
+initialize_controller(
+  framerate_controller_t* controller, 
+  uint64_t target_fps, 
+  uint32_t locked);
 
-    return previous_framerate;
-  }
+float
+controller_start(framerate_controller_t* controller);
 
-  uint64_t 
-  get_framerate()
-  {
-    return m_current_framerate;
-  }
+double
+controller_end(framerate_controller_t* controller);
 
-  void 
-  lock_framerate(uint64_t target)
-  {
-    m_locked = true;
-    m_target_milliseconds = 1000 / target;
-  }
+double
+get_current_fps(framerate_controller_t* controller);
 
-  void 
-  unlock_framerate()
-  {
-    m_locked = false;
-  }
+void
+lock_fps(
+  framerate_controller_t* controller, 
+  uint64_t target_fps);
 
-  //////////////////////////////////////////////////////////////////////////////
-  uint64_t m_target_milliseconds = 0;
-  uint64_t m_current_framerate = 0;
-  bool m_locked = false;
-  bool m_first = true;
-  uint32_t buffer_time = 1;
-  std::chrono::time_point<std::chrono::high_resolution_clock> time_start;
-  std::chrono::time_point<std::chrono::high_resolution_clock> time_end;
-};
+void
+unlock_fps(framerate_controller_t* controller);
+
+
+#include "framerate_controller.impl"
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,0 +1,173 @@
+/**
+ * @file framerate_controller.impl
+ * @author your name (you@domain.com)
+ * @brief 
+ * @version 0.1
+ * @date 2024-01-13
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ */
+#ifndef FRAMERATE_CONTROLLER_IMPL_H
+#define FRAMERATE_CONTROLLER_IMPL_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <windows.h>
+#include <assert.h>
+
+
+static inline
+void
+populate_at_start(framerate_controller_t* controller)
+{
+  assert(controller);
+
+  if (controller->internal.freq_counters_supported) {
+    controller->internal.freq_counters_supported = QueryPerformanceFrequency(
+      (LARGE_INTEGER*)&controller->internal.ticks_per_second);
+    QueryPerformanceCounter((LARGE_INTEGER*)&controller->internal.start);
+  } else
+    controller->internal.start = timeGetTime();
+}
+
+static inline
+void
+populate_at_end(framerate_controller_t* controller)
+{
+  assert(controller);
+
+  if (controller->internal.freq_counters_supported)
+    QueryPerformanceCounter((LARGE_INTEGER*)&controller->internal.end);
+  else
+    controller->internal.end = timeGetTime();
+}
+
+static inline
+double
+get_cycle_duration(
+  framerate_controller_t* controller, 
+  uint64_t start, 
+  uint64_t end,
+  framerate_duration_t format)
+{
+  assert(controller);
+  
+  {
+    double mult = format == FPS_DURATION_MS ? 1000. : 1.;
+    if (controller->internal.freq_counters_supported) {
+      uint64_t delta_ticks = end - start;
+      return (double)delta_ticks / controller->internal.ticks_per_second * mult;
+    } else {
+      uint64_t delta_ms = end - start;
+      return (double)delta_ms / 1000. * mult;
+    }
+  }
+}
+
+inline
+void
+initialize_controller(
+  framerate_controller_t* controller, 
+  uint64_t target_fps, 
+  uint32_t locked)
+{
+  assert(controller);
+
+  controller->target_fps = target_fps;
+  controller->locked = locked;
+
+  controller->internal.ticks_per_second = 0;
+  controller->internal.freq_counters_supported = QueryPerformanceFrequency(
+    (LARGE_INTEGER*)&controller->internal.ticks_per_second);
+
+  populate_at_start(controller);
+
+  controller->internal.current_fps = 0.;
+  controller->internal.target_frame_ms = locked ? (1000ull / target_fps) : 1ull;
+}
+
+inline
+float
+controller_start(framerate_controller_t* controller)
+{
+  assert(controller);
+
+  {
+    uint64_t prior_start = controller->internal.start;
+    populate_at_start(controller);
+    return get_cycle_duration(
+      controller, 
+      prior_start, 
+      controller->internal.start, 
+      FPS_DURATION_SECONDS);
+  }
+}
+
+inline
+double
+controller_end(framerate_controller_t* controller)
+{
+  assert(controller);
+
+  {
+    double duration_ms = 1.;
+    double previous_fps = controller->internal.current_fps;
+    populate_at_end(controller);
+    duration_ms = 
+      get_cycle_duration(
+        controller, 
+        controller->internal.start, 
+        controller->internal.end, 
+        FPS_DURATION_MS);
+    duration_ms = IS_ZERO_MP(duration_ms) ? 1. : duration_ms;
+    controller->internal.current_fps = 1000. / duration_ms;
+
+    if (
+      controller->locked && 
+      controller->internal.target_frame_ms > (duration_ms + BUFFER_TIME_MS)) {
+      double ms_sleep = 
+        controller->internal.target_frame_ms - (duration_ms + BUFFER_TIME_MS);
+
+      Sleep((uint64_t)ms_sleep); 
+    }
+
+    return previous_fps;
+  }
+} 
+
+inline
+double
+get_current_fps(framerate_controller_t* controller)
+{
+  assert(controller);
+  return controller->internal.current_fps;
+}
+
+inline
+void
+lock_fps(
+  framerate_controller_t* controller, 
+  uint64_t target_fps)
+{
+  assert(controller);
+  controller->locked = 1u;
+  controller->target_fps = target_fps;
+  controller->internal.target_frame_ms = 1000ull / target_fps;
+}
+
+inline
+void
+unlock_fps(framerate_controller_t* controller)
+{
+  assert(controller);
+  controller->locked = 0u;
+}
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

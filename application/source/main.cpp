@@ -101,6 +101,7 @@ WinMain(
 	input_parameters_t input_params{ &g_hWnd };
 	input_set_client(&input_params);
 
+  // TODO: make this a part of the library api.
   // set the timers precision of the app in general.
   timeBeginPeriod(1);
 

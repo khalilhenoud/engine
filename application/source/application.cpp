@@ -82,7 +82,7 @@ void free_block(void* block)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-framerate_controller controller;
+framerate_controller_t controller;
 allocator_t allocator;
 
 static uint32_t in_level;
@@ -134,7 +134,7 @@ application::application(
     (float)iheight, 
     &allocator);
 
-  controller.lock_framerate(60);
+  initialize_controller(&controller, 60, 1u);
 }
 
 application::~application()
@@ -145,8 +145,8 @@ application::~application()
 uint64_t 
 application::update()
 {
-  uint64_t frame_rate = controller.end();
-  float dt_seconds = controller.start();
+  uint64_t frame_rate = (uint64_t)controller_end(&controller);
+  float dt_seconds = (float)controller_start(&controller);
 
   if (in_level) {
     update_level(dt_seconds, frame_rate, &allocator);

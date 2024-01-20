@@ -8,45 +8,14 @@
  * @copyright Copyright (c) 2023
  * 
  */
-#include <windows.h>
-#include <cassert>
 #include <algorithm>
-#include <iterator>
-#include <cmath>
-#include <functional>
-#include <unordered_map>
 #include <vector>
-#include <entity/c/runtime/texture.h>
-#include <entity/c/runtime/texture_utils.h>
-#include <entity/c/runtime/font.h>
-#include <entity/c/runtime/font_utils.h>
-#include <entity/c/mesh/color.h>
-#include <entity/c/mesh/mesh.h>
-#include <entity/c/mesh/mesh_utils.h>
-#include <entity/c/scene/scene_utils.h>
-#include <entity/c/scene/scene.h>
-#include <entity/c/scene/camera.h>
-#include <entity/c/scene/camera_utils.h>
-#include <application/application.h>
-#include <application/input.h>
-#include <application/converters/to_render_data.h>
-#include <application/converters/png_to_image.h>
-#include <application/converters/csv_to_font.h>
-#include <application/converters/bin_to_scene_to_bin.h>
-#include <application/process/text/utils.h>
-#include <application/process/logic/camera.h>
-#include <application/process/spatial/bvh.h>
-#include <application/process/spatial/bvh_utils.h>
-#include <application/process/render_data/utils.h>
-#include <math/c/vector3f.h>
-#include <renderer/renderer_opengl.h>
-#include <renderer/pipeline.h>
-#include <collision/capsule.h>
-#include <collision/segment.h>
-#include <collision/face.h>
+
 #include <library/allocator/allocator.h>
-#include <library/filesystem/filesystem.h>
-#include <application/process/levels/level.h>
+#include <renderer/renderer_opengl.h>
+#include <application/application.h>
+
+#include <entity/c/level/level.h>
 #include <application/process/levels/level1.h>
 #include <application/process/levels/room_select.h>
 

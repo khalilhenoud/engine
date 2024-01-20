@@ -17,7 +17,7 @@
 #include <entity/c/mesh/color.h>
 #include <entity/c/scene/scene.h>
 #include <entity/c/scene/scene_utils.h>
-#include <application/process/levels/level.h>
+#include <entity/c/level/level.h>
 #include <application/process/text/utils.h>
 #include <application/process/render_data/utils.h>
 #include <application/converters/to_render_data.h>
@@ -67,7 +67,8 @@ load_room_select(
 
   // load the scene render data.
   scene_render_data = load_scene_render_data(scene, allocator);
-  prep_packaged_render_data(context.data_set, room, scene_render_data, allocator);
+  prep_packaged_render_data(
+    context.data_set, room, scene_render_data, allocator);
 
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;

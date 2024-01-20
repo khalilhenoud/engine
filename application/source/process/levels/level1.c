@@ -9,7 +9,6 @@
  * 
  */
 #include <assert.h>
-#include <application/process/levels/level.h>
 #include <application/input.h>
 #include <library/framerate_controller/framerate_controller.h>
 #include <renderer/pipeline.h>
@@ -20,6 +19,7 @@
 #include <entity/c/scene/camera.h>
 #include <entity/c/scene/scene.h>
 #include <entity/c/scene/scene_utils.h>
+#include <entity/c/level/level.h>
 #include <application/process/text/utils.h>
 #include <application/process/logic/camera.h>
 #include <application/process/spatial/bvh.h>

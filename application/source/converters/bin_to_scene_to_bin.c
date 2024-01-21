@@ -28,10 +28,149 @@
 #include <entity/c/scene/scene_utils.h>
 #include <entity/c/scene/camera.h>
 #include <entity/c/scene/camera_utils.h>
+#include <entity/c/scene/light.h>
+#include <entity/c/scene/light_utils.h>
 #include <serializer/serializer_scene_data.h>
 #include <serializer/serializer_bin.h>
 #include <application/converters/bin_to_scene_to_bin.h>
 
+
+static 
+void
+populate_serializer_light_data(
+  scene_t* scene, 
+  serializer_scene_data_t* target, 
+  const allocator_t* allocator)
+{
+  assert(scene && target && allocator);
+
+  {
+    target->light_repo.used = scene->light_repo.count;
+    if (target->light_repo.used) {
+      target->light_repo.data = 
+        allocator->mem_cont_alloc(
+          target->light_repo.used, 
+          sizeof(serializer_light_data_t));
+
+      for (uint32_t i = 0; i < target->light_repo.used; ++i) {
+        serializer_light_data_t* t_light = target->light_repo.data + i;
+        light_t* s_light = scene->light_repo.lights + i;
+        memset(t_light->name.data, 0, sizeof(t_light->name.data));
+        memcpy(t_light->name.data, s_light->name->str, s_light->name->size);
+        memcpy(
+          t_light->position.data, 
+          s_light->position.data,
+          sizeof(t_light->position.data));
+        memcpy(
+          t_light->direction.data, 
+          s_light->direction.data,
+          sizeof(t_light->direction.data));
+        memcpy(
+          t_light->up.data, 
+          s_light->up.data,
+          sizeof(t_light->up.data));
+        memcpy(&t_light->inner_cone, &s_light->inner_cone, sizeof(float));
+        memcpy(&t_light->outer_cone, &s_light->outer_cone, sizeof(float));
+        memcpy(
+          &t_light->attenuation_constant, 
+          &s_light->attenuation_constant, 
+          sizeof(float));
+        memcpy(
+          &t_light->attenuation_linear, 
+          &s_light->attenuation_linear, 
+          sizeof(float));
+        memcpy(
+          &t_light->attenuation_quadratic, 
+          &s_light->attenuation_quadratic, 
+          sizeof(float));
+        memcpy(
+          t_light->diffuse.data, 
+          s_light->diffuse.data, 
+          sizeof(t_light->diffuse.data));
+        memcpy(
+          t_light->specular.data, 
+          s_light->specular.data, 
+          sizeof(t_light->specular.data));
+        memcpy(
+          t_light->ambient.data, 
+          s_light->ambient.data, 
+          sizeof(t_light->ambient.data));
+        memcpy(
+          &t_light->type, 
+          &s_light->type, 
+          sizeof(t_light->type));
+      }
+    }
+  }
+}
+
+static
+void
+copy_light_data(
+  serializer_scene_data_t* scene, 
+  scene_t* target, 
+  const allocator_t* allocator)
+{
+  assert(scene && target && allocator);
+
+  {
+    target->light_repo.count = scene->light_repo.used;
+    if (target->light_repo.count) {
+      target->light_repo.lights = 
+        allocator->mem_cont_alloc(
+          target->light_repo.count, 
+          sizeof(serializer_light_data_t));
+
+      for (uint32_t i = 0; i < target->light_repo.count; ++i) {
+        light_t* t_light = target->light_repo.lights + i;
+        serializer_light_data_t* s_light = scene->light_repo.data + i;
+        t_light->name = allocate_string(s_light->name.data, allocator);
+        memcpy(
+          t_light->position.data, 
+          s_light->position.data,
+          sizeof(t_light->position.data));
+        memcpy(
+          t_light->direction.data, 
+          s_light->direction.data,
+          sizeof(t_light->direction.data));
+        memcpy(
+          t_light->up.data, 
+          s_light->up.data,
+          sizeof(t_light->up.data));
+        memcpy(&t_light->inner_cone, &s_light->inner_cone, sizeof(float));
+        memcpy(&t_light->outer_cone, &s_light->outer_cone, sizeof(float));
+        memcpy(
+          &t_light->attenuation_constant, 
+          &s_light->attenuation_constant, 
+          sizeof(float));
+        memcpy(
+          &t_light->attenuation_linear, 
+          &s_light->attenuation_linear, 
+          sizeof(float));
+        memcpy(
+          &t_light->attenuation_quadratic, 
+          &s_light->attenuation_quadratic, 
+          sizeof(float));
+        memcpy(
+          t_light->diffuse.data, 
+          s_light->diffuse.data, 
+          sizeof(t_light->diffuse.data));
+        memcpy(
+          t_light->specular.data, 
+          s_light->specular.data, 
+          sizeof(t_light->specular.data));
+        memcpy(
+          t_light->ambient.data, 
+          s_light->ambient.data, 
+          sizeof(t_light->ambient.data));
+        memcpy(
+          &t_light->type, 
+          &s_light->type, 
+          sizeof(t_light->type));
+      }
+    }
+  }
+}
 
 static
 void
@@ -573,6 +712,7 @@ bin_to_scene(
   
   {
     scene_t* runtime_scene = create_scene("current", allocator);
+    copy_light_data(scene, runtime_scene, allocator);
     copy_texture_data(scene, runtime_scene, allocator);
     copy_material_data(scene, runtime_scene, allocator);
     copy_mesh_data(scene, runtime_scene, allocator);
@@ -594,6 +734,7 @@ scene_to_bin(
   {
     serializer_scene_data_t* serializer_scene = 
       allocator->mem_alloc(sizeof(serializer_scene_data_t));
+    populate_serializer_light_data(scene, serializer_scene, allocator);
     populate_serializer_texture_data(scene, serializer_scene, allocator);
     populate_serializer_material_data(scene, serializer_scene, allocator);
     populate_serializer_mesh_data(scene, serializer_scene, allocator);

@@ -18,6 +18,8 @@
 #include <entity/c/scene/scene.h>
 #include <entity/c/scene/scene_utils.h>
 #include <entity/c/scene/camera.h>
+#include <entity/c/scene/light.h>
+#include <entity/c/scene/light_utils.h>
 #include <entity/c/mesh/mesh.h>
 #include <entity/c/mesh/mesh_utils.h>
 #include <entity/c/mesh/material.h>
@@ -161,6 +163,17 @@ free_packaged_camera_data_internal(
 
 static
 void
+free_packaged_light_data_internal(
+  packaged_light_data_t* light_data, 
+  const allocator_t* allocator)
+{
+  assert(light_data && allocator);
+
+  allocator->mem_free(light_data->lights);
+}
+
+static
+void
 free_packaged_node_data_internal(
   packaged_node_data_t* node_data, 
   const allocator_t* allocator)
@@ -189,6 +202,7 @@ free_render_data(
   {
     free_packaged_node_data_internal(&render_data->node_data, allocator);
     free_packaged_mesh_data_internal(&render_data->mesh_data, allocator);
+    free_packaged_light_data_internal(&render_data->light_data, allocator);
     free_packaged_font_data_internal(&render_data->font_data, allocator);
     free_packaged_camera_data_internal(&render_data->camera_data, allocator);  
     allocator->mem_free(render_data);
@@ -310,12 +324,68 @@ load_scene_font_data(
     texture_runtime_t* target_image = font_data->texture_runtimes + i;
     font_t* source = scene->font_repo.fonts + i;
 
-    target->font.data_file = allocate_string(source->data_file->str, allocator);
-    target->font.image_file = allocate_string(source->image_file->str, allocator);
+    target->font.data_file = 
+      allocate_string(source->data_file->str, allocator);
+    target->font.image_file = 
+      allocate_string(source->image_file->str, allocator);
 
     // Set the texture runtime of the font, still unloaded.
     target_image->texture.path = 
       allocate_string(source->image_file->str, allocator);
+  }
+}
+
+static
+void
+normalize_color(color_t* color)
+{
+  float val = 0.f;
+  for (uint32_t i = 0; i < 3; ++i)
+    val += color->data[i] * color->data[i];
+  val = sqrtf(val);
+  if (!IS_ZERO_MP(val)) {
+    for (uint32_t i = 0; i < 3; ++i)
+      color->data[i] /= val;
+  }
+}
+
+static
+void
+load_scene_light_data(
+  scene_t* scene, 
+  packaged_light_data_t* light_data, 
+  const allocator_t* allocator)
+{
+  assert(scene && light_data && allocator);
+
+  {
+    light_data->count = scene->light_repo.count;
+    light_data->lights = 
+      (renderer_light_t*)allocator->mem_cont_alloc(
+        light_data->count, sizeof(renderer_light_t));
+
+    for (uint32_t i = 0; i < light_data->count; ++i) {
+      renderer_light_t* target = light_data->lights + i;
+      size_t size_color = sizeof(target->diffuse.data);
+      size_t size_vector = sizeof(target->position.data);
+      light_t* source = scene->light_repo.lights + i;
+
+      target->attenuation_constant = source->attenuation_constant;
+      target->attenuation_linear = source->attenuation_linear;
+      target->attenuation_quadratic = source->attenuation_quadratic;
+      target->inner_cone = source->inner_cone;
+      target->outer_cone = source->outer_cone;
+      target->type = source->type;
+      memcpy(target->diffuse.data, source->diffuse.data, size_color);
+      memcpy(target->specular.data, source->specular.data, size_color);
+      memcpy(target->ambient.data, source->ambient.data, size_color);
+      normalize_color(&target->diffuse);
+      normalize_color(&target->specular);
+      normalize_color(&target->ambient);
+      memcpy(target->position.data, source->position.data, size_vector);
+      memcpy(target->direction.data, source->direction.data, size_vector);
+      memcpy(target->up.data, source->up.data, size_vector);
+    }
   }
 }
 
@@ -407,6 +477,7 @@ load_scene_render_data(
 
     load_scene_node_data(scene, &render_data->node_data, allocator);
     load_scene_mesh_data(scene, &render_data->mesh_data, allocator);
+    load_scene_light_data(scene, &render_data->light_data, allocator);
     load_scene_font_data(scene, &render_data->font_data, allocator);
     load_scene_camera_data(scene, &render_data->camera_data, allocator);
     

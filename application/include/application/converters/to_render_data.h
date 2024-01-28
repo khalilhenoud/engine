@@ -27,6 +27,7 @@ typedef struct node_t node_t;
 typedef struct mesh_t mesh_t;
 typedef struct allocator_t allocator_t;
 typedef struct mesh_render_data_t mesh_render_data_t;
+typedef struct renderer_light_t renderer_light_t;
 typedef struct font_runtime_t font_runtime_t;
 typedef struct camera_t camera_t;
 typedef struct texture_runtime_t texture_runtime_t;
@@ -53,6 +54,12 @@ struct packaged_camera_data_t {
   camera_t* cameras;
 } packaged_camera_data_t;
 
+typedef
+struct packaged_light_data_t {
+  uint32_t count;
+  renderer_light_t* lights;
+} packaged_light_data_t;
+
 // NOTE: a node has a transform and a list of packaged mesh or other nodes.
 // these are indices into the main packaged_scene_render_data_t struct.
 typedef
@@ -66,6 +73,7 @@ struct packaged_scene_render_data_t {
   packaged_node_data_t node_data;
   packaged_mesh_data_t mesh_data;
   packaged_font_data_t font_data;
+  packaged_light_data_t light_data;
   packaged_camera_data_t camera_data;
 } packaged_scene_render_data_t;
 

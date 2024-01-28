@@ -19,12 +19,14 @@
 #include <entity/c/scene/camera.h>
 #include <entity/c/scene/camera_utils.h>
 #include <entity/c/scene/node.h>
+#include <entity/c/scene/light.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <math/c/matrix4f.h>
 
 
-// uploads the textures to the gpu.
+// note: this function loads the textures from disk and upload the texture data
+// to the gpu. it does the same thing for the font texture.
 void
 prep_packaged_render_data(
   const char* data_set,
@@ -69,6 +71,9 @@ prep_packaged_render_data(
         (renderer_image_format_t)runtime->format);
     }
   }
+
+  for (uint32_t i = 0; i < render_data->light_data.count; ++i)
+    enable_light(i);
 }
 
 void
@@ -85,6 +90,9 @@ cleanup_packaged_render_data(
     if (render_data->font_data.texture_ids[i])
       evict_from_gpu(render_data->font_data.texture_ids[i]);
   }
+
+  for (uint32_t i = 0; i < render_data->light_data.count; ++i)
+    disable_light(i);
 
   free_render_data(render_data, allocator);
 }
@@ -124,6 +132,18 @@ render_packaged_scene_data_node(
   pop_matrix(pipeline);
 }
 
+static
+void
+set_packaged_light_properties(
+  packaged_scene_render_data_t* render_data, 
+  pipeline_t* pipeline)
+{
+  for (uint32_t i = 0; i < render_data->light_data.count; ++i) {
+    renderer_light_t* light = render_data->light_data.lights + i;
+    set_light_properties(i, light, pipeline);
+  }
+}
+
 void
 render_packaged_scene_data(
   packaged_scene_render_data_t* render_data,
@@ -142,6 +162,8 @@ render_packaged_scene_data(
     set_matrix_mode(pipeline, MODELVIEW);
     load_identity(pipeline);
     post_multiply(pipeline, &out);
+
+    set_packaged_light_properties(render_data, pipeline);
 
     // render the root node.
     render_packaged_scene_data_node(

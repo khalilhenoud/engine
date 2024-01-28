@@ -59,7 +59,7 @@ load_level(
     context.data_set,
     room,
     context.level,
-    1, 
+    0, 
     scene_color, 
     allocator);
 

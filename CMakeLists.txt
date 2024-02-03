@@ -35,10 +35,6 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/library/CMakeLists.txt")
 	message(FATAL_ERROR "The library submdule was not downloaded!")
 endif()
 
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/collision/CMakeLists.txt")
-	message(FATAL_ERROR "The collision submdule was not downloaded!")
-endif()
-
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/entity/CMakeLists.txt")
 	message(FATAL_ERROR "The entity submdule was not downloaded!")
 endif()
@@ -57,7 +53,6 @@ endif()
 
 add_subdirectory(external/library library)
 add_subdirectory(external/math math)
-add_subdirectory(external/collision collision)
 add_subdirectory(external/entity entity)
 add_subdirectory(external/loaders/loaders loaders)
 add_subdirectory(external/renderer/renderer renderer)

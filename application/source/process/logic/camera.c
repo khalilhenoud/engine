@@ -20,10 +20,10 @@
 #include <application/input.h>
 #include <application/process/spatial/bvh.h>
 #include <application/process/logic/camera.h>
-#include <collision/capsule.h>
-#include <collision/segment.h>
-#include <collision/face.h>
-#include <collision/sphere.h>
+#include <math/c/capsule.h>
+#include <math/c/segment.h>
+#include <math/c/face.h>
+#include <math/c/sphere.h>
 #include <entity/c/runtime/font.h>
 #include <entity/c/runtime/font_utils.h>
 #include <application/process/text/utils.h>

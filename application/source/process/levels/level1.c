@@ -29,6 +29,8 @@
 #include <application/converters/bin_to_scene_to_bin.h>
 #include <application/converters/to_render_data.h>
 
+#include <loaders/loader_map.h>
+
 #define TILDE   0xC0
 #define KEY_EXIT_LEVEL           '0'
 
@@ -45,6 +47,7 @@ static packaged_scene_render_data_t* scene_render_data;
 static font_runtime_t* font;
 static uint32_t font_image_id;
 static bvh_t* bvh;
+static loader_map_data_t* map;
 
 
 void
@@ -62,6 +65,13 @@ load_level(
     0, 
     scene_color, 
     allocator);
+
+  {
+    sprintf(room, "%squake\\%s", context.data_set, "start.map");
+    map = load_map(room, allocator);
+    free_map(map, allocator);
+  }
+  
 
   // load the scene render data.
   scene_render_data = load_scene_render_data(scene, allocator);

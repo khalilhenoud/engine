@@ -67,8 +67,9 @@ load_level(
     allocator);
 
   {
-    sprintf(room, "%squake\\%s", context.data_set, "start.map");
-    map = load_map(room, allocator);
+    char test_quake[256] = { 0 };
+    sprintf(test_quake, "%squake\\%s", context.data_set, "start.map");
+    map = load_map(test_quake, allocator);
     free_map(map, allocator);
   }
   

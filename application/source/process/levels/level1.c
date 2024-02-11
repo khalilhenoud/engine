@@ -16,6 +16,7 @@
 #include <entity/c/runtime/font.h>
 #include <entity/c/runtime/font_utils.h>
 #include <entity/c/mesh/color.h>
+#include <entity/c/mesh/mesh_utils.h>
 #include <entity/c/scene/camera.h>
 #include <entity/c/scene/scene.h>
 #include <entity/c/scene/scene_utils.h>
@@ -48,6 +49,8 @@ static font_runtime_t* font;
 static uint32_t font_image_id;
 static bvh_t* bvh;
 static loader_map_data_t* map;
+static packaged_mesh_data_t* mesh_render_data;
+static mesh_t* sphere;
 
 
 void
@@ -63,7 +66,7 @@ load_level(
     room,
     context.level,
     0, 
-    scene_color, 
+    scene_color,
     allocator);
 
   {
@@ -72,7 +75,13 @@ load_level(
     map = load_map(test_quake, allocator);
     free_map(map, allocator);
   }
-  
+
+  {
+    color_rgba_t red = { 1.f, 0.f, 0.f, 1.f };
+    // sphere = create_unit_sphere(32, allocator);
+    sphere = create_unit_cube(allocator);
+    mesh_render_data = load_mesh_renderer_data(sphere, red, allocator);
+  }
 
   // load the scene render data.
   scene_render_data = load_scene_render_data(scene, allocator);
@@ -122,6 +131,28 @@ update_level(const allocator_t* allocator)
   clear_color_and_depth_buffers();
 
   render_packaged_scene_data(scene_render_data, &pipeline, camera);
+
+  {
+    // Render a single mesh.
+    uint32_t texture_id[1] = { 0 };
+
+    matrix4f out, scale, translation;
+    memset(&out, 0, sizeof(matrix4f));
+    get_view_transformation(camera, &out);
+    set_matrix_mode(&pipeline, MODELVIEW);
+    load_identity(&pipeline);
+    post_multiply(&pipeline, &out);
+
+    matrix4f_scale(&scale, 300, 300, 300);
+    matrix4f_translation(&translation, 800, -450, -800);
+
+    push_matrix(&pipeline);
+    pre_multiply(&pipeline, &translation);
+    pre_multiply(&pipeline, &scale);
+    
+    draw_meshes(mesh_render_data->mesh_render_data, texture_id, 1, &pipeline);
+    pop_matrix(&pipeline);
+  }
 
   {
     // disable/enable input with '~' key.
@@ -193,6 +224,9 @@ unload_level(const allocator_t* allocator)
   free_scene(scene, allocator);
   cleanup_packaged_render_data(scene_render_data, allocator);
   free_bvh(bvh, allocator);
+
+  free_mesh_render_data(mesh_render_data, allocator);
+  free_mesh(sphere, allocator);
 }
 
 uint32_t

@@ -954,6 +954,17 @@ draw_text(
       draw_status ? &red : &white,
       0, 160.f);
   }
+  {
+    const char* text = "[9] SWITCH CAMERA MODE";
+    render_text_to_screen(
+      font,
+      font_image_id,
+      pipeline,
+      &text,
+      1,
+      movement_mode ? &red : &white,
+      0, 180.f);
+  }
 }
 
 void

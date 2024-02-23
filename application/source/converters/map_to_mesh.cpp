@@ -53,8 +53,7 @@ static
 void
 transform_cube(mesh_t* cube)
 {
-  // 4096 simple scale
-  // TODO: investigate the scale.
+  // 4096 units both side of the three axis.
   float scale = 4096.f * 2;
   for (uint32_t i = 0; i < cube->vertices_count * 3; ++i)
     cube->vertices[i] *= scale;

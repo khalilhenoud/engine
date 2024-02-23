@@ -63,7 +63,7 @@ static int32_t draw_collided_face = 0;
 static int32_t draw_status = 0;
 static vector3f cam_acc = { 5.f, 5.f, 5.f };
 static vector3f cam_speed = { 0.f, 0.f, 0.f };
-static vector3f cam_speed_limit = { 10.f, 20.f, 10.f };
+static vector3f cam_speed_limit = { 10.f, 10.f, 10.f };
 static const float gravity_acc = 1.f;
 static const float friction_dec = 2.f;
 static const float friction_k = 1.f;
@@ -131,12 +131,17 @@ handle_input(float delta_time, camera_t* camera)
     draw_status = !draw_status;
 
   if (is_key_pressed(KEY_SPEED_PLUS))
-    cam_speed_limit.data[0] = cam_speed_limit.data[2] += 0.25f;
+    cam_speed_limit.data[0] = 
+    cam_speed_limit.data[1] = 
+    cam_speed_limit.data[2] += 0.25f;
 
   if (is_key_pressed(KEY_SPEED_MINUS)) {
-    cam_speed_limit.data[0] = cam_speed_limit.data[2] -= 0.25f;
-    cam_speed_limit.data[0] = cam_speed_limit.data[2] = 
-      fmax(cam_speed_limit.data[2], 0.125f);
+    cam_speed_limit.data[0] = 
+    cam_speed_limit.data[1] = 
+    cam_speed_limit.data[2] -= 0.25f;
+    cam_speed_limit.data[0] = 
+    cam_speed_limit.data[1] = 
+    cam_speed_limit.data[2] = fmax(cam_speed_limit.data[2], 0.125f);
   }
 
   if (prev_mouse_x == -1)
@@ -296,7 +301,7 @@ handle_input(float delta_time, camera_t* camera)
     camera->position.data[2] += cam_dt_pos.data[2];
 
     if (movement_mode)
-      camera->position.data[1] += cam_dt_pos.data[1] * multiplier;
+      camera->position.data[1] += cam_dt_pos.data[1];
   }
 }
 

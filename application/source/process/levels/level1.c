@@ -72,13 +72,13 @@ load_level(
 
   {
     char test_quake[256] = { 0 };
-    sprintf(test_quake, "%squake\\%s", context.data_set, "e1m4.map");
+    sprintf(test_quake, "%squake\\%s", context.data_set, "e1m1.map");
     map = load_map(test_quake, allocator);
     void* data = map_to_mesh(map, allocator);
     free_map(map, allocator);
 
     {
-      color_rgba_t color = { 0.5f, 0.5f, 0.5f, 1.f };
+      color_rgba_t color = { 0.2f, 0.2f, 0.2f, 1.f };
       mesh = (mesh_t*)data;
       mesh_render_data = load_mesh_renderer_data(mesh, color, allocator);
     }
@@ -144,7 +144,7 @@ update_level(const allocator_t* allocator)
     load_identity(&pipeline);
     post_multiply(&pipeline, &out);
 
-    matrix4f_scale(&scale, 1.25, 1.25, 1.25);
+    matrix4f_scale(&scale, 1.25f, 1.25f, 1.25f);
     matrix4f_rotation_x(&rotation, -K_PI/2.f);
     matrix4f_translation(&translation, 1200, 0, -1200);
 

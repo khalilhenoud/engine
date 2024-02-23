@@ -29,6 +29,7 @@
 #include <application/converters/to_render_data.h>
 #include <application/converters/bin_to_scene_to_bin.h>
 #include <application/converters/to_render_data.h>
+#include <application/converters/map_to_mesh.h>
 
 #include <loaders/loader_map.h>
 
@@ -50,7 +51,7 @@ static uint32_t font_image_id;
 static bvh_t* bvh;
 static loader_map_data_t* map;
 static packaged_mesh_data_t* mesh_render_data;
-static mesh_t* sphere;
+static mesh_t* mesh;
 
 
 void
@@ -71,16 +72,16 @@ load_level(
 
   {
     char test_quake[256] = { 0 };
-    sprintf(test_quake, "%squake\\%s", context.data_set, "start.map");
+    sprintf(test_quake, "%squake\\%s", context.data_set, "e1m4.map");
     map = load_map(test_quake, allocator);
+    void* data = map_to_mesh(map, allocator);
     free_map(map, allocator);
-  }
 
-  {
-    color_rgba_t red = { 1.f, 0.f, 0.f, 1.f };
-    // sphere = create_unit_sphere(32, allocator);
-    sphere = create_unit_cube(allocator);
-    mesh_render_data = load_mesh_renderer_data(sphere, red, allocator);
+    {
+      color_rgba_t color = { 0.5f, 0.5f, 0.5f, 1.f };
+      mesh = (mesh_t*)data;
+      mesh_render_data = load_mesh_renderer_data(mesh, color, allocator);
+    }
   }
 
   // load the scene render data.
@@ -136,18 +137,20 @@ update_level(const allocator_t* allocator)
     // Render a single mesh.
     uint32_t texture_id[1] = { 0 };
 
-    matrix4f out, scale, translation;
+    matrix4f out, scale, translation, rotation;
     memset(&out, 0, sizeof(matrix4f));
     get_view_transformation(camera, &out);
     set_matrix_mode(&pipeline, MODELVIEW);
     load_identity(&pipeline);
     post_multiply(&pipeline, &out);
 
-    matrix4f_scale(&scale, 300, 300, 300);
-    matrix4f_translation(&translation, 800, -450, -800);
+    matrix4f_scale(&scale, 1.25, 1.25, 1.25);
+    matrix4f_rotation_x(&rotation, -K_PI/2.f);
+    matrix4f_translation(&translation, 1200, 0, -1200);
 
     push_matrix(&pipeline);
     pre_multiply(&pipeline, &translation);
+    pre_multiply(&pipeline, &rotation);
     pre_multiply(&pipeline, &scale);
     
     draw_meshes(mesh_render_data->mesh_render_data, texture_id, 1, &pipeline);
@@ -226,7 +229,7 @@ unload_level(const allocator_t* allocator)
   free_bvh(bvh, allocator);
 
   free_mesh_render_data(mesh_render_data, allocator);
-  free_mesh(sphere, allocator);
+  free_mesh(mesh, allocator);
 }
 
 uint32_t

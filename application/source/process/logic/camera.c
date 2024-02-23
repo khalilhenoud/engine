@@ -33,6 +33,7 @@
 #define KEY_COLLISION_QUERY       '3'
 #define KEY_COLLISION_FACE        '4'
 #define KEY_DRAW_STATUS           '5'
+#define KEY_MOVEMENT_MODE         '9'
 #define KEY_JUMP                  0x20
 #define KEY_STRAFE_LEFT           'A'
 #define KEY_STRAFE_RIGHT          'D'
@@ -194,6 +195,9 @@ handle_input(float delta_time, camera_t* camera)
     &tmpmatrix, &camera->lookat_direction);
   camera->up_vector = mult_m4f_v3f(&tmpmatrix, &camera->up_vector);
 
+  if (is_key_triggered(KEY_MOVEMENT_MODE))
+    movement_mode = !movement_mode;
+
   // Handling translations.
   if (movement_mode) {
     if (is_key_pressed(KEY_MOVE_DOWN))
@@ -234,6 +238,17 @@ handle_input(float delta_time, camera_t* camera)
         cam_speed.data[2] -= friction;
         cam_speed.data[2] = fmax(cam_speed.data[2], 0.f);
       }
+
+      if (movement_mode) {
+        if (cam_speed.data[1] < 0.f) {
+          cam_speed.data[1] += friction;
+          cam_speed.data[1] = fmin(cam_speed.data[1], 0.f);
+        }
+        else {
+          cam_speed.data[1] -= friction;
+          cam_speed.data[1] = fmax(cam_speed.data[1], 0.f);
+        }
+      }
     }
 
     {
@@ -246,6 +261,12 @@ handle_input(float delta_time, camera_t* camera)
         -cam_speed_limit.data[2] : cam_speed.data[2];
       cam_speed.data[2] = (cam_speed.data[2] > +cam_speed_limit.data[2]) ? 
         +cam_speed_limit.data[2] : cam_speed.data[2];
+      if (movement_mode) {
+        cam_speed.data[1] = (cam_speed.data[1] < -cam_speed_limit.data[1]) ?
+          -cam_speed_limit.data[1] : cam_speed.data[1];
+        cam_speed.data[1] = (cam_speed.data[1] > +cam_speed_limit.data[1]) ?
+          +cam_speed_limit.data[1] : cam_speed.data[1];
+      }
     }
   }
 
@@ -253,6 +274,8 @@ handle_input(float delta_time, camera_t* camera)
     vector3f cam_dt_pos = { 0.f, 0.f, 0.f };
     cam_dt_pos.data[0] += tmp.data[0] * cam_speed.data[0] * multiplier;
     cam_dt_pos.data[2] += tmp.data[2] * cam_speed.data[0] * multiplier;
+    if (movement_mode)
+      cam_dt_pos.data[1] += cam_speed.data[1] * multiplier;
 
     {
       vector3f vecxz;
@@ -271,6 +294,9 @@ handle_input(float delta_time, camera_t* camera)
 
     camera->position.data[0] += cam_dt_pos.data[0];
     camera->position.data[2] += cam_dt_pos.data[2];
+
+    if (movement_mode)
+      camera->position.data[1] += cam_dt_pos.data[1] * multiplier;
   }
 }
 
@@ -812,6 +838,9 @@ handle_physics(
   uint32_t currently_falling = 0, remains_falling = 0;
   vector3f to_add;
 
+  if (movement_mode)
+    return;
+
   {
     // check if we are on a walking surface or not.
     capsule_t copy = *capsule;
@@ -830,7 +859,8 @@ handle_physics(
     copy.center.data[1] += snap_up_extent;
     collides = snaps_to_floor_at(
       &copy, bvh, snap_extent + snap_up_extent, &distance);
-
+    
+    // TODO: This hits sometimes why????
     assert(collides && "has to collide at this point!");
 
     currently_falling = 0;
@@ -950,6 +980,7 @@ camera_update(
       BINNED_MACRO_LIMIT);
 
     if (
+      !movement_mode &&
       (flags & COLLIDED_CEILING_FLAG) == COLLIDED_CEILING_FLAG &&
       cam_speed.data[1] > 0.f)
       cam_speed.data[1] = 0.f;

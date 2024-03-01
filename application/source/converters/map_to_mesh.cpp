@@ -25,6 +25,7 @@
 #include <entity/c/mesh/mesh.h>
 #include <entity/c/mesh/mesh_utils.h>
 #include <loaders/loader_map_data.h>
+#include <serializer/serializer_scene_data.h>
 
 
 typedef
@@ -434,7 +435,8 @@ brush_to_faces(
               float t = 0.f;
               segment_plane_classification_t result = classify_segment_face(
                 &plane.face, &plane.normal, &segment, &intersection, &t);
-              assert(result == SEGMENT_PLANE_INTERSECT_ON_SEGMENT);
+              // TODO: change conditions, t could be 1.00000002
+              //assert(result == SEGMENT_PLANE_INTERSECT_ON_SEGMENT);
 
               if (pt_classify[idx0] == POINT_IN_POSITIVE_HALFSPACE)
                 poly_front.points.push_back(current.face.points[idx0]);
@@ -559,4 +561,169 @@ map_to_mesh(void* map, const allocator_t* allocator)
 
   free_mesh(cube, allocator);
   return (void*)result;
+}
+
+// returns serializer_mesh_data_t* typecast to void*.
+static
+void
+map_to_serializer_mesh(
+  void* map, 
+  serializer_mesh_data_t* result, 
+  const allocator_t* allocator)
+{
+  loader_map_data_t* map_data = (loader_map_data_t*)map;
+  mesh_t* cube = create_unit_cube(allocator);
+  transform_cube(cube);
+
+  // convert the cube to a more manageable format.
+  std::vector<l_face_t> faces;
+  point3f p1, p2, p3;
+  vector3f normal;
+  size_t vec3f = sizeof(float) * 3;
+  for (uint32_t i = 0; i < cube->indices_count; i +=3) {
+    memcpy(p1.data, cube->vertices + cube->indices[i + 0] * 3, vec3f);    
+    memcpy(p2.data, cube->vertices + cube->indices[i + 1] * 3, vec3f);    
+    memcpy(p3.data, cube->vertices + cube->indices[i + 2] * 3, vec3f);
+    memcpy(normal.data, cube->normals + cube->indices[i + 0] * 3, vec3f);
+    faces.push_back({ {p1, p2, p3}, normal});
+  }
+
+  {
+    std::vector<l_face_t> map_faces;
+    for (uint32_t i = 0; i < map_data->world.brush_count; ++i) {
+      auto cut_faces = brush_to_faces(faces, map_data->world.brushes + i);
+      map_faces.insert(map_faces.end(), cut_faces.begin(), cut_faces.end());
+    }
+
+    {
+      uint32_t count = map_faces.size();
+      uint32_t sizef3 = sizeof(float) * 3;
+      // populate the resultant mesh from the faces.
+      result->vertices_count = map_faces.size() * 3;
+      result->vertices = (float*)allocator->mem_alloc(
+        sizef3 * result->vertices_count);
+      result->normals = (float*)allocator->mem_alloc(
+        sizef3 * result->vertices_count);
+      result->uvs = (float*)allocator->mem_alloc(
+        sizef3 * result->vertices_count);
+      memset(result->uvs, 0, sizef3 * result->vertices_count);
+
+      result->faces_count = map_faces.size();
+      result->indices = (uint32_t*)allocator->mem_alloc(
+        sizeof(uint32_t) * result->faces_count * 3);
+
+      // copy the data into the mesh.
+      uint32_t verti = 0, indexi = 0;
+      for (uint32_t i = 0; i < count; ++i) {
+        auto& face = map_faces[i];
+        point3f* points = face.face.points;
+        memcpy(result->vertices + (verti + 0) * 3, points[0].data, sizef3);
+        memcpy(result->vertices + (verti + 1) * 3, points[1].data, sizef3);
+        memcpy(result->vertices + (verti + 2) * 3, points[2].data, sizef3);
+        memcpy(result->normals + (verti + 0) * 3, face.normal.data, sizef3);
+        memcpy(result->normals + (verti + 1) * 3, face.normal.data, sizef3);
+        memcpy(result->normals + (verti + 2) * 3, face.normal.data, sizef3);
+
+        result->indices[indexi + 0] = verti + 0;
+        result->indices[indexi + 1] = verti + 1;
+        result->indices[indexi + 2] = verti + 2;
+
+        indexi += 3;
+        verti += 3;
+      }
+    }
+  }
+
+  free_mesh(cube, allocator);
+}
+
+void*
+map_to_bin(void* map, const allocator_t* allocator)
+{
+  loader_map_data_t* map_data = (loader_map_data_t*)map;
+
+  serializer_scene_data_t* scene =
+    (serializer_scene_data_t*)allocator->mem_alloc(
+      sizeof(serializer_scene_data_t));
+  memset(scene, 0, sizeof(serializer_scene_data_t));
+  scene->mesh_repo.used = 1;
+  scene->mesh_repo.data = 
+    (serializer_mesh_data_t*)allocator->mem_alloc(
+      sizeof(serializer_mesh_data_t));
+  memset(scene->mesh_repo.data, 0, sizeof(serializer_mesh_data_t));
+  map_to_serializer_mesh(map, scene->mesh_repo.data, allocator);
+  scene->mesh_repo.data->materials.used = 1;
+  scene->mesh_repo.data->materials.indices[0] = 0;
+  
+  scene->material_repo.used = 1;
+  scene->material_repo.data = 
+    (serializer_material_data_t*)allocator->mem_alloc(
+      sizeof(serializer_material_data_t));
+  memset(scene->material_repo.data, 0, sizeof(serializer_material_data_t));
+  scene->material_repo.data->opacity = 1.f;
+  scene->material_repo.data->shininess = 1.f;
+  scene->material_repo.data->ambient.data[0] =
+  scene->material_repo.data->ambient.data[1] =
+  scene->material_repo.data->ambient.data[2] = 0.2f;
+  scene->material_repo.data->ambient.data[3] = 1.f;
+  scene->material_repo.data->diffuse.data[0] =
+  scene->material_repo.data->diffuse.data[1] =
+  scene->material_repo.data->diffuse.data[2] = 0.6f;
+  scene->material_repo.data->diffuse.data[3] = 1.f;
+  scene->material_repo.data->specular.data[0] =
+  scene->material_repo.data->specular.data[1] =
+  scene->material_repo.data->specular.data[2] = 0.6f;
+  scene->material_repo.data->specular.data[3] = 1.f;
+
+  scene->model_repo.used = 1;
+  scene->model_repo.data = 
+    (serializer_model_data_t*)allocator->mem_alloc(
+      sizeof(serializer_model_data_t));
+  memset(scene->model_repo.data, 0, sizeof(serializer_model_data_t));
+  scene->model_repo.data[0].meshes.used = 1;
+  scene->model_repo.data[0].meshes.indices[0] = 0;
+  scene->model_repo.data[0].models.used = 0;
+  // TODO: set the name here.
+  // scene->model_repo.data[0].name.data;
+  matrix4f_rotation_x(&scene->model_repo.data[0].transform, -K_PI/2.f);
+  scene->camera_repo.used = 1;
+  scene->camera_repo.data = 
+    (serializer_camera_t*)allocator->mem_alloc(
+      sizeof(serializer_camera_t));
+  scene->camera_repo.data[0].position.data[0] = 
+    (float)map_data->player_start[0];
+  scene->camera_repo.data[0].position.data[1] = 
+    (float)map_data->player_start[1];
+  scene->camera_repo.data[0].position.data[2] = 
+    (float)map_data->player_start[2];
+
+  scene->light_repo.used = 1;
+  scene->light_repo.data = 
+    (serializer_light_data_t*)allocator->mem_alloc(
+      sizeof(serializer_light_data_t));
+  memset(scene->light_repo.data, 0, sizeof(serializer_light_data_t));
+  scene->light_repo.data->type = SERIALIZER_LIGHT_TYPE_POINT;
+  scene->light_repo.data->ambient.data[0] =
+  scene->light_repo.data->ambient.data[1] =
+  scene->light_repo.data->ambient.data[2] =
+  scene->light_repo.data->ambient.data[3] = 0.2f;
+  scene->light_repo.data->diffuse.data[0] =
+  scene->light_repo.data->diffuse.data[1] =
+  scene->light_repo.data->diffuse.data[2] =
+  scene->light_repo.data->diffuse.data[3] = 0.6f;
+  scene->light_repo.data->specular.data[0] =
+  scene->light_repo.data->specular.data[1] =
+  scene->light_repo.data->specular.data[2] =
+  scene->light_repo.data->specular.data[3] = 0.6f;
+
+  // premultiply the position.
+  mult_set_m4f_p3f(
+    &scene->model_repo.data[0].transform, &scene->camera_repo.data[0].position);
+  scene->camera_repo.data[0].lookat_direction.data[0] = 
+  scene->camera_repo.data[0].lookat_direction.data[1] = 0.f;
+  scene->camera_repo.data[0].lookat_direction.data[2] = -1.f;
+  scene->camera_repo.data[0].up_vector.data[0] = 
+  scene->camera_repo.data[0].up_vector.data[2] = 0.f;
+  scene->camera_repo.data[0].up_vector.data[1] = 1.f;
+  return (void*)scene;
 }

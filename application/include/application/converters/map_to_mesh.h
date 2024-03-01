@@ -22,6 +22,10 @@ typedef struct allocator_t allocator_t;
 void* 
 map_to_mesh(void* map, const allocator_t* allocator);
 
+// returns a serializer_scene_data_t* typecast as void*.
+void*
+map_to_bin(void* map, const allocator_t* allocator);
+
 #ifdef __cplusplus
 }
 #endif

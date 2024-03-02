@@ -29,11 +29,6 @@
 #include <application/converters/to_render_data.h>
 #include <application/converters/bin_to_scene_to_bin.h>
 #include <application/converters/to_render_data.h>
-#include <application/converters/map_to_mesh.h>
-
-#include <serializer/serializer_bin.h>
-
-#include <loaders/loader_map.h>
 
 #define TILDE   0xC0
 #define KEY_EXIT_LEVEL           '0'
@@ -42,7 +37,7 @@
 static framerate_controller_t controller;
 static uint32_t exit_level = 0;
 static color_t white = { 1.f, 1.f, 1.f, 1.f };
-static color_rgba_t scene_color = { 0.2f, 0.2f, 0.2f, 1.f};
+static color_rgba_t scene_color = { 0.4f, 0.4f, 0.4f, 1.f};
 static int32_t disable_input;
 static pipeline_t pipeline;
 static camera_t* camera;
@@ -51,10 +46,6 @@ static packaged_scene_render_data_t* scene_render_data;
 static font_runtime_t* font;
 static uint32_t font_image_id;
 static bvh_t* bvh;
-static loader_map_data_t* map;
-static packaged_mesh_data_t* mesh_render_data;
-static mesh_t* mesh;
-
 
 void
 load_level(
@@ -68,30 +59,9 @@ load_level(
     context.data_set,
     room,
     context.level,
-    0, 
+    1, 
     scene_color,
     allocator);
-
-#if 0
-  {
-    char test_quake[256] = { 0 };
-    char test_quake_out[256] = { 0 };
-    sprintf(test_quake, "%squake\\%s", context.data_set, "start.map");
-    sprintf(test_quake_out, "%squake\\%s", context.data_set, "start.bin");
-    map = load_map(test_quake, allocator);
-    serializer_scene_data_t* bin_scene = map_to_bin(map, allocator);
-    serialize_bin(test_quake_out, bin_scene);
-    free_bin(bin_scene, allocator);
-    void* data = map_to_mesh(map, allocator);
-    free_map(map, allocator);
-
-    {
-      color_rgba_t color = { 0.2f, 0.2f, 0.2f, 1.f };
-      mesh = (mesh_t*)data;
-      mesh_render_data = load_mesh_renderer_data(mesh, color, allocator);
-    }
-  }
-#endif
 
   // load the scene render data.
   scene_render_data = load_scene_render_data(scene, allocator);
@@ -99,11 +69,7 @@ load_level(
     context.data_set, room, scene_render_data, allocator);
 
   // guaranteed to exist, same with the font.
-  //{data = 0x00000192fd9740f0 {544.000000, 31.9999866, -288.000000} }
   camera = scene_render_data->camera_data.cameras;
-  camera->position.data[0] = 544;// 32, -288);
-  camera->position.data[1] = 32;
-  camera->position.data[2] = -288;
 
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
@@ -145,32 +111,6 @@ update_level(const allocator_t* allocator)
   clear_color_and_depth_buffers();
 
   render_packaged_scene_data(scene_render_data, &pipeline, camera);
-
-#if 0
-  {
-    // Render a single mesh.
-    uint32_t texture_id[1] = { 0 };
-
-    matrix4f out, scale, translation, rotation;
-    memset(&out, 0, sizeof(matrix4f));
-    get_view_transformation(camera, &out);
-    set_matrix_mode(&pipeline, MODELVIEW);
-    load_identity(&pipeline);
-    post_multiply(&pipeline, &out);
-
-    matrix4f_scale(&scale, 1.25f, 1.25f, 1.25f);
-    matrix4f_rotation_x(&rotation, -K_PI/2.f);
-    matrix4f_translation(&translation, 1200, 0, -1200);
-
-    push_matrix(&pipeline);
-    pre_multiply(&pipeline, &translation);
-    pre_multiply(&pipeline, &rotation);
-    pre_multiply(&pipeline, &scale);
-    
-    draw_meshes(mesh_render_data->mesh_render_data, texture_id, 1, &pipeline);
-    pop_matrix(&pipeline);
-  }
-#endif
 
   {
     // disable/enable input with '~' key.
@@ -242,11 +182,6 @@ unload_level(const allocator_t* allocator)
   free_scene(scene, allocator);
   cleanup_packaged_render_data(scene_render_data, allocator);
   free_bvh(bvh, allocator);
-
-#if 0
-  free_mesh_render_data(mesh_render_data, allocator);
-  free_mesh(mesh, allocator);
-#endif
 }
 
 uint32_t

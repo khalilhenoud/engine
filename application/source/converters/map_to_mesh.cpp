@@ -705,16 +705,16 @@ map_to_bin(void* map, const allocator_t* allocator)
   scene->light_repo.data->type = SERIALIZER_LIGHT_TYPE_POINT;
   scene->light_repo.data->ambient.data[0] =
   scene->light_repo.data->ambient.data[1] =
-  scene->light_repo.data->ambient.data[2] =
-  scene->light_repo.data->ambient.data[3] = 0.2f;
+  scene->light_repo.data->ambient.data[2] = 0.1f;
+  scene->light_repo.data->ambient.data[3] = 1.f;
   scene->light_repo.data->diffuse.data[0] =
   scene->light_repo.data->diffuse.data[1] =
-  scene->light_repo.data->diffuse.data[2] =
-  scene->light_repo.data->diffuse.data[3] = 0.6f;
+  scene->light_repo.data->diffuse.data[2] = 0.2f;
+  scene->light_repo.data->diffuse.data[3] = 1.f;
   scene->light_repo.data->specular.data[0] =
   scene->light_repo.data->specular.data[1] =
-  scene->light_repo.data->specular.data[2] =
-  scene->light_repo.data->specular.data[3] = 0.6f;
+  scene->light_repo.data->specular.data[2] = 0.f;
+  scene->light_repo.data->specular.data[3] = 1.f;
 
   // premultiply the position.
   mult_set_m4f_p3f(

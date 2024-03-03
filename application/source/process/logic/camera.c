@@ -981,7 +981,7 @@ camera_update(
   font_runtime_t* font,
   const uint32_t font_image_id)
 {
-  static capsule_t capsule = { { 0.f, 0.f, 0.f }, 30.f, 25.f };
+  static capsule_t capsule = { { 0.f, 0.f, 0.f }, 12.f, 16.f };
 
   handle_input(delta_time, camera);
 

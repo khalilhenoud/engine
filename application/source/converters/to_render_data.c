@@ -267,7 +267,7 @@ load_scene_mesh_data(
     r_data->per_face_tex_id = mesh->per_face_tex_id;
     if (r_data->per_face_tex_id) {
       array_size = sizeof(uint32_t) * mesh->indices_count / 3;
-      r_data->face_text = allocator->mem_alloc(array_size);
+      r_data->face_tex = allocator->mem_alloc(array_size);
       memcpy(r_data->face_tex, mesh->face_tex, array_size);
     }
 
@@ -551,7 +551,7 @@ load_mesh_renderer_data(
     r_data->per_face_tex_id = mesh->per_face_tex_id;
     if (r_data->per_face_tex_id) {
       array_size = sizeof(uint32_t) * mesh->indices_count / 3;
-      r_data->face_text = allocator->mem_alloc(array_size);
+      r_data->face_tex = allocator->mem_alloc(array_size);
       memcpy(r_data->face_tex, mesh->face_tex, array_size);
     }
 

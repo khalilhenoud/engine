@@ -44,8 +44,6 @@ free_mesh_render_data_internal(
   allocator->mem_free(render_data->normals);
   allocator->mem_free(render_data->uv_coords);
   allocator->mem_free(render_data->indices);
-  if (render_data->per_face_tex_id)
-    allocator->mem_free(render_data->face_tex);
 }
 
 static
@@ -262,14 +260,6 @@ load_scene_mesh_data(
     r_data->indices_count = mesh->indices_count;
     r_data->indices = allocator->mem_alloc(array_size);
     memcpy(r_data->indices, mesh->indices, array_size);
-
-    r_data->face_tex = NULL;
-    r_data->per_face_tex_id = mesh->per_face_tex_id;
-    if (r_data->per_face_tex_id) {
-      array_size = sizeof(uint32_t) * mesh->indices_count / 3;
-      r_data->face_tex = allocator->mem_alloc(array_size);
-      memcpy(r_data->face_tex, mesh->face_tex, array_size);
-    }
 
     // Set the default texture and material colors to grey.
     mesh_data->texture_runtimes[i].texture.path = NULL;
@@ -546,14 +536,6 @@ load_mesh_renderer_data(
     r_data->indices_count = mesh->indices_count;
     r_data->indices = allocator->mem_alloc(array_size);
     memcpy(r_data->indices, mesh->indices, array_size);
-
-    r_data->face_tex = NULL;
-    r_data->per_face_tex_id = mesh->per_face_tex_id;
-    if (r_data->per_face_tex_id) {
-      array_size = sizeof(uint32_t) * mesh->indices_count / 3;
-      r_data->face_tex = allocator->mem_alloc(array_size);
-      memcpy(r_data->face_tex, mesh->face_tex, array_size);
-    }
 
     // Set the default texture and material colors to grey.
     mesh_data->texture_runtimes[0].texture.path = NULL;

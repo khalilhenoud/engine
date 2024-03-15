@@ -71,13 +71,16 @@ build_bvh_node_transformed_data(
 {
   {
     // populate the transformed mesh data.
-    for (uint32_t i = 0; i < node->meshes.count; ++i) {
+    for (uint32_t i = 0; i < node->meshes.count; ) {
       uint32_t mesh_index = node->meshes.indices[i];
-      build_bvh_node_mesh_transformed_data(
-        scene, 
-        mesh_index, 
-        transform, 
-        vertices, indices, indices_count, data_index, allocator);
+      if (scene->mesh_repo.meshes[mesh_index].indices_count) {
+        build_bvh_node_mesh_transformed_data(
+          scene,
+          mesh_index,
+          transform,
+          vertices, indices, indices_count, data_index, allocator);
+      }
+      ++i;
     }
 
     // recurively call the child nodes, after concatenating the transform.

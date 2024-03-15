@@ -35,7 +35,8 @@ prep_packaged_render_data(
   const allocator_t* allocator)
 {
   char texture_path[1024] = { 0 };
-  snprintf(texture_path, sizeof(texture_path), "%s\\%s\\", data_set, folder);
+  snprintf(
+    texture_path, sizeof(texture_path), "%s\\%s\\textures\\", data_set, folder);
 
   // load the images and upload them to the gpu.
   for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
@@ -112,12 +113,12 @@ render_packaged_scene_data_node(
     // draw the meshes belonging to this node.
     for (uint32_t i = 0; i < node->meshes.count; ++i) {
       uint32_t mesh_index = node->meshes.indices[i];
-      draw_meshes(
-        render_data->mesh_data.mesh_render_data + mesh_index, 
-        render_data->mesh_data.texture_ids + mesh_index,
-        1,
-        pipeline);
-    }
+              draw_meshes(
+          render_data->mesh_data.mesh_render_data + mesh_index,
+          render_data->mesh_data.texture_ids + mesh_index,
+          1,
+          pipeline);
+          }
 
     // recurively call the child nodes.
     for (uint32_t i = 0; i < node->nodes.count; ++i) {

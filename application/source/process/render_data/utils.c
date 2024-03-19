@@ -144,48 +144,6 @@ set_packaged_light_properties(
     renderer_light_t* light = render_data->light_data.lights + i;
     set_light_properties(i, light, pipeline);
   }
-
-  //// get the 8 closest light sources and use those.
-  //float distance = 10000000.f;
-  //float used_diff[8]; 
-  //uint32_t used[8];
-  //uint32_t count = 0;
-  //vector3f dis;
-  //float disf;
-
-  //for (uint32_t i = 0; i < 8; ++i) {
-  //  used_diff[i] = distance;
-  //  used[i] = 0;
-  //}
-
-  //for (uint32_t i = 0; i < render_data->light_data.count; ++i) {
-  //  renderer_light_t* light = render_data->light_data.lights + i;
-  //  vector3f_set_diff_v3f(&dis, &light->position, &camera->position);
-  //  disf = length_v3f(&dis);
-  //  for (int32_t k = 7; k >= 0; --k) {
-  //    if (used_diff[k] > disf) {
-  //      if (k != 7) {
-  //        used_diff[k + 1] = used_diff[k];
-  //        used[k + 1] = used[k];
-  //      }
-  //      used_diff[k] = disf;
-  //      used[k] = i;
-  //    }
-  //  }
-  //}
-
-  //for (uint32_t i = 0, last_used = 1000000; i < 8; ++i) {
-  //  if (last_used == used[i])
-  //    break;
-  //  last_used = used[i];
-  //  renderer_light_t* light = render_data->light_data.lights + used[i];
-  //  light->ambient.data[0] = light->ambient.data[1] = light->ambient.data[2] = 0.f;
-  //  light->diffuse.data[0] = light->diffuse.data[1] = light->diffuse.data[2] = 1.f;
-  //  light->attenuation_constant = 1;
-  //  light->attenuation_linear = 0.01;
-
-  //  set_light_properties(i, light, pipeline);
-  //}
 }
 
 void

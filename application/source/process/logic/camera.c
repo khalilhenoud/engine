@@ -352,51 +352,6 @@ populate_capsule_aabb(bvh_aabb_t* aabb, const capsule_t* capsule)
   }
 }
 
-// TODO: move this function to the collision packag.
-static
-float
-find_intersection_time(
-  sphere_t sphere, 
-  face_t* face,
-  vector3f* normal,
-  const float expand_down)
-{
-  const uint32_t iteration_max = 16;
-  const float distance_limit = 1.f;
-  float starting_y = sphere.center.data[1];
-
-  {
-    float start = 0.f, end = 1.f, mid_point;
-    uint32_t iteration = 0;
-    vector3f penetration;
-    sphere_face_classification_t classification = classify_sphere_face(
-      &sphere, face, normal, 0, &penetration);
-
-    assert(
-      classification == SPHERE_FACE_NO_COLLISION && 
-      "the initial test should always return no collision!");
-
-    {
-      float distance = get_sphere_face_distance(&sphere, face, normal);
-
-      do {
-        mid_point = start + (end - start) / 2.f;
-        sphere.center.data[1] = starting_y - mid_point * expand_down;
-        classification = classify_sphere_face(
-          &sphere, face, normal, 0, &penetration);
-        if (classification == SPHERE_FACE_NO_COLLISION) {
-          start = mid_point;
-          distance = get_sphere_face_distance(&sphere, face, normal);
-        }
-        else
-          end = mid_point;
-      } while (distance > distance_limit && ++iteration < iteration_max);
-    }
-
-    return start;
-  }
-}
-
 // NOTE: The initial position of the capsule should not intersect any floor.
 // This condition must be ensured by the calling function.
 static
@@ -489,15 +444,18 @@ snaps_to_floor_at(
     float t = 1.f, tmp = 1.f;
     face_t face;
     sphere_t sphere;
+    vector3f displacement;
     sphere.center = sphere_center;
     sphere.radius = capsule->radius;
+    displacement.data[0] = displacement.data[2] = 0.f;
+    displacement.data[1] = -expand_down; 
 
     for (uint32_t i = 0; i < faces_total; ++i) {
       face.points[0] = bvh->faces[faces[i]].points[0];
       face.points[1] = bvh->faces[faces[i]].points[1];
       face.points[2] = bvh->faces[faces[i]].points[2];
-      tmp = find_intersection_time(
-        sphere, &face, &bvh->faces[faces[i]].normal, expand_down);
+      tmp = find_sphere_face_intersection_time(
+        sphere, &face, &bvh->faces[faces[i]].normal, displacement, 16, 1.f);
       t = fmin(t, tmp);
     }
 

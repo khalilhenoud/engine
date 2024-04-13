@@ -513,7 +513,8 @@ get_first_time_of_impact_filtered(
   const uint32_t to_filter[1024],
   uint32_t filter_count,
   const uint32_t iterations,
-  const float limit_distance)
+  const float limit_distance,
+  pipeline_t* pipeline)
 {
   uint32_t array[256];
   uint32_t used = 0;
@@ -522,6 +523,24 @@ get_first_time_of_impact_filtered(
 
   populate_moving_capsule_aabb(&bounds, *capsule, &displacement, 1.025f);
   query_intersection(bvh, &bounds, array, &used);
+
+  if (used && draw_collision_query) {
+    for (uint32_t used_index = 0; used_index < used; ++used_index) {
+      bvh_node_t* node = bvh->nodes + array[used_index];
+      for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
+        if (!bvh->faces[i].is_valid)
+          continue;
+
+        draw_face(
+          bvh->faces + i, 
+          &bvh->faces[i].normal, 
+          (bvh->faces[i].is_floor) ? &green : 
+            (bvh->faces[i].is_ceiling ? &white : &red), 
+          (bvh->faces[i].is_floor) ? 3 : 2,
+          pipeline);
+      }
+    }
+  }
 
   if (used) {
     face_t face;
@@ -591,7 +610,8 @@ get_first_time_of_impact(
   vector3f displacement,
   uint8_t only_floors,
   const uint32_t iterations,
-  const float limit_distance)
+  const float limit_distance,
+  pipeline_t* pipeline)
 {
   return 
     get_first_time_of_impact_filtered(
@@ -602,7 +622,8 @@ get_first_time_of_impact(
       NULL, 
       0, 
       iterations, 
-      limit_distance);
+      limit_distance,
+      pipeline);
 }
 
 static
@@ -710,7 +731,8 @@ handle_collision_detection(
   capsule_t* capsule,
   vector3f displacement,
   const uint32_t iterations,
-  const float limit_distance) 
+  const float limit_distance,
+  pipeline_t* pipeline) 
 {
   collision_flags_t flags = (collision_flags_t)0;
   intersection_info_t info, unfiltered_info;
@@ -730,7 +752,8 @@ handle_collision_detection(
       to_filter, 
       filter_count, 
       iterations, 
-      limit_distance);
+      limit_distance,
+      pipeline);
 
     unfiltered_info = get_first_time_of_impact(
       bvh,
@@ -738,22 +761,30 @@ handle_collision_detection(
       displacement,
       0,
       iterations,
-      limit_distance);
+      limit_distance,
+      pipeline);
 
     if (info.flags == COLLIDED_NONE) {
       mult_set_v3f(&displacement, unfiltered_info.time);
       add_set_v3f(&capsule->center, &displacement);
       break;
     } else {
-      int32_t status[2];
       vector3f normal = bvh->faces[info.bvh_face_index].normal;
       to_filter[filter_count++] = info.bvh_face_index;
+
+      if (draw_collided_face)
+        draw_face(
+          bvh->faces + info.bvh_face_index, 
+          &bvh->faces[info.bvh_face_index].normal, 
+          &blue, 
+          5, 
+          pipeline);
 
       {
         vector3f temp;
         float dot, toi = 1.f;
         dot = dot_product_v3f(&displacement, &normal);
-        // ignore front facing faces or perpendicular.
+        // ignore front facing faces or perpendicular
         if (dot >= 0.f)
           continue;
 
@@ -903,7 +934,9 @@ handle_vertical_velocity(
   const float jump_velocity, 
   bvh_t* bvh, 
   capsule_t* capsule, 
-  pipeline_t* pipeline)
+  pipeline_t* pipeline,
+  font_runtime_t* font,
+  const uint32_t font_image_id)
 {
   float multiplier = delta_time / REFERENCE_FRAME_TIME;
   uint32_t on_solid_floor = 0;
@@ -915,7 +948,7 @@ handle_vertical_velocity(
     // could simply be touching the side of the floor.
     vector3f displacement = { 0.f, -capsule->radius, 0.f };
     info = get_first_time_of_impact(
-      bvh, capsule, displacement, 1, 16, EPSILON_FLOAT_MIN_PRECISION);
+      bvh, capsule, displacement, 1, 16, EPSILON_FLOAT_MIN_PRECISION, pipeline);
 
     if (info.flags == COLLIDED_FLOOR_FLAG) {
        segment_t segment;
@@ -942,6 +975,21 @@ handle_vertical_velocity(
   if (on_solid_floor && velocity.data[1] <= 0.f) {
     velocity.data[1] = 0.f;
     capsule->center.data[1] -= capsule->radius * info.time;  
+
+    if (draw_status) {
+      char text[512];
+      const char* ptext = text;
+      memset(text, 0, sizeof(text));
+      sprintf(text, "SNAPPING %f", capsule->radius * info.time);
+      render_text_to_screen(
+        font,
+        font_image_id,
+        pipeline,
+        &ptext,
+        1,
+        &green,
+        400.f, 300.f);
+    }
   }
 
   if (is_key_triggered(KEY_JUMP) && on_solid_floor) {
@@ -994,7 +1042,9 @@ camera_update(
     jump_speed,
     bvh, 
     &capsule, 
-    pipeline);
+    pipeline,
+    font,
+    font_image_id);
 
   {
     vector3f displacement = get_relative_displacement(
@@ -1006,7 +1056,8 @@ camera_update(
         &capsule, 
         displacement, 
         16, 
-        EPSILON_FLOAT_MIN_PRECISION);
+        EPSILON_FLOAT_MIN_PRECISION,
+        pipeline);
 
     // reset the vertical velocity if we collide with a ceiling
     if (

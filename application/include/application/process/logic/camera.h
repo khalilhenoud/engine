@@ -39,9 +39,6 @@ is_falling(
   bvh_t* bvh,
   vector3f* to_add);
 
-void
-recenter_camera_cursor(void);
-
 #ifdef __cplusplus
 }
 #endif

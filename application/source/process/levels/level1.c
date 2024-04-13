@@ -117,9 +117,6 @@ update_level(const allocator_t* allocator)
     if (is_key_triggered(TILDE)) {
       disable_input = !disable_input;
       show_cursor((int32_t)disable_input);
-
-      if (disable_input)
-        recenter_camera_cursor();
     }
 
     if (!disable_input) {

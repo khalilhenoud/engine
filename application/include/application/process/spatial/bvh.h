@@ -66,6 +66,17 @@ enum bvh_construction_method_t {
   BVH_CONSTRUCT_COUNT
 } bvh_construction_method_t;
 
+void
+merge_aabb(
+  bvh_aabb_t* dst, 
+  const bvh_aabb_t* a, 
+  const bvh_aabb_t* b);
+
+void
+merge_aabb_inplace(
+  bvh_aabb_t* dst, 
+  const bvh_aabb_t* b);
+
 // takes a list of indices and vertices...
 bvh_t*
 create_bvh(

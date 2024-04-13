@@ -25,9 +25,11 @@ get_bvh_primitives_per_leaf(void)
   return PRIMITIVES_PER_LEAF;
 }
 
-static
 void
-merge_aabb(bvh_aabb_t* dst, const bvh_aabb_t* a, const bvh_aabb_t* b)
+merge_aabb(
+  bvh_aabb_t* dst, 
+  const bvh_aabb_t* a, 
+  const bvh_aabb_t* b)
 {
   dst->min_max[0].data[0] = fmin(a->min_max[0].data[0], b->min_max[0].data[0]);
   dst->min_max[0].data[1] = fmin(a->min_max[0].data[1], b->min_max[0].data[1]);
@@ -38,9 +40,10 @@ merge_aabb(bvh_aabb_t* dst, const bvh_aabb_t* a, const bvh_aabb_t* b)
   dst->min_max[1].data[2] = fmax(a->min_max[1].data[2], b->min_max[1].data[2]);
 }
 
-static
 void
-merge_aabb_inplace(bvh_aabb_t* dst, bvh_aabb_t* b)
+merge_aabb_inplace(
+  bvh_aabb_t* dst, 
+  const bvh_aabb_t* b)
 {
   bvh_aabb_t a = *dst;
   dst->min_max[0].data[0] = fmin(a.min_max[0].data[0], b->min_max[0].data[0]);

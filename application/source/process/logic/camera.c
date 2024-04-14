@@ -68,7 +68,7 @@ static const float friction_k = 1.f;
 static const float jump_speed = 10.f;
 
 // 0 is walking, 1 is flying (not yet used).
-static uint32_t movement_mode = 0;
+static uint32_t flying = 0;
 
 static color_t red = { 1.f, 0.f, 0.f, 1.f };
 static color_t green = { 0.f, 1.f, 0.f, 1.f };
@@ -137,11 +137,14 @@ camera_t
 get_camera_orientation(
   float delta_time, 
   const cursor_info_t *cursor, 
-  const camera_t *camera)
+  const camera_t *camera,
+  const float vertical_sensitivity,
+  const float horizontal_sensitivity,
+  const float vertical_angle_limit_radians)
 {
   // used to keep track of the current maximum offset.
-  static const float y_limit = 0.925f;
   static float current_y = 0.f;
+  const float y_limit = vertical_angle_limit_radians;
   camera_t copy;
   matrix4f cross_p, rotation_x, axis_xz, result_mtx;
   float frame_dy, tmp_y;
@@ -169,7 +172,7 @@ get_camera_orientation(
   }
 
   // limit the rotation along y, we test against the limit.
-  frame_dy = -cursor->delta_y / 1000;
+  frame_dy = -cursor->delta_y * vertical_sensitivity;
   tmp_y = current_y + frame_dy;
   
   // limit the frame dy.
@@ -178,7 +181,7 @@ get_camera_orientation(
   current_y += frame_dy;
 
   // rotate the camera left and right
-  matrix4f_rotation_y(&rotation_x, -cursor->delta_x / 1000.f);
+  matrix4f_rotation_y(&rotation_x, -cursor->delta_x * horizontal_sensitivity);
   // rotate the camera up and down
   matrix4f_set_axisangle(&axis_xz, &ortho_xz, TO_DEGREES(frame_dy));
 
@@ -216,13 +219,13 @@ get_velocity(
   if (is_key_pressed(KEY_MOVE_BACK))
     velocity.data[2] -= acceleration.data[2] * multiplier;
 
-  // if (flying) {
-  //   if (is_key_pressed(KEY_MOVE_UP))
-  //     velocity.data[1] += acceleration.data[1] * multiplier;
+  if (flying) {
+    if (is_key_pressed(KEY_MOVE_UP))
+      velocity.data[1] += acceleration.data[1] * multiplier;
 
-  //   if (is_key_pressed(KEY_MOVE_DOWN))
-  //     velocity.data[1] -= acceleration.data[1] * multiplier;
-  // }
+    if (is_key_pressed(KEY_MOVE_DOWN))
+      velocity.data[1] -= acceleration.data[1] * multiplier;
+  }
 
   {
     // apply friction.
@@ -240,11 +243,11 @@ get_velocity(
     velocity.data[2] = (mul.data[2] == -1.f) ? 
       fmax(velocity.data[2], 0.f) : fmin(velocity.data[2], 0.f);
 
-    // if (flying) {
-    //   velocity.data[1] += mul.data[1] * friction;
-    //   velocity.data[1] = (mul.data[1] == -1.f) ? 
-    //     fmax(velocity.data[1], 0.f) : fmin(velocity.data[1], 0.f);
-    // }
+    if (flying) {
+      velocity.data[1] += mul.data[1] * friction;
+      velocity.data[1] = (mul.data[1] == -1.f) ? 
+        fmax(velocity.data[1], 0.f) : fmin(velocity.data[1], 0.f);
+    }
   }
 
   {
@@ -259,12 +262,12 @@ get_velocity(
     velocity.data[2] = (velocity.data[2] > +velocity_limits.data[2]) ? 
       +velocity_limits.data[2] : velocity.data[2];
     
-    // if (flying) {
-    //   velocity.data[1] = (velocity.data[1] < -velocity_limits.data[1]) ?
-    //     -velocity_limits.data[1] : velocity.data[1];
-    //   velocity.data[1] = (velocity.data[1] > +velocity_limits.data[1]) ?
-    //     +velocity_limits.data[1] : velocity.data[1];
-    // }
+    if (flying) {
+      velocity.data[1] = (velocity.data[1] < -velocity_limits.data[1]) ?
+        -velocity_limits.data[1] : velocity.data[1];
+      velocity.data[1] = (velocity.data[1] > +velocity_limits.data[1]) ?
+        +velocity_limits.data[1] : velocity.data[1];
+    }
   }
 
   return velocity;
@@ -275,8 +278,7 @@ vector3f
 get_relative_displacement(
   float delta_time, 
   const camera_t* camera, 
-  const vector3f velocity,
-  const int32_t flying)
+  const vector3f velocity)
 {
   float multiplier = delta_time / REFERENCE_FRAME_TIME;
   matrix4f cross_p;
@@ -349,7 +351,7 @@ handle_macro_keys(camera_t* camera)
   }
 
   if (is_key_triggered(KEY_MOVEMENT_MODE))
-    movement_mode = !movement_mode;
+    flying = !flying;
 }
 
 static
@@ -465,7 +467,7 @@ draw_text(
       pipeline,
       &text,
       1,
-      movement_mode ? &red : &white,
+      flying ? &red : &white,
       0, 180.f);
   }
 }
@@ -1022,7 +1024,8 @@ camera_update(
   
   handle_macro_keys(camera);
   cursor_info_t info = update_cursor(delta_time);
-  camera_t oriented = get_camera_orientation(delta_time, &info, camera);
+  camera_t oriented = get_camera_orientation(
+    delta_time, &info, camera, 1/1000.f, 1/1000.f, TO_RADIANS(60));
   camera->lookat_direction = oriented.lookat_direction;
   camera->up_vector = oriented.up_vector;
 
@@ -1032,23 +1035,25 @@ camera_update(
     friction_dec * friction_k, 
     cam_speed_limit, 
     cam_acc, 
-    movement_mode);
+    flying);
 
-  cam_speed = handle_vertical_velocity(
-    delta_time, 
-    cam_speed, 
-    cam_speed_limit, 
-    gravity_acc,
-    jump_speed,
-    bvh, 
-    &capsule, 
-    pipeline,
-    font,
-    font_image_id);
+  if (!flying) {
+    cam_speed = handle_vertical_velocity(
+      delta_time, 
+      cam_speed, 
+      cam_speed_limit, 
+      gravity_acc,
+      jump_speed,
+      bvh, 
+      &capsule, 
+      pipeline,
+      font,
+      font_image_id);
+  }
 
   {
     vector3f displacement = get_relative_displacement(
-      delta_time, &oriented, cam_speed, movement_mode);
+      delta_time, &oriented, cam_speed);
 
     collision_flags_t flags = 
       handle_collision_detection(
@@ -1061,7 +1066,7 @@ camera_update(
 
     // reset the vertical velocity if we collide with a ceiling
     if (
-      !movement_mode &&
+      !flying &&
       (flags & COLLIDED_CEILING_FLAG) == COLLIDED_CEILING_FLAG &&
       cam_speed.data[1] > 0.f)
       cam_speed.data[1] = 0.f;

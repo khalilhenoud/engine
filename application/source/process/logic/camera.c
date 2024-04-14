@@ -944,39 +944,45 @@ handle_vertical_velocity(
   uint32_t on_solid_floor = 0;
   float extrude = 0.f;
   intersection_info_t info;
+  vector3f displacement = { 0.f, -capsule->radius * 2, 0.f };
 
   {
     // NOTE: this is not enough, the player could still be falling. the capsule
     // could simply be touching the side of the floor.
-    vector3f displacement = { 0.f, -capsule->radius, 0.f };
+    capsule_t duplicate = *capsule;
+    duplicate.center.data[1] -= displacement.data[1] / 2.f;
     info = get_first_time_of_impact(
-      bvh, capsule, displacement, 1, 16, EPSILON_FLOAT_MIN_PRECISION, pipeline);
+      bvh, 
+      &duplicate, 
+      displacement, 1, 16, EPSILON_FLOAT_MIN_PRECISION, pipeline);
 
     if (info.flags == COLLIDED_FLOOR_FLAG) {
-       segment_t segment;
-       point3f intersection, closest;
        float t;
-       coplanar_point_classification_t classify_point;
        vector3f *normal = &bvh->faces[info.bvh_face_index].normal;
        face_t face;
        face.points[0] = bvh->faces[info.bvh_face_index].points[0];
        face.points[1] = bvh->faces[info.bvh_face_index].points[1];
        face.points[2] = bvh->faces[info.bvh_face_index].points[2];
+       face = get_extended_face(&face, capsule->radius * 2);
 
-       get_capsule_segment(capsule, &segment);
-       classify_segment_face(&face, normal, &segment, &intersection, &t);
-       classify_point = classify_coplanar_point_face(
-         &face, normal, &intersection, &closest);
+       t = find_capsule_face_intersection_time(
+        duplicate, 
+        &face, 
+        normal, 
+        displacement, 
+        16, 
+        EPSILON_FLOAT_MIN_PRECISION);
 
-       if (classify_point == COPLANAR_POINT_ON_OR_INSIDE)
-          on_solid_floor = 1;
+       info.time = t;
+       on_solid_floor = 1;
     }
   }
 
   // snap the capsule to the nearst floor.
   if (on_solid_floor && velocity.data[1] <= 0.f) {
     velocity.data[1] = 0.f;
-    capsule->center.data[1] -= capsule->radius * info.time;  
+    capsule->center.data[1] -= displacement.data[1] / 2.f;
+    capsule->center.data[1] += displacement.data[1] * info.time;
 
     if (draw_status) {
       char text[512];

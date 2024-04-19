@@ -727,6 +727,80 @@ ensure_in_valid_space(
 }
 
 static
+vector3f
+get_adjusted_velocity(
+  const vector3f velocity,
+  const float toi, 
+  const capsule_t* capsule,
+  const float radius_scale)
+{
+  // if we are moving adn there is intersection.
+  if (!IS_ZERO_LP(length_squared_v3f(&velocity)) && toi != 1.f) {
+    vector3f resultant = normalize_v3f(&velocity);
+    mult_v3f(&resultant, capsule->radius * radius_scale);
+    add_set_v3f(&resultant, &velocity);
+    return resultant;
+  }
+
+  return velocity;
+}
+
+static
+int32_t
+can_step_up(
+  bvh_t* bvh,
+  const capsule_t* capsule,
+  const vector3f velocity,
+  float* out_y,
+  pipeline_t* pipeline)
+{
+  intersection_info_t info;
+  vector3f displacement = { 0.f, -capsule->radius * 2, 0.f };
+  capsule_t duplicate = *capsule;
+  add_set_v3f(&duplicate.center, &velocity);
+
+  // the capsule has to start in solid after applying the velocity.
+  if (is_in_valid_space(bvh, &duplicate))
+    return 0;
+
+  {
+    duplicate.center.data[1] -= displacement.data[1] / 2.f;
+    info = get_first_time_of_impact(
+      bvh, 
+      &duplicate, 
+      displacement, 1, 16, EPSILON_FLOAT_MIN_PRECISION, pipeline);
+
+    if (info.flags == COLLIDED_FLOOR_FLAG) {
+       float t;
+       vector3f *normal = &bvh->faces[info.bvh_face_index].normal;
+       face_t face;
+       face.points[0] = bvh->faces[info.bvh_face_index].points[0];
+       face.points[1] = bvh->faces[info.bvh_face_index].points[1];
+       face.points[2] = bvh->faces[info.bvh_face_index].points[2];
+       face = get_extended_face(&face, capsule->radius * 2);
+
+       t = find_capsule_face_intersection_time(
+        duplicate, 
+        &face, 
+        normal, 
+        displacement, 
+        16, 
+        EPSILON_FLOAT_MIN_PRECISION);
+
+       info.time = t;
+       duplicate.center.data[1] += displacement.data[1] * info.time;
+       
+       if (is_in_valid_space(bvh, &duplicate)) {
+        *out_y = duplicate.center.data[1];
+        return 1;
+       }
+    }
+  }
+
+  return 0;
+}
+
+static
 collision_flags_t
 handle_collision_detection(
   bvh_t* bvh,
@@ -740,12 +814,9 @@ handle_collision_detection(
   intersection_info_t info, unfiltered_info;
   uint32_t to_filter[1024];
   uint32_t filter_count = 0;
-  uint32_t iter = 0;
 
   float length = length_v3f(&displacement);
   while (length > limit_distance) {
-    ++iter;
-    
     info = get_first_time_of_impact_filtered(
       bvh, 
       capsule, 
@@ -783,25 +854,35 @@ handle_collision_detection(
           pipeline);
 
       {
-        vector3f temp;
+        vector3f scaled_displacement;
         float dot, toi = 1.f;
         dot = dot_product_v3f(&displacement, &normal);
-        // ignore front facing faces or perpendicular
+        // ignore front facing or perpendicular faces.
         if (dot >= 0.f)
           continue;
 
+        // due to imprecision, already considered faces can have smaller toi.
         toi = fmin(info.time, unfiltered_info.time);
-        temp = mult_v3f(&displacement, toi);
-        add_set_v3f(&capsule->center, &temp);
+        scaled_displacement = mult_v3f(&displacement, toi);
+        add_set_v3f(&capsule->center, &scaled_displacement);
 
         // only keep the part of displacement that wasn't used.
         mult_set_v3f(&displacement, 1 - toi);
 
-        dot = dot_product_v3f(&displacement, &normal);
-        temp = normal;
-        mult_set_v3f(&temp, dot);
-        
-        diff_set_v3f(&displacement, &temp);
+        {
+          float out_y = 0.f;
+          vector3f adjusted = get_adjusted_velocity(
+            displacement, toi, capsule, 0.5f);
+          // if we can step up, simply offset the capsule on y.
+          if (can_step_up(bvh, capsule, adjusted, &out_y, pipeline))
+            capsule->center.data[1] = out_y;
+          else {
+            vector3f scaled_normal = normal;
+            dot = dot_product_v3f(&displacement, &normal);
+            mult_set_v3f(&scaled_normal, dot);
+            diff_set_v3f(&displacement, &scaled_normal);
+          }
+        }
       }
 
       flags |= info.flags;
@@ -810,120 +891,6 @@ handle_collision_detection(
   }
 
   return flags;
-}
-
-
-// NOTE: The initial position of the capsule should not intersect any floor.
-// This condition must be ensured by the calling function.
-static
-uint32_t
-snaps_to_floor_at(
-  const capsule_t* capsule, 
-  bvh_t* bvh,
-  const float expand_down,
-  float* distance)
-{
-  capsule_t swept_sphere;
-  bvh_aabb_t swept_aabb;
-  uint32_t array[256];
-  uint32_t used = 0;
-  // to simplify the calculations we limit the faces to 256 total.
-  uint32_t faces[256];
-  uint32_t faces_total = 0;
-
-  // intersect the aabb to limit our calculations to the faces we care about.
-  bvh_aabb_t bounds;
-  vector3f min, max, sphere_center;
-  vector3f_set_3f(
-    &sphere_center, 
-    capsule->center.data[0], 
-    capsule->center.data[1] - capsule->half_height, 
-    capsule->center.data[2]);
-  bounds.min_max[0] = bounds.min_max[1] = sphere_center;
-  vector3f_set_3f(
-    &min, 
-    -capsule->radius, 
-    -capsule->radius - expand_down, 
-    -capsule->radius);
-  vector3f_set_3f(
-    &max,
-    capsule->radius, 
-    capsule->radius, 
-    capsule->radius);
-  add_set_v3f(bounds.min_max, &min);
-  add_set_v3f(bounds.min_max + 1, &max);
-
-  query_intersection(bvh, &bounds, array, &used);
-
-  // this swept sphere will be used to limit the faces we look at.
-  swept_sphere.radius = capsule->radius;
-  swept_sphere.center = sphere_center;
-  swept_sphere.center.data[1] -= expand_down/2.f;
-  swept_sphere.half_height = expand_down/2.f;
-  populate_capsule_aabb(&swept_aabb, &swept_sphere, 1.f);
-
-  if (used) {
-    face_t face;
-    vector3f penetration;
-    capsule_face_classification_t classification;
-    point3f center;
-
-    for (uint32_t used_index = 0; used_index < used; ++used_index) {
-      bvh_node_t* node = bvh->nodes + array[used_index];
-      for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
-        if (!bvh->faces[i].is_valid || !bvh->faces[i].is_floor)
-          continue;
-
-        if (!bounds_intersect(&swept_aabb, &bvh->faces[i].aabb))
-          continue;
-        
-        // TODO: we can avoid a copy here.
-        face.points[0] = bvh->faces[i].points[0];
-        face.points[1] = bvh->faces[i].points[1];
-        face.points[2] = bvh->faces[i].points[2];
-
-        classification = classify_capsule_face(
-          &swept_sphere, 
-          &face, 
-          &bvh->faces[i].normal, 
-          0, 
-          &penetration, 
-          &center);
-
-        if (classification != CAPSULE_FACE_NO_COLLISION) {
-          faces[faces_total++] = i;
-          assert(faces_total < 256 && "no more than 256 faces are supported!");
-        }
-      }
-    }
-  }
-
-  if (!faces_total)
-    return 0;
-
-  {
-    float t = 1.f, tmp = 1.f;
-    face_t face;
-    sphere_t sphere;
-    vector3f displacement;
-    sphere.center = sphere_center;
-    sphere.radius = capsule->radius;
-    displacement.data[0] = displacement.data[2] = 0.f;
-    displacement.data[1] = -expand_down; 
-
-    for (uint32_t i = 0; i < faces_total; ++i) {
-      face.points[0] = bvh->faces[faces[i]].points[0];
-      face.points[1] = bvh->faces[faces[i]].points[1];
-      face.points[2] = bvh->faces[faces[i]].points[2];
-      tmp = find_sphere_face_intersection_time(
-        sphere, &face, &bvh->faces[faces[i]].normal, displacement, 16, 1.f);
-      t = fmin(t, tmp);
-    }
-
-    assert(distance);
-    *distance = t * expand_down;
-    return 1;
-  }
 }
 
 static
@@ -942,7 +909,6 @@ handle_vertical_velocity(
 {
   float multiplier = delta_time / REFERENCE_FRAME_TIME;
   uint32_t on_solid_floor = 0;
-  float extrude = 0.f;
   intersection_info_t info;
   vector3f displacement = { 0.f, -capsule->radius * 2, 0.f };
 

@@ -88,7 +88,7 @@ WinMain(
 	int32_t screenWidth = GetSystemMetrics(SM_CXFULLSCREEN);
   int32_t screenHeight = GetSystemMetrics(SM_CYFULLSCREEN);
   int32_t client_width = (int32_t)(screenWidth/1.3);
-  int32_t client_height = (int32_t)(screenHeight/1.3);
+  int32_t client_height = client_width / 16.f * 9.f;
 	RECT r = { 0, 0, client_width, client_height };
   AdjustWindowRect(&r, WS_CAPTION, FALSE);
 	int32_t x, y;

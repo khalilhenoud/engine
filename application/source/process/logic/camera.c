@@ -33,6 +33,7 @@
 #define KEY_COLLISION_QUERY       '3'
 #define KEY_COLLISION_FACE        '4'
 #define KEY_DRAW_STATUS           '5'
+#define KEY_MOVEMENT_LOCK         '8'
 #define KEY_MOVEMENT_MODE         '9'
 #define KEY_JUMP                  0x20
 #define KEY_STRAFE_LEFT           'A'
@@ -56,6 +57,7 @@
 #define REFERENCE_FRAME_TIME      0.033f
 
 
+static int32_t use_locked_motion = 0;
 static int32_t draw_collision_query = 0;
 static int32_t draw_collided_face = 0;
 static int32_t draw_status = 0;
@@ -207,6 +209,9 @@ get_velocity(
   float friction = friction_constant * multiplier;
   vector3f velocity = current_velocity;
 
+  if (use_locked_motion)
+    return current_velocity;
+
   if (is_key_pressed(KEY_STRAFE_LEFT))
     velocity.data[0] -= acceleration.data[0] * multiplier;
 
@@ -352,6 +357,9 @@ handle_macro_keys(camera_t* camera)
 
   if (is_key_triggered(KEY_MOVEMENT_MODE))
     flying = !flying;
+
+  if (is_key_triggered(KEY_MOVEMENT_LOCK))
+    use_locked_motion = !use_locked_motion;
 }
 
 static
@@ -571,13 +579,13 @@ get_first_time_of_impact_filtered(
         // ignore any face that does not intersect post displacement.
         if (
           !intersects_post_displacement(
-            *capsule, 
-            displacement, 
-            &face, 
-            &bvh->faces[i].normal, 
-            iterations, 
+            *capsule,
+            displacement,
+            &face,
+            &bvh->faces[i].normal,
+            iterations,
             limit_distance))
-          continue;
+          continue;      
 
         time = find_capsule_face_intersection_time(
           *capsule,
@@ -805,7 +813,7 @@ collision_flags_t
 handle_collision_detection(
   bvh_t* bvh,
   capsule_t* capsule,
-  vector3f displacement,
+  const vector3f displacement,
   const uint32_t iterations,
   const float limit_distance,
   pipeline_t* pipeline) 
@@ -814,13 +822,15 @@ handle_collision_detection(
   intersection_info_t info, unfiltered_info;
   uint32_t to_filter[1024];
   uint32_t filter_count = 0;
+  vector3f orientation = normalize_v3f(&displacement);
+  vector3f velocity = displacement;
+  float remaining = length_v3f(&velocity);
 
-  float length = length_v3f(&displacement);
-  while (length > limit_distance) {
+  while (remaining > limit_distance && !IS_ZERO_LP(length_v3f(&velocity))) {
     info = get_first_time_of_impact_filtered(
       bvh, 
       capsule, 
-      displacement, 
+      velocity, 
       0,
       to_filter, 
       filter_count, 
@@ -831,15 +841,15 @@ handle_collision_detection(
     unfiltered_info = get_first_time_of_impact(
       bvh,
       capsule,
-      displacement,
+      velocity,
       0,
       iterations,
       limit_distance,
       pipeline);
 
     if (info.flags == COLLIDED_NONE) {
-      mult_set_v3f(&displacement, unfiltered_info.time);
-      add_set_v3f(&capsule->center, &displacement);
+      mult_set_v3f(&velocity, unfiltered_info.time);
+      add_set_v3f(&capsule->center, &velocity);
       break;
     } else {
       vector3f normal = bvh->faces[info.bvh_face_index].normal;
@@ -853,40 +863,34 @@ handle_collision_detection(
           5, 
           pipeline);
 
+      // ignore back-facing faces.
+      if (dot_product_v3f(&velocity, &normal) >= 0.f)
+        continue;
+
       {
-        vector3f scaled_displacement;
-        float dot, toi = 1.f;
-        dot = dot_product_v3f(&displacement, &normal);
-        // ignore front facing or perpendicular faces.
-        if (dot >= 0.f)
-          continue;
-
         // due to imprecision, already considered faces can have smaller toi.
-        toi = fmin(info.time, unfiltered_info.time);
-        scaled_displacement = mult_v3f(&displacement, toi);
-        add_set_v3f(&capsule->center, &scaled_displacement);
-
-        // only keep the part of displacement that wasn't used.
-        mult_set_v3f(&displacement, 1 - toi);
+        float toi = fmin(info.time, unfiltered_info.time);
+        vector3f applied_displacement = mult_v3f(&velocity, toi);
+        add_set_v3f(&capsule->center, &applied_displacement);
+        remaining -= length_v3f(&applied_displacement);
 
         {
           float out_y = 0.f;
           vector3f adjusted = get_adjusted_velocity(
-            displacement, toi, capsule, 0.5f);
+            velocity, toi, capsule, 0.5f);
           // if we can step up, simply offset the capsule on y.
           if (can_step_up(bvh, capsule, adjusted, &out_y, pipeline))
             capsule->center.data[1] = out_y;
           else {
-            vector3f scaled_normal = normal;
-            dot = dot_product_v3f(&displacement, &normal);
-            mult_set_v3f(&scaled_normal, dot);
-            diff_set_v3f(&displacement, &scaled_normal);
+            vector3f oriented = mult_v3f(&orientation, remaining);
+            float dot = dot_product_v3f(&oriented, &normal);
+            vector3f subtract = mult_v3f(&normal, dot);
+            velocity = diff_v3f(&subtract, &oriented);
           }
         }
       }
 
       flags |= info.flags;
-      length = length_v3f(&displacement);
     }
   }
 
@@ -951,10 +955,11 @@ handle_vertical_velocity(
     capsule->center.data[1] += displacement.data[1] * info.time;
 
     if (draw_status) {
+      float distance = displacement.data[1] * info.time - displacement.data[1] / 2.f;
       char text[512];
       const char* ptext = text;
       memset(text, 0, sizeof(text));
-      sprintf(text, "SNAPPING %f", capsule->radius * info.time);
+      sprintf(text, "SNAPPING %f", distance);
       render_text_to_screen(
         font,
         font_image_id,
@@ -990,6 +995,9 @@ camera_update(
 {
   static capsule_t capsule = { { 0.f, 0.f, 0.f }, 12.f, 16.f };
 
+  // cap the detla time when debugging.
+  //delta_time = fmin(delta_time, REFERENCE_FRAME_TIME);
+
   capsule.center = camera->position;
   if (!is_in_valid_space(bvh, &capsule)) 
     ensure_in_valid_space(bvh, &capsule);
@@ -998,8 +1006,12 @@ camera_update(
   cursor_info_t info = update_cursor(delta_time);
   camera_t oriented = get_camera_orientation(
     delta_time, &info, camera, 1/1000.f, 1/1000.f, TO_RADIANS(60));
-  camera->lookat_direction = oriented.lookat_direction;
-  camera->up_vector = oriented.up_vector;
+  if (use_locked_motion) {
+    oriented = *camera;
+  } else {
+    camera->lookat_direction = oriented.lookat_direction;
+    camera->up_vector = oriented.up_vector;
+  }
 
   cam_speed = get_velocity(
     delta_time, 

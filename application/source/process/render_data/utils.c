@@ -140,10 +140,49 @@ set_packaged_light_properties(
   packaged_scene_render_data_t* render_data, 
   pipeline_t* pipeline)
 {
+#if 0
   for (uint32_t i = 0; i < render_data->light_data.count; ++i) {
     renderer_light_t* light = render_data->light_data.lights + i;
     set_light_properties(i, light, pipeline);
   }
+#else
+  renderer_light_t light;
+  light.type = RENDERER_LIGHT_TYPE_DIRECTIONAL;
+  light.position.data[0] = 0;
+  light.position.data[1] = 1;
+  light.position.data[2] = 0;
+  light.direction.data[0] = 0;
+  light.direction.data[1] = 0;
+  light.direction.data[2] = 0;
+  light.up.data[0] = 0;
+  light.up.data[1] = 0;
+  light.up.data[2] = 0;
+  light.inner_cone = 0;
+  light.outer_cone = 0;
+  light.attenuation_constant = 1;
+  light.attenuation_linear = 0.001f;
+  light.attenuation_quadratic = 0;
+  light.ambient.data[0] = 
+    light.ambient.data[1] = 
+    light.ambient.data[2] = 
+    light.ambient.data[3] = 1.f;
+  light.diffuse.data[0] =
+    light.diffuse.data[1] =
+    light.diffuse.data[2] =
+    light.diffuse.data[3] = 1.f;
+  light.specular.data[0] =
+    light.specular.data[1] =
+    light.specular.data[2] = 0.f;
+  light.specular.data[3] = 1.f;
+  set_light_properties(0, &light, pipeline);
+  light.position.data[0] = 1;
+  light.position.data[1] = 0;
+  light.position.data[2] = 0;
+  light.ambient.data[0] =
+  light.ambient.data[1] =
+  light.ambient.data[2] = 0.2f;
+  set_light_properties(1, &light, pipeline);
+#endif
 }
 
 void

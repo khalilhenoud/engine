@@ -824,7 +824,8 @@ handle_collision_detection(
   uint32_t filter_count = 0;
   vector3f orientation = normalize_v3f(&displacement);
   vector3f velocity = displacement;
-  float remaining = length_v3f(&velocity);
+  float length, remaining;
+  length = remaining = length_v3f(&velocity);
 
   while (remaining > limit_distance && !IS_ZERO_LP(length_v3f(&velocity))) {
     info = get_first_time_of_impact_filtered(
@@ -882,10 +883,15 @@ handle_collision_detection(
           if (can_step_up(bvh, capsule, adjusted, &out_y, pipeline))
             capsule->center.data[1] = out_y;
           else {
-            vector3f oriented = mult_v3f(&orientation, remaining);
-            float dot = dot_product_v3f(&oriented, &normal);
+            //vector3f oriented = mult_v3f(&orientation, remaining);
+            float dot = dot_product_v3f(&velocity, &normal);
             vector3f subtract = mult_v3f(&normal, dot);
-            velocity = diff_v3f(&subtract, &oriented);
+            diff_set_v3f(&velocity, &subtract);
+            if (!IS_ZERO_LP(length_squared_v3f(&velocity))) {
+              normalize_set_v3f(&velocity);
+              dot = dot_product_v3f(&orientation, &velocity);
+              mult_set_v3f(&velocity, dot * length);
+            }
           }
         }
       }

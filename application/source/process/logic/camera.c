@@ -814,6 +814,7 @@ handle_collision_detection(
   bvh_t* bvh,
   capsule_t* capsule,
   const vector3f displacement,
+  const uint32_t on_solid_floor,
   const uint32_t iterations,
   const float limit_distance,
   pipeline_t* pipeline) 
@@ -853,7 +854,23 @@ handle_collision_detection(
       add_set_v3f(&capsule->center, &velocity);
       break;
     } else {
-      vector3f normal = bvh->faces[info.bvh_face_index].normal;
+      int32_t face_i = info.bvh_face_index;
+      vector3f normal = bvh->faces[face_i].normal;
+      int32_t is_wall = 
+        !bvh->faces[face_i].is_floor &&
+        !bvh->faces[face_i].is_ceiling;
+
+      // adjust the normal, even if sloped, walls cannot contribute to vertical
+      // acceleration.
+      if (is_wall && on_solid_floor) {
+        vector3f y_up, perp;
+        vector3f_set_3f(&y_up, 0.f, 1.f, 0.f);
+        perp = cross_product_v3f(&y_up, &normal);
+        normalize_set_v3f(&perp);
+        normal = cross_product_v3f(&perp, &y_up);
+        normalize_set_v3f(&normal);
+      }
+      
       to_filter[filter_count++] = info.bvh_face_index;
 
       if (draw_collided_face)
@@ -908,6 +925,7 @@ vector3f
 handle_vertical_velocity(
   float delta_time, 
   vector3f velocity, 
+  uint32_t* on_solid_floor,
   const vector3f velocity_limit,
   const float gravity_acceleration,
   const float jump_velocity, 
@@ -918,9 +936,9 @@ handle_vertical_velocity(
   const uint32_t font_image_id)
 {
   float multiplier = delta_time / REFERENCE_FRAME_TIME;
-  uint32_t on_solid_floor = 0;
   intersection_info_t info;
   vector3f displacement = { 0.f, -capsule->radius * 2, 0.f };
+  *on_solid_floor = 0;
 
   {
     // NOTE: this is not enough, the player could still be falling. the capsule
@@ -950,12 +968,12 @@ handle_vertical_velocity(
         EPSILON_FLOAT_MIN_PRECISION);
 
        info.time = t;
-       on_solid_floor = 1;
+       *on_solid_floor = 1;
     }
   }
 
   // snap the capsule to the nearst floor.
-  if (on_solid_floor && velocity.data[1] <= 0.f) {
+  if (*on_solid_floor && velocity.data[1] <= 0.f) {
     velocity.data[1] = 0.f;
     capsule->center.data[1] -= displacement.data[1] / 2.f;
     capsule->center.data[1] += displacement.data[1] * info.time;
@@ -977,12 +995,12 @@ handle_vertical_velocity(
     }
   }
 
-  if (is_key_triggered(KEY_JUMP) && on_solid_floor) {
-    on_solid_floor = 0;
+  if (is_key_triggered(KEY_JUMP) && *on_solid_floor) {
+    *on_solid_floor = 0;
     velocity.data[1] = jump_velocity;
   }
 
-  if (!on_solid_floor) {
+  if (!*on_solid_floor) {
     velocity.data[1] -= gravity_acceleration * multiplier;
     velocity.data[1] = fmax(velocity.data[1], -velocity_limit.data[1]);
   }
@@ -1000,6 +1018,7 @@ camera_update(
   const uint32_t font_image_id)
 {
   static capsule_t capsule = { { 0.f, 0.f, 0.f }, 12.f, 16.f };
+  static uint32_t on_solid_floor = 0;
 
   // cap the detla time when debugging.
   //delta_time = fmin(delta_time, REFERENCE_FRAME_TIME);
@@ -1031,6 +1050,7 @@ camera_update(
     cam_speed = handle_vertical_velocity(
       delta_time, 
       cam_speed, 
+      &on_solid_floor,
       cam_speed_limit, 
       gravity_acc,
       jump_speed,
@@ -1050,6 +1070,7 @@ camera_update(
         bvh, 
         &capsule, 
         displacement, 
+        on_solid_floor,
         16, 
         EPSILON_FLOAT_MIN_PRECISION,
         pipeline);

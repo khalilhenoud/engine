@@ -1055,6 +1055,8 @@ handle_vertical_velocity(
   float delta_time, 
   vector3f velocity, 
   uint32_t* on_solid_floor,
+  const uint32_t iterations,
+  const float limit_distance,
   const vector3f velocity_limit,
   const float gravity_acceleration,
   const float jump_velocity, 
@@ -1069,20 +1071,24 @@ handle_vertical_velocity(
   uint32_t info_used;
   int32_t floor_info_i;
   intersection_info_t info = { 1.f, COLLIDED_NONE, (uint32_t)-1 };
-  vector3f displacement = { 0.f, -capsule->radius * 2, 0.f };
+  vector3f displacement = { 0.f, 0.f, 0.f };
+  const float y_trace_start_offset = capsule->radius;
+  const float y_trace_end_offset = -capsule->radius * 2;
+  // this is necessary as the time of first impact precision is 1 / iterations.
+  displacement.data[1] = y_trace_end_offset + y_trace_end_offset / iterations;
   *on_solid_floor = 0;
 
   {
     capsule_t duplicate = *capsule;
-    duplicate.center.data[1] -= displacement.data[1] / 2.f;
+    duplicate.center.data[1] += y_trace_start_offset;
 
     info_used = get_all_first_time_of_impact(
       bvh, 
       &duplicate, 
       displacement, 
       collision_info, 
-      16, 
-      EPSILON_FLOAT_MIN_PRECISION, 
+      iterations, 
+      limit_distance, 
       pipeline);
 
     floor_info_i = get_floor_info(collision_info, info_used);
@@ -1090,36 +1096,36 @@ handle_vertical_velocity(
       info = collision_info[floor_info_i];
 
     if (info.flags == COLLIDED_FLOOR_FLAG) {
-       float t;
-       vector3f *normal = &bvh->faces[info.bvh_face_index].normal;
-       face_t face;
-       face.points[0] = bvh->faces[info.bvh_face_index].points[0];
-       face.points[1] = bvh->faces[info.bvh_face_index].points[1];
-       face.points[2] = bvh->faces[info.bvh_face_index].points[2];
-       face = get_extended_face(&face, capsule->radius * 2);
+      float t;
+      vector3f* normal = &bvh->faces[info.bvh_face_index].normal;
+      face_t face;
+      face.points[0] = bvh->faces[info.bvh_face_index].points[0];
+      face.points[1] = bvh->faces[info.bvh_face_index].points[1];
+      face.points[2] = bvh->faces[info.bvh_face_index].points[2];
+      face = get_extended_face(&face, capsule->radius * 2);
 
-       t = find_capsule_face_intersection_time(
-        duplicate, 
-        &face, 
-        normal, 
-        displacement, 
-        16, 
-        EPSILON_FLOAT_MIN_PRECISION);
+      t = find_capsule_face_intersection_time(
+        duplicate,
+        &face,
+        normal,
+        displacement,
+        iterations,
+        limit_distance);
 
-       info.time = t;
-       *on_solid_floor = 1;
+      info.time = t;
+      *on_solid_floor = 1;
     }
   }
 
   // snap the capsule to the nearst floor.
   if (*on_solid_floor && velocity.data[1] <= 0.f) {
     velocity.data[1] = 0.f;
-    capsule->center.data[1] -= displacement.data[1] / 2.f;
+    capsule->center.data[1] += y_trace_start_offset;
     capsule->center.data[1] += displacement.data[1] * info.time;
 
     if (draw_status) {
       float distance = 
-        displacement.data[1] * info.time - displacement.data[1] / 2.f;
+        displacement.data[1] * info.time + y_trace_start_offset;
       char text[512];
       const char* ptext = text;
       memset(text, 0, sizeof(text));
@@ -1199,6 +1205,8 @@ camera_update(
       delta_time, 
       cam_speed, 
       &on_solid_floor,
+      16, 
+      EPSILON_FLOAT_MIN_PRECISION,
       cam_speed_limit, 
       gravity_acc,
       jump_speed,

@@ -133,6 +133,136 @@ update_cursor(float delta_time)
   return info;
 }
 
+typedef
+struct {
+  char text[512];
+  color_t color;
+  float x, y;
+} text_properties_t;
+
+typedef
+struct {
+  text_properties_t text_props[512];
+  uint32_t used;
+} text_renderables_t;
+
+static text_renderables_t renderable_text; 
+
+static
+void
+add_text_to_render(const char* text, color_t color, float x, float y)
+{
+  memset(
+    renderable_text.text_props[renderable_text.used].text, 
+    0, 
+    sizeof(renderable_text.text_props[renderable_text.used].text));
+  memcpy(
+    renderable_text.text_props[renderable_text.used].text, 
+    text, strlen(text));
+
+  renderable_text.text_props[renderable_text.used].color = color;
+  renderable_text.text_props[renderable_text.used].x = x;
+  renderable_text.text_props[renderable_text.used].y = y;
+  renderable_text.used++;
+}
+
+static
+void
+draw_renderable_text(
+  pipeline_t* pipeline,
+  font_runtime_t* font,
+  const uint32_t font_image_id)
+{
+  const char* text;
+  for (uint32_t i = 0; i < renderable_text.used; ++i) {
+    text = renderable_text.text_props[i].text;
+    render_text_to_screen(
+      font, 
+      font_image_id, 
+      pipeline, 
+      &text,
+      1, 
+      &renderable_text.text_props[i].color, 
+      renderable_text.text_props[i].x, 
+      renderable_text.text_props[i].y);
+  }
+
+  renderable_text.used = 0;
+}
+
+typedef
+struct {
+  uint32_t index;
+  color_t color;
+  int32_t thickness;
+} renderable_face_properties_t;
+
+typedef
+struct {
+  renderable_face_properties_t faces[2048];
+  uint32_t used;
+} face_renderables_t;
+
+static face_renderables_t renderable_faces; 
+
+static
+void
+draw_face(
+  bvh_face_t* face, 
+  vector3f* normal, 
+  color_t* color, 
+  int32_t thickness,
+  pipeline_t* pipeline)
+{
+  const float mult = 0.1f;
+  float vertices[12];
+
+  vertices[0 * 3 + 0] = face->points[0].data[0] + face->normal.data[0] * mult;
+  vertices[0 * 3 + 1] = face->points[0].data[1] + face->normal.data[1] * mult;
+  vertices[0 * 3 + 2] = face->points[0].data[2] + face->normal.data[2] * mult;
+  vertices[1 * 3 + 0] = face->points[1].data[0] + face->normal.data[0] * mult;
+  vertices[1 * 3 + 1] = face->points[1].data[1] + face->normal.data[1] * mult;
+  vertices[1 * 3 + 2] = face->points[1].data[2] + face->normal.data[2] * mult;
+  vertices[2 * 3 + 0] = face->points[2].data[0] + face->normal.data[0] * mult;
+  vertices[2 * 3 + 1] = face->points[2].data[1] + face->normal.data[1] * mult;
+  vertices[2 * 3 + 2] = face->points[2].data[2] + face->normal.data[2] * mult;
+  vertices[3 * 3 + 0] = face->points[0].data[0] + face->normal.data[0] * mult;
+  vertices[3 * 3 + 1] = face->points[0].data[1] + face->normal.data[1] * mult;
+  vertices[3 * 3 + 2] = face->points[0].data[2] + face->normal.data[2] * mult;
+
+  draw_lines(vertices, 4, *color, thickness, pipeline);
+}
+
+static
+void
+add_face_to_render(uint32_t index, color_t color, int32_t thickness)
+{
+  renderable_faces.faces[renderable_faces.used].index = index;
+  renderable_faces.faces[renderable_faces.used].color = color;
+  renderable_faces.faces[renderable_faces.used].thickness = thickness;
+  renderable_faces.used++;
+  renderable_faces.used %= 2048;
+}
+
+static
+void
+draw_renderable_faces(
+  bvh_t* bvh,
+  pipeline_t* pipeline)
+{
+  for (uint32_t i = 0; i < renderable_faces.used; ++i) {
+    uint32_t index = renderable_faces.faces[i].index;
+    draw_face(
+      bvh->faces + index, 
+      &bvh->faces[index].normal, 
+      &renderable_faces.faces[i].color, 
+      renderable_faces.faces[i].thickness,
+      pipeline);
+  }
+
+  renderable_faces.used = 0;
+}
+
 // returns a copy of the camera with updated orientation
 static
 camera_t
@@ -364,34 +494,6 @@ handle_macro_keys(camera_t* camera)
 
 static
 void
-draw_face(
-  bvh_face_t* face, 
-  vector3f* normal, 
-  color_t* color, 
-  int32_t thickness,
-  pipeline_t* pipeline)
-{
-  const float mult = 0.1f;
-  float vertices[12];
-
-  vertices[0 * 3 + 0] = face->points[0].data[0] + face->normal.data[0] * mult;
-  vertices[0 * 3 + 1] = face->points[0].data[1] + face->normal.data[1] * mult;
-  vertices[0 * 3 + 2] = face->points[0].data[2] + face->normal.data[2] * mult;
-  vertices[1 * 3 + 0] = face->points[1].data[0] + face->normal.data[0] * mult;
-  vertices[1 * 3 + 1] = face->points[1].data[1] + face->normal.data[1] * mult;
-  vertices[1 * 3 + 2] = face->points[1].data[2] + face->normal.data[2] * mult;
-  vertices[2 * 3 + 0] = face->points[2].data[0] + face->normal.data[0] * mult;
-  vertices[2 * 3 + 1] = face->points[2].data[1] + face->normal.data[1] * mult;
-  vertices[2 * 3 + 2] = face->points[2].data[2] + face->normal.data[2] * mult;
-  vertices[3 * 3 + 0] = face->points[0].data[0] + face->normal.data[0] * mult;
-  vertices[3 * 3 + 1] = face->points[0].data[1] + face->normal.data[1] * mult;
-  vertices[3 * 3 + 2] = face->points[0].data[2] + face->normal.data[2] * mult;
-
-  draw_lines(vertices, 4, *color, thickness, pipeline);
-}
-
-static
-void
 populate_capsule_aabb(
   bvh_aabb_t* aabb, 
   const capsule_t* capsule, 
@@ -426,59 +528,6 @@ populate_moving_capsule_aabb(
   add_set_v3f(&capsule.center, displacement);
   populate_capsule_aabb(start_end + 1, &capsule, multiplier);
   merge_aabb(aabb, start_end + 0, start_end + 1);
-}
-
-static
-void
-draw_text(
-  pipeline_t* pipeline,
-  font_runtime_t* font,
-  const uint32_t font_image_id)
-{
-  {
-    const char* text = "[3] RENDER COLLISION QUERIES";
-    render_text_to_screen(
-      font,
-      font_image_id,
-      pipeline,
-      &text,
-      1,
-      draw_collision_query ? &red : &white,
-      0.f, 120.f);
-  }
-  {
-    const char* text = "[4] RENDER COLLISION FACE";
-    render_text_to_screen(
-      font,
-      font_image_id,
-      pipeline,
-      &text,
-      1,
-      draw_collided_face ? &red : &white,
-      0, 140.f);
-  }
-  {
-    const char* text = "[5] SHOW SNAPPING/FALLING STATE";
-    render_text_to_screen(
-      font,
-      font_image_id,
-      pipeline,
-      &text,
-      1,
-      draw_status ? &red : &white,
-      0, 160.f);
-  }
-  {
-    const char* text = "[9] SWITCH CAMERA MODE";
-    render_text_to_screen(
-      font,
-      font_image_id,
-      pipeline,
-      &text,
-      1,
-      flying ? &red : &white,
-      0, 180.f);
-  }
 }
 
 static
@@ -537,8 +586,7 @@ get_all_first_time_of_impact_filtered(
   const uint32_t to_filter[1024],
   uint32_t filter_count,
   const uint32_t iterations,
-  const float limit_distance,
-  pipeline_t* pipeline)
+  const float limit_distance)
 {
   uint32_t array[256];
   uint32_t used = 0;
@@ -559,13 +607,13 @@ get_all_first_time_of_impact_filtered(
         if (!bvh->faces[i].is_valid)
           continue;
 
-        draw_face(
-          bvh->faces + i, 
-          &bvh->faces[i].normal, 
-          (bvh->faces[i].is_floor) ? &green : 
-            (bvh->faces[i].is_ceiling ? &white : &red), 
-          (bvh->faces[i].is_floor) ? 3 : 2,
-          pipeline);
+        {
+          color_t color = 
+            (bvh->faces[i].is_floor) ? green : 
+            (bvh->faces[i].is_ceiling ? white : red);
+          int32_t thickness = (bvh->faces[i].is_floor) ? 3 : 2;
+          add_face_to_render(i, color, thickness);
+        }
       }
     }
   }
@@ -650,8 +698,7 @@ get_all_first_time_of_impact(
   vector3f displacement,
   intersection_info_t collision_info[256],
   const uint32_t iterations,
-  const float limit_distance,
-  pipeline_t* pipeline)
+  const float limit_distance)
 {
   return 
     get_all_first_time_of_impact_filtered(
@@ -662,8 +709,7 @@ get_all_first_time_of_impact(
       NULL, 
       0, 
       iterations, 
-      limit_distance,
-      pipeline);
+      limit_distance);
 }
 
 static
@@ -675,8 +721,7 @@ get_any_first_time_of_impact_filtered(
   const uint32_t to_filter[1024],
   uint32_t filter_count,
   const uint32_t iterations,
-  const float limit_distance,
-  pipeline_t* pipeline)
+  const float limit_distance)
 {
   uint32_t info_used = 0;
   intersection_info_t collision_info[256];
@@ -692,8 +737,7 @@ get_any_first_time_of_impact_filtered(
     to_filter,
     filter_count,
     iterations, 
-    limit_distance, 
-    pipeline);
+    limit_distance);
 
   return collision_info[0];
 }
@@ -705,8 +749,7 @@ get_any_first_time_of_impact(
   capsule_t* capsule,
   vector3f displacement,
   const uint32_t iterations,
-  const float limit_distance,
-  pipeline_t* pipeline)
+  const float limit_distance)
 {
   return 
     get_any_first_time_of_impact_filtered(
@@ -716,8 +759,7 @@ get_any_first_time_of_impact(
       NULL, 
       0, 
       iterations, 
-      limit_distance,
-      pipeline);
+      limit_distance);
 }
 
 static
@@ -843,8 +885,7 @@ can_step_up(
   bvh_t* bvh,
   const capsule_t* capsule,
   const vector3f velocity,
-  float* out_y,
-  pipeline_t* pipeline)
+  float* out_y)
 {
   intersection_info_t collision_info[256];
   uint32_t info_used;
@@ -870,8 +911,7 @@ can_step_up(
       displacement, 
       collision_info, 
       16, 
-      EPSILON_FLOAT_MIN_PRECISION, 
-      pipeline);
+      EPSILON_FLOAT_MIN_PRECISION);
 
     floor_info_i = get_floor_info(collision_info, info_used);
     if (floor_info_i != -1)
@@ -925,10 +965,7 @@ handle_collision_detection(
   const vector3f displacement,
   const uint32_t on_solid_floor,
   const uint32_t iterations,
-  const float limit_distance,
-  pipeline_t* pipeline,
-  font_runtime_t* font,
-  const uint32_t font_image_id)
+  const float limit_distance)
 {
   collision_flags_t flags = (collision_flags_t)0;
   intersection_info_t info, unfiltered_info;
@@ -947,16 +984,14 @@ handle_collision_detection(
       to_filter, 
       filter_count, 
       iterations, 
-      limit_distance,
-      pipeline);
+      limit_distance);
 
     unfiltered_info = get_any_first_time_of_impact(
       bvh,
       capsule,
       velocity,
       iterations,
-      limit_distance,
-      pipeline);
+      limit_distance);
 
     if (info.flags == COLLIDED_NONE) {
       mult_set_v3f(&velocity, unfiltered_info.time);
@@ -982,14 +1017,13 @@ handle_collision_detection(
       
       to_filter[filter_count++] = info.bvh_face_index;
 
-      if (draw_collided_face)
-        draw_face(
-          bvh->faces + info.bvh_face_index, 
-          &bvh->faces[info.bvh_face_index].normal, 
-          (bvh->faces[info.bvh_face_index].is_floor) ? &green :
-          (bvh->faces[info.bvh_face_index].is_ceiling ? &white : &red),
-          5, 
-          pipeline);
+      if (draw_collided_face) {
+        uint32_t i = info.bvh_face_index;
+        color_t color = 
+          (bvh->faces[i].is_floor) ? green : 
+          (bvh->faces[i].is_ceiling ? white : red);
+        add_face_to_render(i, color, 5);
+      }
 
       // ignore back-facing faces.
       if (dot_product_v3f(&velocity, &normal) >= 0.f)
@@ -1008,25 +1042,15 @@ handle_collision_detection(
             velocity, toi, capsule, 0.5f);
           
           // if we can step up, simply offset the capsule on y.
-          if (
-            is_wall && 
-            can_step_up(bvh, capsule, adjusted, &out_y, pipeline)) {
+          if (is_wall && can_step_up(bvh, capsule, adjusted, &out_y)) {
             float value = capsule->center.data[1] - out_y;
             capsule->center.data[1] = out_y;
 
             if (draw_status) {
               char text[512];
-              const char* ptext = text;
               memset(text, 0, sizeof(text));
-              sprintf(text, "stepup %f", value);
-              render_text_to_screen(
-                font,
-                font_image_id,
-                pipeline,
-                &ptext,
-                1,
-                &green,
-                500.f, 300.f);
+              sprintf(text, "STEPUP %f", value);
+              add_text_to_render(text, red, 400.f, 320.f);
             }
           } else {
             float dot = dot_product_v3f(&velocity, &normal);
@@ -1061,10 +1085,7 @@ handle_vertical_velocity(
   const float gravity_acceleration,
   const float jump_velocity, 
   bvh_t* bvh, 
-  capsule_t* capsule, 
-  pipeline_t* pipeline,
-  font_runtime_t* font,
-  const uint32_t font_image_id)
+  capsule_t* capsule)
 {
   float multiplier = delta_time / REFERENCE_FRAME_TIME;
   intersection_info_t collision_info[256];
@@ -1088,8 +1109,7 @@ handle_vertical_velocity(
       displacement, 
       collision_info, 
       iterations, 
-      limit_distance, 
-      pipeline);
+      limit_distance);
 
     floor_info_i = get_floor_info(collision_info, info_used);
     if (floor_info_i != -1)
@@ -1127,25 +1147,18 @@ handle_vertical_velocity(
       float distance = 
         displacement.data[1] * info.time + y_trace_start_offset;
       char text[512];
-      const char* ptext = text;
       memset(text, 0, sizeof(text));
       sprintf(text, "SNAPPING %f", distance);
-      render_text_to_screen(
-        font,
-        font_image_id,
-        pipeline,
-        &ptext,
-        1,
-        &green,
-        400.f, 300.f);
+      add_text_to_render(text, green, 400.f, 300.f);
 
-      draw_face(
-        bvh->faces + info.bvh_face_index,
-        &bvh->faces[info.bvh_face_index].normal,
-        (bvh->faces[info.bvh_face_index].is_floor) ? &green :
-        (bvh->faces[info.bvh_face_index].is_ceiling ? &white : &red),
-        (bvh->faces[info.bvh_face_index].is_floor) ? 3 : 2,
-        pipeline);
+      {
+        uint32_t i = info.bvh_face_index;
+        color_t color = 
+          (bvh->faces[i].is_floor) ? green : 
+          (bvh->faces[i].is_ceiling ? white : red);
+        int32_t thickness = (bvh->faces[i].is_floor) ? 3 : 2;
+        add_face_to_render(i, color, thickness);
+      }
     }
   }
 
@@ -1175,19 +1188,20 @@ camera_update(
   static uint32_t on_solid_floor = 0;
 
   // cap the detla time when debugging.
-  //delta_time = fmin(delta_time, REFERENCE_FRAME_TIME);
+  delta_time = fmin(delta_time, REFERENCE_FRAME_TIME);
+
+  handle_macro_keys(camera);
 
   capsule.center = camera->position;
   if (!is_in_valid_space(bvh, &capsule)) 
     ensure_in_valid_space(bvh, &capsule);
   
-  handle_macro_keys(camera);
   cursor_info_t info = update_cursor(delta_time);
   camera_t oriented = get_camera_orientation(
     delta_time, &info, camera, 1/1000.f, 1/1000.f, TO_RADIANS(60));
-  if (use_locked_motion) {
+  if (use_locked_motion)
     oriented = *camera;
-  } else {
+  else {
     camera->lookat_direction = oriented.lookat_direction;
     camera->up_vector = oriented.up_vector;
   }
@@ -1211,10 +1225,7 @@ camera_update(
       gravity_acc,
       jump_speed,
       bvh, 
-      &capsule, 
-      pipeline,
-      font,
-      font_image_id);
+      &capsule);
   }
 
   {
@@ -1228,10 +1239,7 @@ camera_update(
         displacement, 
         on_solid_floor,
         16, 
-        EPSILON_FLOAT_MIN_PRECISION,
-        pipeline,
-        font,
-        font_image_id);
+        EPSILON_FLOAT_MIN_PRECISION);
 
     // reset the vertical velocity if we collide with a ceiling
     if (
@@ -1244,5 +1252,17 @@ camera_update(
     camera->position = capsule.center;
   }
 
-  draw_text(pipeline, font, font_image_id);
+  add_text_to_render(
+    "[3] RENDER COLLISION QUERIES", 
+    draw_collision_query ? red : white, 0.f, 120.f);
+  add_text_to_render(
+    "[4] RENDER COLLISION FACE", draw_collided_face ? red : white, 0.f, 140.f);
+  add_text_to_render(
+    "[5] SHOW SNAPPING/FALLING STATE", draw_status ? red : white, 0.f, 160.f);
+  add_text_to_render(
+    "[8] LOCK DIRECTIONAL MOTION", use_locked_motion ? red : white, 0.f, 180.f);
+  add_text_to_render(
+    "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, 200.f);
+  draw_renderable_text(pipeline, font, font_image_id);
+  draw_renderable_faces(bvh, pipeline);
 }

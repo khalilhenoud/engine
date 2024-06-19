@@ -998,11 +998,10 @@ handle_collision_detection(
       add_set_v3f(&capsule->center, &velocity);
       break;
     } else {
-      int32_t face_i = info.bvh_face_index;
-      vector3f normal = bvh->faces[face_i].normal;
+      vector3f normal = bvh->faces[info.bvh_face_index].normal;
       int32_t is_wall = 
-        !bvh->faces[face_i].is_floor &&
-        !bvh->faces[face_i].is_ceiling;
+        !bvh->faces[info.bvh_face_index].is_floor &&
+        !bvh->faces[info.bvh_face_index].is_ceiling;
 
       // adjust the normal, even if sloped, walls cannot contribute to vertical
       // acceleration.
@@ -1018,15 +1017,14 @@ handle_collision_detection(
       to_filter[filter_count++] = info.bvh_face_index;
 
       if (draw_collided_face) {
-        uint32_t i = info.bvh_face_index;
         color_t color = 
-          (bvh->faces[i].is_floor) ? green : 
-          (bvh->faces[i].is_ceiling ? white : red);
-        add_face_to_render(i, color, 5);
+          (bvh->faces[info.bvh_face_index].is_floor) ? green : 
+          (bvh->faces[info.bvh_face_index].is_ceiling ? white : red);
+        add_face_to_render(info.bvh_face_index, color, 5);
       }
 
       // ignore back-facing faces.
-      if (dot_product_v3f(&velocity, &normal) >= 0.f)
+      if (dot_product_v3f(&velocity, &normal) > EPSILON_FLOAT_LOW_PRECISION)
         continue;
 
       {

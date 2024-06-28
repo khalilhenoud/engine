@@ -93,7 +93,10 @@ WinMain(
   AdjustWindowRect(&r, WS_CAPTION, FALSE);
 	int32_t x, y;
 	ComputeWindowPosition(x, y, client_width, client_height, screenWidth, screenHeight);
-  g_hWnd = CreateWindow("OGL", "", WS_CAPTION, x, y, r.right - r.left, r.bottom - r.top, 0, 0, hInstance, 0);
+  g_hWnd = CreateWindow(
+    "OGL", "", 
+    WS_CAPTION, 
+    x, y, r.right - r.left, r.bottom - r.top, 0, 0, hInstance, 0);
 
 	ShowWindow(g_hWnd, nCmdShow);
 	UpdateWindow(g_hWnd);
@@ -108,8 +111,15 @@ WinMain(
 	g_hWindowDC = GetDC(g_hWnd);
   opengl_parameters_t params{&g_hWindowDC};
   opengl_initialize(&params);
-	auto app = 
-    std::make_unique<application>(client_width, client_height, lpCmdLine);
+
+  // remove emtpy spaces from the command lines.
+  std::string cmd_args = lpCmdLine;
+  cmd_args.erase(
+    std::remove_if(cmd_args.begin(), cmd_args.end(), std::isspace), 
+    cmd_args.end());
+
+	auto app = std::make_unique<application>(
+    client_width, client_height, cmd_args.c_str());
   
   char array[100] = { 0 };
 	MSG msg;

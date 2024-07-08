@@ -33,6 +33,7 @@
 #define KEY_COLLISION_QUERY       '3'
 #define KEY_COLLISION_FACE        '4'
 #define KEY_DRAW_STATUS           '5'
+#define KEY_DRAW_IGNORED_FACES    '6'
 #define KEY_DISABLE_DEPTH         '7'
 #define KEY_MOVEMENT_LOCK         '8'
 #define KEY_MOVEMENT_MODE         '9'
@@ -58,6 +59,7 @@
 #define REFERENCE_FRAME_TIME      0.033f
 
 
+static int32_t draw_ignored_faces = 0;
 static int32_t disable_depth_debug = 0;
 static int32_t use_locked_motion = 0;
 static int32_t draw_collision_query = 0;
@@ -85,7 +87,7 @@ typedef
 enum {
   COLLIDED_FLOOR_FLAG = 1 << 0,
   COLLIDED_CEILING_FLAG = 1 << 1,
-  COLLIDED_WALLS = 1 << 2,
+  COLLIDED_WALLS_FLAG = 1 << 2,
   COLLIDED_NONE = 1 << 3
 } collision_flags_t;
 
@@ -483,6 +485,9 @@ handle_macro_keys(camera_t* camera)
   if (is_key_triggered(KEY_COLLISION_QUERY))
     draw_collision_query = !draw_collision_query;
 
+  if (is_key_triggered(KEY_DRAW_IGNORED_FACES))
+    draw_ignored_faces = !draw_ignored_faces;
+
   if (is_key_triggered(KEY_COLLISION_FACE))
     draw_collided_face = !draw_collided_face;
 
@@ -698,7 +703,7 @@ get_all_first_time_of_impact_filtered(
 
           collision_info[collision_info_used].flags = 
             collision_info[collision_info_used].flags == COLLIDED_NONE ? 
-            COLLIDED_WALLS : collision_info[collision_info_used].flags;
+            COLLIDED_WALLS_FLAG : collision_info[collision_info_used].flags;
 
           collision_info[collision_info_used].bvh_face_index = i;
           collision_info_used++;
@@ -982,7 +987,245 @@ can_step_up(
   return 0;
 }
 
-#if 1
+// return 0 if not split, 1 if split.
+static
+int32_t
+classify_buckets(
+  bvh_t* bvh, 
+  intersection_info_t collision_info[256], 
+  uint32_t info_used, 
+  uint32_t buckets[256], 
+  uint32_t bucket_offset[256],
+  uint32_t bucket_count, 
+  collision_flags_t flag,
+  uint32_t bucket_index,
+  uint32_t excluded_index)
+{
+  face_t face0, face1;
+  vector3f* normal0;
+  uint32_t index0, index1;
+  point_halfspace_classification_t classify[3];
+  uint32_t faces_in_front, faces_to_back;
+
+  assert(bucket_count);
+  
+  for (uint32_t i = 0; i < bucket_count; ++i) {
+    // these are the buckets that form colinear opposite walls
+    if (i == bucket_index || i == excluded_index)
+      continue;
+
+    // again limit this to similar specs
+    if ((collision_info[bucket_offset[i]].flags & flag) == 0)
+      continue;
+
+    // this is the plane, test the original bucket faces to check if they lie on 
+    // both sides of the plane. 
+    index0 = collision_info[bucket_offset[i]].bvh_face_index;
+    memcpy(face0.points, bvh->faces[index0].points, sizeof(face0.points));
+    normal0 = &bvh->faces[index0].normal;
+    faces_in_front = faces_to_back = 0;
+
+    for (uint32_t j = 0; j < buckets[bucket_index]; ++j) {
+      uint32_t points_in_front = 0, points_to_back = 0;
+      index1 = collision_info[bucket_offset[bucket_index] + j].bvh_face_index;
+      memcpy(face1.points, bvh->faces[index1].points, sizeof(face1.points));
+
+      classify[0] = classify_point_halfspace(&face0, normal0, face1.points + 0);
+      classify[1] = classify_point_halfspace(&face0, normal0, face1.points + 1);
+      classify[2] = classify_point_halfspace(&face0, normal0, face1.points + 2);
+      
+      points_in_front += (classify[0] == POINT_IN_POSITIVE_HALFSPACE) ? 1 : 0;
+      points_in_front += (classify[1] == POINT_IN_POSITIVE_HALFSPACE) ? 1 : 0;
+      points_in_front += (classify[2] == POINT_IN_POSITIVE_HALFSPACE) ? 1 : 0;
+      
+      points_to_back += (classify[0] == POINT_IN_NEGATIVE_HALFSPACE) ? 1 : 0;
+      points_to_back += (classify[1] == POINT_IN_NEGATIVE_HALFSPACE) ? 1 : 0;
+      points_to_back += (classify[2] == POINT_IN_NEGATIVE_HALFSPACE) ? 1 : 0;
+      
+      // early out, meaning we have found a face that intersects the clip plane.
+      if (points_in_front && points_to_back)
+        return 1;
+      else if (points_to_back) 
+        faces_to_back++;
+      else
+        faces_in_front++;
+
+      // early out if the classification contradicts the one-sidedness 
+      // established prior.
+      if (faces_in_front && faces_to_back)
+        return 1;
+    }
+  }
+
+  return 0;
+}
+
+// NOTE: the function modifies buckets[], bucket_offset[].
+// TODO: make this more robust, it should also modify bucket_count and tag with
+// the appropriate access specfiers to indicate intent (const etc...)
+static
+uint32_t
+remove_bucket(
+  intersection_info_t collision_info[256], 
+  uint32_t info_used, 
+  uint32_t buckets[256], 
+  uint32_t bucket_offset[256], 
+  uint32_t bucket_count,
+  uint32_t bucket_index)
+{
+  // remove all the faces belonging to the bucket, remove the bucket and rebuild
+  // the offset.
+  uint32_t start_index = bucket_offset[bucket_index];
+  uint32_t end_index = start_index + buckets[bucket_index];
+  uint32_t counts_affected = buckets[bucket_index];
+
+  intersection_info_t new_info[256];
+  uint32_t new_buckets[256];
+  uint32_t new_bucket_offset[256];
+  uint32_t new_bucket_count = bucket_count - 1;
+
+  assert(bucket_count);
+
+  for (uint32_t i = 0, index = 0; i < bucket_count; ++i) {
+    if (i == bucket_index)
+      continue;
+    new_buckets[index++] = buckets[i];
+  }
+
+  for (uint32_t i = 0, index = 0; i < new_bucket_count; ++i) {
+    new_bucket_offset[i] = index;
+    index += new_buckets[i];
+  }
+
+  for (uint32_t i = 0, index = 0; i < info_used; ++i) {
+    if (i >= start_index && i < end_index) {
+      if (draw_ignored_faces)
+        add_face_to_render(collision_info[i].bvh_face_index, yellow, 2);
+      continue;
+    }
+    new_info[index++] = collision_info[i];
+  }
+
+  memcpy(buckets, new_buckets, sizeof(new_buckets));
+  memcpy(bucket_offset, new_bucket_offset, sizeof(new_bucket_offset));
+  memcpy(collision_info, new_info, sizeof(new_info));
+
+  return info_used - counts_affected;
+}
+
+static
+void
+process_buckets(
+  bvh_t* bvh, 
+  intersection_info_t collision_info[256], 
+  uint32_t info_used, 
+  uint32_t buckets[256],
+  uint32_t bucket_count)
+{
+  // processing is separated based on walls, floors, ceilings
+  collision_flags_t flags[] = { 
+    COLLIDED_WALLS_FLAG, 
+    COLLIDED_FLOOR_FLAG | COLLIDED_CEILING_FLAG};
+
+  // transform to total offset, instead of count.
+  uint32_t bucket_offset[256] = { 0 };
+  for (uint32_t i = 0, index = 0; i < bucket_count; ++i) {
+    bucket_offset[i] = index;
+    index += buckets[i];
+  }
+
+  assert(bucket_count);
+
+  for (uint32_t flag_index = 0; flag_index < 2; ++flag_index) {
+    planes_classification_t result;
+    int32_t parters[] = { -1, -1 };
+    int32_t found = 1;
+    face_t face0, face1;
+    vector3f* normal0, * normal1;
+    uint32_t index0, index1;
+    collision_flags_t flag = flags[flag_index];
+
+    // while colinear opposite face buckets exist, continue.
+    while (found) {
+      found = 0;
+
+      for (uint32_t i = 0, count = bucket_count - 1; i < count; ++i) {
+        // only consider buckets that share the flag spec
+        if ((collision_info[bucket_offset[i]].flags & flag) == 0)
+          continue;
+        
+        index0 = collision_info[bucket_offset[i]].bvh_face_index;
+        memcpy(face0.points, bvh->faces[index0].points, sizeof(face0.points));
+        normal0 = &bvh->faces[index0].normal;
+
+        for (uint32_t j = i + 1; j < bucket_count; ++j) {
+          // again limit it to the same spec
+          if ((collision_info[bucket_offset[j]].flags & flag) == 0)
+            continue;
+
+          index1 = collision_info[bucket_offset[j]].bvh_face_index;
+          memcpy(face1.points, bvh->faces[index1].points, sizeof(face1.points));
+          normal1 = &bvh->faces[index1].normal;
+
+          result = classify_planes(&face0, normal0, &face1, normal1);
+          if (result == PLANES_COLINEAR_OPPOSITE_FACING) {
+            parters[0] = i;
+            parters[1] = j; 
+            found = 1;
+            break;
+          }
+        }
+
+        if (found)
+          break;
+      }
+
+      if (found) {
+        // one or both of the parters buckets will be removed.
+        if (classify_buckets(
+          bvh, 
+          collision_info, info_used, 
+          buckets, bucket_offset, bucket_count, 
+          flag, 
+          parters[0], parters[1])) {
+          // remove parters[1]
+          info_used = remove_bucket(
+            collision_info, info_used, 
+            buckets, bucket_offset, bucket_count, 
+            parters[1]);
+          --bucket_count;
+        } else if (classify_buckets(
+          bvh, 
+          collision_info, info_used, 
+          buckets, bucket_offset, bucket_count, 
+          flag, 
+          parters[1], parters[0])) {
+          // remove parters[0]
+          info_used = remove_bucket(
+            collision_info, info_used, 
+            buckets, bucket_offset, bucket_count, 
+            parters[0]);
+          --bucket_count;
+        } else {
+          // remove parters[0, 1].
+          info_used = remove_bucket(
+            collision_info, info_used, 
+            buckets, bucket_offset, bucket_count, 
+            parters[0]);
+          --bucket_count;
+          --parters[1];
+          info_used = remove_bucket(
+            collision_info, info_used, 
+            buckets, bucket_offset, bucket_count, 
+            parters[1]);
+          --bucket_count;
+        }
+      }
+    }
+
+  }
+}
+
 // this will sort collision_info with colinear faces being consecutive, the 
 // buckets array will contain the count per face colinearity. we return the 
 // bucket type.
@@ -1074,7 +1317,7 @@ get_averaged_normal(
     else if (bvh->faces[face_i].is_ceiling)
       *flags |= COLLIDED_CEILING_FLAG;
     else {
-      *flags |= COLLIDED_WALLS;
+      *flags |= COLLIDED_WALLS_FLAG;
       is_wall = 1;
     }
 
@@ -1163,6 +1406,18 @@ handle_collision_detection(
       iterations, 
       limit_distance);
 
+    if (0) {
+      // TEMP: this is temporary work.
+      intersection_info_t copy_of_info[256];
+      uint32_t buckets[256];
+      uint32_t bucket_count = 0;
+      memcpy(copy_of_info, collision_info, sizeof(collision_info));
+      bucket_count = sort_in_buckets(bvh, copy_of_info, info_used, buckets);
+      if (bucket_count)
+        process_buckets(bvh, copy_of_info, info_used, buckets, bucket_count);
+    }
+
+    // ignore for now, we are dealign with the finding inward edges.
     info_used = trim_backfacing(bvh, &velocity, collision_info, info_used);
 
     if (!info_used) {
@@ -1188,7 +1443,7 @@ handle_collision_detection(
         break;
 
       if (
-        (l_flags & COLLIDED_WALLS) && 
+        (l_flags & COLLIDED_WALLS_FLAG) && 
         can_step_up(bvh, capsule, velocity, toi, 0.5f, &out_y)) {
         
         if (draw_status) {
@@ -1216,131 +1471,6 @@ handle_collision_detection(
 
   return flags;
 }
-#else
-static
-collision_flags_t
-handle_collision_detection(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  const vector3f displacement,
-  const uint32_t on_solid_floor,
-  const uint32_t iterations,
-  const float limit_distance)
-{
-  intersection_info_t collision_info[256];
-  uint32_t info_used;
-  collision_flags_t flags = (collision_flags_t)0;
-  intersection_info_t info, unfiltered_info;
-  uint32_t to_filter[1024];
-  uint32_t filter_count = 0;
-  vector3f orientation = normalize_v3f(&displacement);
-  vector3f velocity = displacement;
-  float length, remaining;
-  length = remaining = length_v3f(&velocity);
-
-  while (remaining > limit_distance && !IS_ZERO_LP(length_v3f(&velocity))) {
-    info = get_any_first_time_of_impact_filtered(
-      bvh, 
-      capsule, 
-      velocity,
-      to_filter, 
-      filter_count, 
-      iterations, 
-      limit_distance);
-
-    info_used = get_all_first_time_of_impact(
-      bvh, 
-      capsule, 
-      velocity, 
-      collision_info,
-      iterations, 
-      limit_distance);
-
-    unfiltered_info = get_any_first_time_of_impact(
-      bvh,
-      capsule,
-      velocity,
-      iterations,
-      limit_distance);
-
-    if (info.flags == COLLIDED_NONE) {
-      mult_set_v3f(&velocity, unfiltered_info.time);
-      add_set_v3f(&capsule->center, &velocity);
-      break;
-    } else {
-      vector3f normal = bvh->faces[info.bvh_face_index].normal;
-      int32_t is_wall = 
-        !bvh->faces[info.bvh_face_index].is_floor &&
-        !bvh->faces[info.bvh_face_index].is_ceiling;
-
-      // adjust the normal, even if sloped, walls cannot contribute to vertical
-      // acceleration.
-      if (is_wall && on_solid_floor) {
-        vector3f y_up, perp;
-        vector3f_set_3f(&y_up, 0.f, 1.f, 0.f);
-        perp = cross_product_v3f(&y_up, &normal);
-        normalize_set_v3f(&perp);
-        normal = cross_product_v3f(&perp, &y_up);
-        normalize_set_v3f(&normal);
-      }
-      
-      to_filter[filter_count++] = info.bvh_face_index;
-
-      if (draw_collided_face) {
-        color_t color = 
-          (bvh->faces[info.bvh_face_index].is_floor) ? green : 
-          (bvh->faces[info.bvh_face_index].is_ceiling ? white : red);
-        add_face_to_render(info.bvh_face_index, color, 5);
-      }
-
-      // ignore back-facing faces.
-      if (dot_product_v3f(&velocity, &normal) > EPSILON_FLOAT_LOW_PRECISION)
-        continue;
-
-      {
-        // due to imprecision, already considered faces can have smaller toi.
-        float toi = fmin(info.time, unfiltered_info.time);
-        vector3f applied_displacement = mult_v3f(&velocity, toi);
-        add_set_v3f(&capsule->center, &applied_displacement);
-        remaining -= length_v3f(&applied_displacement);
-
-        {
-          float out_y = 0.f;
-          vector3f adjusted = get_adjusted_velocity(
-            velocity, toi, capsule, 0.5f);
-          
-          // if we can step up, simply offset the capsule on y.
-          if (is_wall && can_step_up(bvh, capsule, adjusted, &out_y)) {
-            float value = capsule->center.data[1] - out_y;
-            capsule->center.data[1] = out_y;
-
-            if (draw_status) {
-              char text[512];
-              memset(text, 0, sizeof(text));
-              sprintf(text, "STEPUP %f", value);
-              add_text_to_render(text, red, 400.f, 320.f);
-            }
-          } else {
-            float dot = dot_product_v3f(&velocity, &normal);
-            vector3f subtract = mult_v3f(&normal, dot);
-            diff_set_v3f(&velocity, &subtract);
-
-            if (!IS_ZERO_LP(length_squared_v3f(&velocity))) {
-              normalize_set_v3f(&velocity);
-              dot = dot_product_v3f(&orientation, &velocity);
-              mult_set_v3f(&velocity, dot * length);
-            }
-          }
-        }
-      }
-
-      flags |= info.flags;
-    }
-  }
-
-  return flags;
-}
-#endif
 
 static
 vector3f
@@ -1520,19 +1650,14 @@ camera_update(
     camera->position = capsule.center;
   }
 
-  {
-    //color_t color =
-    //  (bvh->faces[3606].is_floor) ? green :
-    //  (bvh->faces[3606].is_ceiling ? white : red);
-    //add_face_to_render(3606, color, 1);
-  }
-  {
-    //add_face_to_render(3607, blue, 1);
-    //add_face_to_render(3611, white, 1);
+  // add_face_to_render(8132, blue, 2);
+  // add_face_to_render(7526, yellow, 2);
 
-    //add_face_to_render(3991, blue, 1);
-    //add_face_to_render(3991, blue, 1);
-  }
+  // first iteration is: 3553, 2nd is 3425, 3rd+ is: 3492, 3509, 3553 with t = 0
+  add_face_to_render(3553, blue, 2);    // ceiling
+  add_face_to_render(3509, blue, 2);    // ceiling
+  add_face_to_render(3425, white, 2);   // wall
+  add_face_to_render(3492, white, 2);   // wall
 
   add_text_to_render(
     "[3] RENDER COLLISION QUERIES", 
@@ -1542,11 +1667,15 @@ camera_update(
   add_text_to_render(
     "[5] SHOW SNAPPING/FALLING STATE", draw_status ? red : white, 0.f, 160.f);
   add_text_to_render(
-    "[7] DISABLE DEPTH TEST DEBUG", disable_depth_debug ? red : white, 0.f, 180.f);
+    "[6] DRAW IGNORED FACES", 
+    draw_ignored_faces ? red : white, 0.f, 180.f);
   add_text_to_render(
-    "[8] LOCK DIRECTIONAL MOTION", use_locked_motion ? red : white, 0.f, 200.f);
+    "[7] DISABLE DEPTH TEST DEBUG", 
+    disable_depth_debug ? red : white, 0.f, 200.f);
   add_text_to_render(
-    "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, 220.f);
+    "[8] LOCK DIRECTIONAL MOTION", use_locked_motion ? red : white, 0.f, 220.f);
+  add_text_to_render(
+    "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, 240.f);
   draw_renderable_text(pipeline, font, font_image_id);
   draw_renderable_faces(bvh, pipeline);
 }

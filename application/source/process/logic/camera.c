@@ -33,6 +33,7 @@
 #define KEY_COLLISION_QUERY       '3'
 #define KEY_COLLISION_FACE        '4'
 #define KEY_DRAW_STATUS           '5'
+#define KEY_DISABLE_DEPTH         '7'
 #define KEY_MOVEMENT_LOCK         '8'
 #define KEY_MOVEMENT_MODE         '9'
 #define KEY_JUMP                  0x20
@@ -57,6 +58,7 @@
 #define REFERENCE_FRAME_TIME      0.033f
 
 
+static int32_t disable_depth_debug = 0;
 static int32_t use_locked_motion = 0;
 static int32_t draw_collision_query = 0;
 static int32_t draw_collided_face = 0;
@@ -77,6 +79,7 @@ static color_t green = { 0.f, 1.f, 0.f, 1.f };
 static color_t blue = { 0.f, 0.f, 1.f, 1.f };
 static color_t yellow = { 1.f, 1.f, 0.f, 1.f };
 static color_t white = { 1.f, 1.f, 1.f, 1.f };
+static color_t gen = { 1.f, 1.f, 1.f, -1.f };
 
 typedef
 enum {
@@ -230,7 +233,12 @@ draw_face(
   vertices[3 * 3 + 1] = face->points[0].data[1] + face->normal.data[1] * mult;
   vertices[3 * 3 + 2] = face->points[0].data[2] + face->normal.data[2] * mult;
 
-  draw_lines(vertices, 4, *color, thickness, pipeline);
+  if (disable_depth_debug) {
+    disable_depth_test();
+    draw_lines(vertices, 4, *color, thickness, pipeline);
+    enable_depth_test();
+  } else
+    draw_lines(vertices, 4, *color, thickness, pipeline);
 }
 
 static
@@ -252,10 +260,20 @@ draw_renderable_faces(
 {
   for (uint32_t i = 0; i < renderable_faces.used; ++i) {
     uint32_t index = renderable_faces.faces[i].index;
+    color_t normal_color;
+    uint32_t gen_color = 0;
+    if (renderable_faces.faces[i].color.data[3] == gen.data[3]) {
+      normal_color.data[0] = bvh->faces[index].normal.data[0] + 0.3f;
+      normal_color.data[1] = bvh->faces[index].normal.data[1] + 0.3f;
+      normal_color.data[2] = bvh->faces[index].normal.data[2] + 0.3f;
+      normal_color.data[3] = 1.f;
+      gen_color = 1;
+    }
+
     draw_face(
       bvh->faces + index, 
       &bvh->faces[index].normal, 
-      &renderable_faces.faces[i].color, 
+      gen_color ? &normal_color: &renderable_faces.faces[i].color, 
       renderable_faces.faces[i].thickness,
       pipeline);
   }
@@ -490,6 +508,9 @@ handle_macro_keys(camera_t* camera)
 
   if (is_key_triggered(KEY_MOVEMENT_LOCK))
     use_locked_motion = !use_locked_motion;
+
+  if (is_key_triggered(KEY_DISABLE_DEPTH))
+    disable_depth_debug = !disable_depth_debug;
 }
 
 static
@@ -610,7 +631,7 @@ get_all_first_time_of_impact_filtered(
         {
           color_t color = 
             (bvh->faces[i].is_floor) ? green : 
-            (bvh->faces[i].is_ceiling ? white : red);
+            (bvh->faces[i].is_ceiling ? white : gen);
           int32_t thickness = (bvh->faces[i].is_floor) ? 3 : 2;
           add_face_to_render(i, color, thickness);
         }
@@ -884,7 +905,9 @@ int32_t
 can_step_up(
   bvh_t* bvh,
   const capsule_t* capsule,
-  const vector3f velocity,
+  vector3f velocity,
+  const float toi,
+  float radius_scale,
   float* out_y)
 {
   intersection_info_t collision_info[256];
@@ -893,6 +916,8 @@ can_step_up(
   intersection_info_t info = { 1.f, COLLIDED_NONE, (uint32_t)-1 };
   vector3f displacement = { 0.f, -(capsule->radius + 1) * 2, 0.f };
   capsule_t duplicate = *capsule;
+
+  velocity = get_adjusted_velocity(velocity, toi, capsule, radius_scale);
   add_set_v3f(&duplicate.center, &velocity);
 
   // the capsule has to start in solid after applying the velocity.
@@ -957,6 +982,158 @@ can_step_up(
   return 0;
 }
 
+#if 1
+// this will sort collision_info with colinear faces being consecutive, the 
+// buckets array will contain the count per face colinearity. we return the 
+// bucket type.
+static
+uint32_t
+sort_in_buckets(
+  bvh_t* bvh,
+  intersection_info_t collision_info[256], 
+  uint32_t info_used,
+  uint32_t buckets[256])
+{
+  uint32_t bucket_count = 0;
+  intersection_info_t sorted[256];
+  uint32_t sorted_index = 0;
+  uint32_t copy_info_used = info_used;
+  bvh_face_t* a_bvh_face, *b_bvh_face;
+  face_t a, b;
+  vector3f* a_normal, *b_normal;
+  int64_t i, to_swap;
+  intersection_info_t copy;
+  planes_classification_t classify;
+
+  while (info_used--) {
+    a_bvh_face = &bvh->faces[collision_info[info_used].bvh_face_index]; 
+    memcpy(a.points, a_bvh_face->points, sizeof(a.points));
+    a_normal = &a_bvh_face->normal;
+    
+    // copy into the first sorted index.
+    sorted[sorted_index++] = collision_info[info_used];
+    buckets[bucket_count++] = 1;
+
+    i = to_swap = (int64_t)info_used - 1;
+    for (; i >= 0; --i) {
+      b_bvh_face = &bvh->faces[collision_info[i].bvh_face_index];
+      memcpy(b.points, b_bvh_face->points, sizeof(b.points));
+      b_normal = &b_bvh_face->normal;
+
+      // if colinear copy into the first sorted index, swap it with to_swap 
+      // index and decrease info_used.
+      classify = classify_planes(&a, a_normal, &b, b_normal);
+      if (classify == PLANES_COLINEAR) {
+        sorted[sorted_index++] = collision_info[i];
+        buckets[bucket_count - 1]++;
+
+        // swap the colinear with the non-colinear.
+        copy = collision_info[to_swap];
+        collision_info[to_swap] = collision_info[i];
+        collision_info[i] = copy;
+
+        to_swap--;
+        info_used--;
+      }
+    }
+  }
+
+  assert(sorted_index == copy_info_used);
+  
+  // copy the sorted data back.
+  memcpy(collision_info, sorted, sizeof(sorted));
+
+  return bucket_count;
+}
+
+static
+vector3f
+get_averaged_normal(
+  bvh_t* bvh,
+  const uint32_t on_solid_floor,
+  intersection_info_t collision_info[256],
+  uint32_t info_used,
+  collision_flags_t* flags)
+{
+  uint32_t buckets[256];
+  uint32_t bucket_count = 0;
+
+  vector3f averaged, normal;
+  vector3f_set_1f(&averaged, 0.f);
+
+  // we shouldn't consider colinear faces more than once, we need to sort this.
+  bucket_count = sort_in_buckets(bvh, collision_info, info_used, buckets);
+
+  for (uint32_t i = 0, index = 0, face_i, is_wall; i < bucket_count; ++i) {
+    is_wall = 0;
+    face_i = collision_info[index].bvh_face_index;
+    normal = bvh->faces[face_i].normal;
+
+    if (bvh->faces[face_i].is_floor)
+      *flags |= COLLIDED_FLOOR_FLAG;
+    else if (bvh->faces[face_i].is_ceiling)
+      *flags |= COLLIDED_CEILING_FLAG;
+    else {
+      *flags |= COLLIDED_WALLS;
+      is_wall = 1;
+    }
+
+    // adjust the normal, even if sloped, walls cannot contribute to vertical
+    // acceleration.
+    if (is_wall && on_solid_floor) {
+      vector3f y_up, perp;
+      vector3f_set_3f(&y_up, 0.f, 1.f, 0.f);
+      perp = cross_product_v3f(&y_up, &normal);
+      normalize_set_v3f(&perp);
+      normal = cross_product_v3f(&perp, &y_up);
+      normalize_set_v3f(&normal);
+    }
+
+    add_set_v3f(&averaged, &normal);
+
+     if (draw_collided_face) {
+       for (uint32_t k = index; k < (index + buckets[i]); ++k) {
+         uint32_t d_face_i = collision_info[k].bvh_face_index;
+         color_t color =
+           (bvh->faces[d_face_i].is_floor) ? green :
+           (bvh->faces[d_face_i].is_ceiling ? white : gen);
+         add_face_to_render(d_face_i, color, 2);
+       }
+     }
+
+    index += buckets[i];
+  }
+
+  normalize_set_v3f(&averaged);
+  return averaged;
+}
+
+static
+uint32_t
+trim_backfacing(
+  bvh_t* bvh,
+  const vector3f* velocity, 
+  intersection_info_t collision_info[256],
+  uint32_t info_used)
+{
+  intersection_info_t new_collision_info[256];
+  uint32_t count = 0;
+  vector3f* normal = NULL;
+
+  for (uint32_t i = 0, index = 0; i < info_used; ++i) {
+    index = collision_info[i].bvh_face_index;
+    normal = &bvh->faces[index].normal;
+    if (dot_product_v3f(velocity, normal) > EPSILON_FLOAT_LOW_PRECISION)
+      continue;
+    else
+      new_collision_info[count++] = collision_info[i];
+  }
+
+  // copy the new info into the old one and return the updated info_used
+  memcpy(collision_info, new_collision_info, sizeof(new_collision_info));
+  return count;
+}
+
 static
 collision_flags_t
 handle_collision_detection(
@@ -967,6 +1144,91 @@ handle_collision_detection(
   const uint32_t iterations,
   const float limit_distance)
 {
+  collision_flags_t flags = (collision_flags_t)0;
+  intersection_info_t collision_info[256];
+  uint32_t info_used;
+  vector3f normal;
+  vector3f orientation = normalize_v3f(&displacement);
+  vector3f velocity = displacement;
+  uint32_t stationary = 0;
+  float length, remaining;
+  length = remaining = length_v3f(&velocity);
+
+  while (remaining > limit_distance && !IS_ZERO_LP(length_v3f(&velocity))) {
+    info_used = get_all_first_time_of_impact(
+      bvh, 
+      capsule, 
+      velocity,
+      collision_info,  
+      iterations, 
+      limit_distance);
+
+    info_used = trim_backfacing(bvh, &velocity, collision_info, info_used);
+
+    if (!info_used) {
+      add_set_v3f(&capsule->center, &velocity);
+      return flags;
+    } else {
+      collision_flags_t l_flags = COLLIDED_NONE;
+      float toi = 0.f, out_y = 0.f;
+      vector3f applied;
+
+      normal = get_averaged_normal(
+        bvh, on_solid_floor, collision_info, info_used, &l_flags);
+      flags |= l_flags;
+
+      // apply what we can of the displacement.
+      toi = collision_info[0].time;
+      applied = mult_v3f(&velocity, toi);
+      add_set_v3f(&capsule->center, &applied);
+      remaining -= length_v3f(&applied);
+
+      stationary = IS_ZERO_MP(toi) ? (stationary + 1) : 0;
+      if (stationary >= 3)
+        break;
+
+      if (
+        (l_flags & COLLIDED_WALLS) && 
+        can_step_up(bvh, capsule, velocity, toi, 0.5f, &out_y)) {
+        
+        if (draw_status) {
+          float value = capsule->center.data[1] - out_y;
+          char text[512];
+          memset(text, 0, sizeof(text));
+          sprintf(text, "STEPUP %f", value);
+          add_text_to_render(text, red, 400.f, 320.f);
+        }
+
+        capsule->center.data[1] = out_y;
+      } else {
+        float dot = dot_product_v3f(&velocity, &normal);
+        vector3f subtract = mult_v3f(&normal, dot);
+        diff_set_v3f(&velocity, &subtract);
+
+        if (!IS_ZERO_LP(length_squared_v3f(&velocity))) {
+          normalize_set_v3f(&velocity);
+          dot = dot_product_v3f(&orientation, &velocity);
+          mult_set_v3f(&velocity, dot * length);
+        }
+      }
+    }
+  }
+
+  return flags;
+}
+#else
+static
+collision_flags_t
+handle_collision_detection(
+  bvh_t* bvh,
+  capsule_t* capsule,
+  const vector3f displacement,
+  const uint32_t on_solid_floor,
+  const uint32_t iterations,
+  const float limit_distance)
+{
+  intersection_info_t collision_info[256];
+  uint32_t info_used;
   collision_flags_t flags = (collision_flags_t)0;
   intersection_info_t info, unfiltered_info;
   uint32_t to_filter[1024];
@@ -983,6 +1245,14 @@ handle_collision_detection(
       velocity,
       to_filter, 
       filter_count, 
+      iterations, 
+      limit_distance);
+
+    info_used = get_all_first_time_of_impact(
+      bvh, 
+      capsule, 
+      velocity, 
+      collision_info,
       iterations, 
       limit_distance);
 
@@ -1070,6 +1340,7 @@ handle_collision_detection(
 
   return flags;
 }
+#endif
 
 static
 vector3f
@@ -1153,9 +1424,8 @@ handle_vertical_velocity(
         uint32_t i = info.bvh_face_index;
         color_t color = 
           (bvh->faces[i].is_floor) ? green : 
-          (bvh->faces[i].is_ceiling ? white : red);
-        int32_t thickness = (bvh->faces[i].is_floor) ? 3 : 2;
-        add_face_to_render(i, color, thickness);
+          (bvh->faces[i].is_ceiling ? white : gen);
+        add_face_to_render(i, color, 1);
       }
     }
   }
@@ -1250,6 +1520,20 @@ camera_update(
     camera->position = capsule.center;
   }
 
+  {
+    //color_t color =
+    //  (bvh->faces[3606].is_floor) ? green :
+    //  (bvh->faces[3606].is_ceiling ? white : red);
+    //add_face_to_render(3606, color, 1);
+  }
+  {
+    //add_face_to_render(3607, blue, 1);
+    //add_face_to_render(3611, white, 1);
+
+    //add_face_to_render(3991, blue, 1);
+    //add_face_to_render(3991, blue, 1);
+  }
+
   add_text_to_render(
     "[3] RENDER COLLISION QUERIES", 
     draw_collision_query ? red : white, 0.f, 120.f);
@@ -1258,9 +1542,11 @@ camera_update(
   add_text_to_render(
     "[5] SHOW SNAPPING/FALLING STATE", draw_status ? red : white, 0.f, 160.f);
   add_text_to_render(
-    "[8] LOCK DIRECTIONAL MOTION", use_locked_motion ? red : white, 0.f, 180.f);
+    "[7] DISABLE DEPTH TEST DEBUG", disable_depth_debug ? red : white, 0.f, 180.f);
   add_text_to_render(
-    "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, 200.f);
+    "[8] LOCK DIRECTIONAL MOTION", use_locked_motion ? red : white, 0.f, 200.f);
+  add_text_to_render(
+    "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, 220.f);
   draw_renderable_text(pipeline, font, font_image_id);
   draw_renderable_faces(bvh, pipeline);
 }

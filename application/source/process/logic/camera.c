@@ -1114,9 +1114,9 @@ remove_bucket(
 }
 
 static
-void
+int32_t
 process_buckets(
-  bvh_t* bvh, 
+  bvh_t* const bvh, 
   intersection_info_t collision_info[256], 
   uint32_t info_used, 
   uint32_t buckets[256],
@@ -1222,17 +1222,18 @@ process_buckets(
         }
       }
     }
-
   }
+
+  return info_used;
 }
 
-// this will sort collision_info with colinear faces being consecutive, the 
-// buckets array will contain the count per face colinearity. we return the 
+// this will sort collision_info with colinear faces being consecutive, the
+// buckets array will contain the count per face colinearity. we return the
 // bucket type.
 static
 uint32_t
 sort_in_buckets(
-  bvh_t* bvh,
+  bvh_t* const bvh,
   intersection_info_t collision_info[256], 
   uint32_t info_used,
   uint32_t buckets[256])
@@ -1292,7 +1293,7 @@ sort_in_buckets(
 static
 vector3f
 get_averaged_normal(
-  bvh_t* bvh,
+  bvh_t* const bvh,
   const uint32_t on_solid_floor,
   intersection_info_t collision_info[256],
   uint32_t info_used,
@@ -1354,7 +1355,7 @@ get_averaged_normal(
 static
 uint32_t
 trim_backfacing(
-  bvh_t* bvh,
+  bvh_t* const bvh,
   const vector3f* velocity, 
   intersection_info_t collision_info[256],
   uint32_t info_used)
@@ -1375,6 +1376,27 @@ trim_backfacing(
   // copy the new info into the old one and return the updated info_used
   memcpy(collision_info, new_collision_info, sizeof(new_collision_info));
   return count;
+}
+
+// Note: this function does modify collision_info.
+static
+int32_t 
+process_collision_info(
+  bvh_t* const bvh, 
+  const vector3f* velocity, 
+  intersection_info_t collision_info[256], 
+  int32_t info_used)
+{
+  // sort and process the buckets in a way the collision info used.
+  if (info_used) {
+    uint32_t buckets[256];
+    uint32_t bucket_count = 0;
+    bucket_count = sort_in_buckets(bvh, collision_info, info_used, buckets);
+    info_used = process_buckets(
+      bvh, collision_info, info_used, buckets, bucket_count);
+  }
+
+  return trim_backfacing(bvh, velocity, collision_info, info_used);
 }
 
 static
@@ -1406,19 +1428,8 @@ handle_collision_detection(
       iterations, 
       limit_distance);
 
-    if (0) {
-      // TEMP: this is temporary work.
-      intersection_info_t copy_of_info[256];
-      uint32_t buckets[256];
-      uint32_t bucket_count = 0;
-      memcpy(copy_of_info, collision_info, sizeof(collision_info));
-      bucket_count = sort_in_buckets(bvh, copy_of_info, info_used, buckets);
-      if (bucket_count)
-        process_buckets(bvh, copy_of_info, info_used, buckets, bucket_count);
-    }
-
-    // ignore for now, we are dealign with the finding inward edges.
-    info_used = trim_backfacing(bvh, &velocity, collision_info, info_used);
+    info_used = process_collision_info(
+      bvh, &velocity, collision_info, info_used);
 
     if (!info_used) {
       add_set_v3f(&capsule->center, &velocity);
@@ -1654,9 +1665,9 @@ camera_update(
   // add_face_to_render(7526, yellow, 2);
 
   // first iteration is: 3553, 2nd is 3425, 3rd+ is: 3492, 3509, 3553 with t = 0
-  add_face_to_render(3553, blue, 2);    // ceiling
+  add_face_to_render(3553, yellow, 2);    // ceiling
   add_face_to_render(3509, blue, 2);    // ceiling
-  add_face_to_render(3425, white, 2);   // wall
+  add_face_to_render(3425, red, 2);     // wall
   add_face_to_render(3492, white, 2);   // wall
 
   add_text_to_render(

@@ -830,7 +830,9 @@ is_in_valid_space(
 
       length_sqrd = length_squared_v3f(&penetration);
 
-      if (classification != CAPSULE_FACE_NO_COLLISION)
+      if (
+        classification != CAPSULE_FACE_NO_COLLISION && 
+        !IS_ZERO_LP(length_sqrd))
         return 0;
     }
   }
@@ -876,7 +878,7 @@ ensure_in_valid_space(
           capsule,
           &face,
           &bvh->faces[i].normal,
-          1,
+          0,
           &penetration,
           &sphere_center);
 
@@ -1412,14 +1414,13 @@ handle_collision_detection(
   collision_flags_t flags = (collision_flags_t)0;
   intersection_info_t collision_info[256];
   uint32_t info_used;
-  vector3f normal;
   vector3f orientation = normalize_v3f(&displacement);
   vector3f velocity = displacement;
-  uint32_t stationary = 0;
-  float length, remaining;
-  length = remaining = length_v3f(&velocity);
+  float distance_to_go = length_v3f(&velocity);
+  // limit the number of iterations we can do on the collision handling.
+  int32_t steps = 3;
 
-  while (remaining > limit_distance && !IS_ZERO_LP(length_v3f(&velocity))) {
+  while (steps-- && !IS_ZERO_LP(length_squared_v3f(&velocity))) {
     info_used = get_all_first_time_of_impact(
       bvh, 
       capsule, 
@@ -1435,47 +1436,43 @@ handle_collision_detection(
       add_set_v3f(&capsule->center, &velocity);
       return flags;
     } else {
+      float toi = collision_info[0].time;
+      float step_y = 0.f;
       collision_flags_t l_flags = COLLIDED_NONE;
-      float toi = 0.f, out_y = 0.f;
-      vector3f applied;
+      vector3f to_apply;
 
-      normal = get_averaged_normal(
+      vector3f normal = get_averaged_normal(
         bvh, on_solid_floor, collision_info, info_used, &l_flags);
       flags |= l_flags;
 
-      // apply what we can of the displacement.
-      toi = collision_info[0].time;
-      applied = mult_v3f(&velocity, toi);
-      add_set_v3f(&capsule->center, &applied);
-      remaining -= length_v3f(&applied);
-
-      stationary = IS_ZERO_MP(toi) ? (stationary + 1) : 0;
-      if (stationary >= 3)
-        break;
+      to_apply = mult_v3f(&velocity, toi);
+      add_set_v3f(&capsule->center, &to_apply);
+      distance_to_go -= length_v3f(&to_apply);
+      distance_to_go = fmax(distance_to_go, 0.f);
 
       if (
         (l_flags & COLLIDED_WALLS_FLAG) && 
-        can_step_up(bvh, capsule, velocity, toi, 0.5f, &out_y)) {
+        can_step_up(bvh, capsule, velocity, toi, 0.5f, &step_y)) {
         
         if (draw_status) {
-          float value = capsule->center.data[1] - out_y;
+          float value = capsule->center.data[1] - step_y;
           char text[512];
           memset(text, 0, sizeof(text));
           sprintf(text, "STEPUP %f", value);
           add_text_to_render(text, red, 400.f, 320.f);
         }
 
-        capsule->center.data[1] = out_y;
+        capsule->center.data[1] = step_y;
       } else {
-        float dot = dot_product_v3f(&velocity, &normal);
-        vector3f subtract = mult_v3f(&normal, dot);
+        vector3f subtract;
+        float dot;
+        normalize_set_v3f(&velocity);
+        dot = dot_product_v3f(&velocity, &normal);
+        subtract = mult_v3f(&normal, dot);
         diff_set_v3f(&velocity, &subtract);
 
-        if (!IS_ZERO_LP(length_squared_v3f(&velocity))) {
-          normalize_set_v3f(&velocity);
-          dot = dot_product_v3f(&orientation, &velocity);
-          mult_set_v3f(&velocity, dot * length);
-        }
+        dot = fmax(dot_product_v3f(&orientation, &velocity), 0.f);
+        mult_set_v3f(&velocity, distance_to_go * dot);
       }
     }
   }
@@ -1596,12 +1593,13 @@ camera_update(
   static capsule_t capsule = { { 0.f, 0.f, 0.f }, 12.f, 16.f };
   static uint32_t on_solid_floor = 0;
 
-  // cap the detla time when debugging.
+  // TODO: cap the detla time when debugging.
   delta_time = fmin(delta_time, REFERENCE_FRAME_TIME);
 
   handle_macro_keys(camera);
 
   capsule.center = camera->position;
+  // TODO: this should be called from level1.c, remove it.
   if (!is_in_valid_space(bvh, &capsule)) 
     ensure_in_valid_space(bvh, &capsule);
   
@@ -1661,32 +1659,39 @@ camera_update(
     camera->position = capsule.center;
   }
 
-  // add_face_to_render(8132, blue, 2);
-  // add_face_to_render(7526, yellow, 2);
+  {
+    float y = 100.f;
+    char array[256];
+    snprintf(
+      array, 256, 
+      "CAPSULE POSITION:     %.2f     %.2f     %.2f", 
+      capsule.center.data[0], 
+      capsule.center.data[1], 
+      capsule.center.data[2]);
 
-  // first iteration is: 3553, 2nd is 3425, 3rd+ is: 3492, 3509, 3553 with t = 0
-  add_face_to_render(3553, yellow, 2);    // ceiling
-  add_face_to_render(3509, blue, 2);    // ceiling
-  add_face_to_render(3425, red, 2);     // wall
-  add_face_to_render(3492, white, 2);   // wall
-
-  add_text_to_render(
-    "[3] RENDER COLLISION QUERIES", 
-    draw_collision_query ? red : white, 0.f, 120.f);
-  add_text_to_render(
-    "[4] RENDER COLLISION FACE", draw_collided_face ? red : white, 0.f, 140.f);
-  add_text_to_render(
-    "[5] SHOW SNAPPING/FALLING STATE", draw_status ? red : white, 0.f, 160.f);
-  add_text_to_render(
-    "[6] DRAW IGNORED FACES", 
-    draw_ignored_faces ? red : white, 0.f, 180.f);
-  add_text_to_render(
-    "[7] DISABLE DEPTH TEST DEBUG", 
-    disable_depth_debug ? red : white, 0.f, 200.f);
-  add_text_to_render(
-    "[8] LOCK DIRECTIONAL MOTION", use_locked_motion ? red : white, 0.f, 220.f);
-  add_text_to_render(
-    "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, 240.f);
-  draw_renderable_text(pipeline, font, font_image_id);
-  draw_renderable_faces(bvh, pipeline);
+    add_text_to_render(
+      array, green, 0.f, (y+=20.f));
+    add_text_to_render(
+      "[3] RENDER COLLISION QUERIES", 
+      draw_collision_query ? red : white, 0.f, (y+=20.f));
+    add_text_to_render(
+      "[4] RENDER COLLISION FACE", 
+      draw_collided_face ? red : white, 0.f, (y+=20.f));
+    add_text_to_render(
+      "[5] SHOW SNAPPING/FALLING STATE", 
+      draw_status ? red : white, 0.f, (y+=20.f));
+    add_text_to_render(
+      "[6] DRAW IGNORED FACES", 
+      draw_ignored_faces ? red : white, 0.f, (y+=20.f));
+    add_text_to_render(
+      "[7] DISABLE DEPTH TEST DEBUG", 
+      disable_depth_debug ? red : white, 0.f, (y+=20.f));
+    add_text_to_render(
+      "[8] LOCK DIRECTIONAL MOTION", 
+      use_locked_motion ? red : white, 0.f, (y+=20.f));
+    add_text_to_render(
+      "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, (y+=20.f));
+    draw_renderable_text(pipeline, font, font_image_id);
+    draw_renderable_faces(bvh, pipeline);
+  }
 }

@@ -39,6 +39,13 @@ void* container_allocate(size_t count, size_t elem_size)
   return block;
 }
 
+void* reallocate(void* block, size_t size)
+{
+  block = realloc(block, size);
+  assert(block);
+  return block;
+}
+
 void free_block(void* block)
 {
   allocated.erase(
@@ -115,7 +122,7 @@ application::application(
   allocator.mem_cont_alloc = container_allocate;
   allocator.mem_free = free_block;
   allocator.mem_alloc_alligned = nullptr;
-  allocator.mem_realloc = nullptr;
+  allocator.mem_realloc = reallocate;
 
   viewport_width = width;
   viewport_height = height;

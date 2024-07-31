@@ -11,13 +11,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 add_executable(${PROJECT_NAME} WIN32
       ./source/converters/to_render_data.c
       ./source/converters/csv_to_font.c
-      ./source/converters/bin_to_scene_to_bin.c
+      ./source/converters/bin_to_scene.c
       ./source/converters/png_to_image.c
       ./source/process/render_data/utils.c
       ./source/process/logic/camera.c
       ./source/process/text/utils.c
-      ./source/process/spatial/bvh.c
-      ./source/process/spatial/bvh_utils.c
       ./source/process/levels/level1.c
       ./source/process/levels/room_select.c
 			./source/application.cpp

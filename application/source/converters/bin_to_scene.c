@@ -32,77 +32,8 @@
 #include <entity/c/scene/light_utils.h>
 #include <serializer/serializer_scene_data.h>
 #include <serializer/serializer_bin.h>
-#include <application/converters/bin_to_scene_to_bin.h>
+#include <application/converters/bin_to_scene.h>
 
-
-static 
-void
-populate_serializer_light_data(
-  scene_t* scene, 
-  serializer_scene_data_t* target, 
-  const allocator_t* allocator)
-{
-  assert(scene && target && allocator);
-
-  {
-    target->light_repo.used = scene->light_repo.count;
-    if (target->light_repo.used) {
-      target->light_repo.data = 
-        allocator->mem_cont_alloc(
-          target->light_repo.used, 
-          sizeof(serializer_light_data_t));
-
-      for (uint32_t i = 0; i < target->light_repo.used; ++i) {
-        serializer_light_data_t* t_light = target->light_repo.data + i;
-        light_t* s_light = scene->light_repo.lights + i;
-        memset(t_light->name.data, 0, sizeof(t_light->name.data));
-        memcpy(t_light->name.data, s_light->name->str, s_light->name->size);
-        memcpy(
-          t_light->position.data, 
-          s_light->position.data,
-          sizeof(t_light->position.data));
-        memcpy(
-          t_light->direction.data, 
-          s_light->direction.data,
-          sizeof(t_light->direction.data));
-        memcpy(
-          t_light->up.data, 
-          s_light->up.data,
-          sizeof(t_light->up.data));
-        memcpy(&t_light->inner_cone, &s_light->inner_cone, sizeof(float));
-        memcpy(&t_light->outer_cone, &s_light->outer_cone, sizeof(float));
-        memcpy(
-          &t_light->attenuation_constant, 
-          &s_light->attenuation_constant, 
-          sizeof(float));
-        memcpy(
-          &t_light->attenuation_linear, 
-          &s_light->attenuation_linear, 
-          sizeof(float));
-        memcpy(
-          &t_light->attenuation_quadratic, 
-          &s_light->attenuation_quadratic, 
-          sizeof(float));
-        memcpy(
-          t_light->diffuse.data, 
-          s_light->diffuse.data, 
-          sizeof(t_light->diffuse.data));
-        memcpy(
-          t_light->specular.data, 
-          s_light->specular.data, 
-          sizeof(t_light->specular.data));
-        memcpy(
-          t_light->ambient.data, 
-          s_light->ambient.data, 
-          sizeof(t_light->ambient.data));
-        memcpy(
-          &t_light->type, 
-          &s_light->type, 
-          sizeof(t_light->type));
-      }
-    }
-  }
-}
 
 static
 void
@@ -174,37 +105,6 @@ copy_light_data(
 
 static
 void
-populate_serializer_texture_data(
-  scene_t* scene, 
-  serializer_scene_data_t* target, 
-  const allocator_t* allocator)
-{
-  assert(scene && target && allocator);
-
-  {
-    target->texture_repo.used = scene->texture_repo.count;
-    if (target->texture_repo.used) {
-      target->texture_repo.data = 
-        allocator->mem_cont_alloc(
-          target->texture_repo.used, 
-          sizeof(serializer_texture_data_t));
-
-      for (uint32_t i = 0; i < target->texture_repo.used; ++i) {
-        memset(
-          target->texture_repo.data[i].path.data, 
-          0, 
-          sizeof(target->texture_repo.data[i].path.data));
-        memcpy(
-          target->texture_repo.data[i].path.data, 
-          scene->texture_repo.textures[i].path->str, 
-          scene->texture_repo.textures[i].path->size);
-      }
-    }
-  }
-}
-
-static
-void
 copy_texture_data(
   serializer_scene_data_t* scene, 
   scene_t* target, 
@@ -221,64 +121,6 @@ copy_texture_data(
       for (uint32_t i = 0; i < scene->texture_repo.used; ++i) {
         target->texture_repo.textures[i].path = 
           allocate_string(scene->texture_repo.data[i].path.data, allocator);
-      }
-    }
-  }
-}
-
-static
-void
-populate_serializer_material_data(
-  scene_t* scene, 
-  serializer_scene_data_t* target, 
-  const allocator_t* allocator)
-{
-  assert(scene && target && allocator);
-
-  {
-    target->material_repo.used = scene->material_repo.count;
-    if (target->material_repo.used) {
-      target->material_repo.data = 
-        allocator->mem_cont_alloc(
-          target->material_repo.used, 
-          sizeof(serializer_material_data_t));
-      
-      for (uint32_t i = 0; i < target->material_repo.used; ++i) {
-        serializer_material_data_t* mat = target->material_repo.data + i;
-        material_t* source = scene->material_repo.materials + i;
-
-        // will only keep 128 characters.
-        memset(mat->name.data, 0, sizeof(mat->name.data));
-        memcpy(mat->name.data, source->name->str, sizeof(source->name->size));
-        memcpy(
-          mat->ambient.data, 
-          source->ambient.data, 
-          sizeof(mat->ambient.data));
-        memcpy(
-          mat->diffuse.data, 
-          source->diffuse.data, 
-          sizeof(mat->diffuse.data));
-        memcpy(
-          mat->specular.data, 
-          source->specular.data, 
-          sizeof(mat->specular.data));
-        mat->shininess = source->shininess;
-        mat->opacity = source->opacity;
-
-        // Only 8 textures per material are supported.
-        mat->textures.used = 
-          (source->textures.used > MAX_TEXTURE_COUNT_PER_MATERIAL) ?
-          MAX_TEXTURE_COUNT_PER_MATERIAL : source->textures.used;
-
-        // NOTE: we do not copy the name/type.
-        for (uint32_t j = 0; j < mat->textures.used; ++j) {
-          mat->textures.data[j].index   = source->textures.data[j].index;
-          mat->textures.data[j].u       = source->textures.data[j].u;
-          mat->textures.data[j].v       = source->textures.data[j].v;
-          mat->textures.data[j].u_scale = source->textures.data[j].u_scale;
-          mat->textures.data[j].v_scale = source->textures.data[j].v_scale;
-          mat->textures.data[j].angle   = source->textures.data[j].angle;
-        }
       }
     }
   }
@@ -341,57 +183,6 @@ copy_material_data(
 
 static
 void
-populate_serializer_mesh_data(
-  scene_t* scene,
-  serializer_scene_data_t* target,
-  const allocator_t* allocator)
-{
-  assert(scene && target && allocator);
-  assert(scene->mesh_repo.count);
-
-  {
-    target->mesh_repo.used = scene->mesh_repo.count;
-    target->mesh_repo.data = allocator->mem_cont_alloc(
-      scene->mesh_repo.count, 
-      sizeof(serializer_mesh_data_t));
-
-    for (uint32_t i = 0; i < target->mesh_repo.used; ++i) {
-      serializer_mesh_data_t *mesh = target->mesh_repo.data + i;
-      mesh_t *source = scene->mesh_repo.meshes + i;
-
-      // deep copy the pointers.
-      uint32_t array_size = sizeof(float) * 3 * mesh->vertices_count;
-      mesh->vertices_count = source->vertices_count;
-      mesh->vertices = allocator->mem_alloc(array_size);
-      memcpy(mesh->vertices, source->vertices, array_size);
-      mesh->normals = allocator->mem_alloc(array_size);
-      memcpy(mesh->normals, source->normals, array_size);
-      mesh->uvs = allocator->mem_alloc(array_size);
-      memcpy(mesh->uvs, source->uvs, array_size);
-
-      array_size = sizeof(uint32_t) * source->indices_count;
-      mesh->faces_count = source->indices_count / 3;
-      mesh->indices = allocator->mem_alloc(array_size);
-      memcpy(mesh->indices, source->indices, array_size);
-
-      // copy the first 4 material indices, discard everything else.
-      // TODO: Add logging functionality to notify the user if any materials
-      // have been discarded.
-      {
-        mesh->materials.used = 
-          (source->materials.used > MAX_MATERIAL_NUMBER) ? 
-          MAX_MATERIAL_NUMBER : 
-          source->materials.used;
-
-        for (uint32_t j = 0; j < mesh->materials.used; ++j)
-          mesh->materials.indices[j] = source->materials.indices[j];
-      }
-    }
-  }
-}
-
-static
-void
 copy_mesh_data(
   serializer_scene_data_t* scene,
   scene_t* target,
@@ -433,59 +224,6 @@ copy_mesh_data(
 
         for (uint32_t j = 0; j < mesh->materials.used; ++j)
           mesh->materials.indices[j] = source->materials.indices[j];
-      }
-    }
-  }
-}
-
-static
-void
-populate_serializer_model_data(
-  scene_t* scene, 
-  serializer_scene_data_t* target, 
-  const allocator_t* allocator)
-{
-  assert(scene && target && allocator);
-  assert(scene->node_repo.count && "at least a root node must exist!");
-
-  {
-    target->model_repo.used = scene->node_repo.count; 
-    target->model_repo.data = 
-      allocator->mem_cont_alloc(
-        target->model_repo.used, 
-        sizeof(serializer_model_data_t));
-    
-    for (uint32_t i = 0; i < target->model_repo.used; ++i) {
-      serializer_model_data_t* model = target->model_repo.data + i;
-      node_t* source = scene->node_repo.nodes + i;
-
-      model->transform = source->transform;
-
-      // this will discard anything but 128 characters.
-      memset(model->name.data, 0, sizeof(model->name.data));
-      memcpy(model->name.data, source->name->str, sizeof(source->name->size));
-
-      {
-        uint32_t elem_count = sizeof(model->models.indices)/sizeof(uint32_t);
-        // this only fits 1024 indices.
-        model->meshes.used = source->meshes.count;
-        if (model->meshes.used) {
-          assert(model->meshes.used <= elem_count);
-          memcpy(
-            model->meshes.indices,
-            source->meshes.indices,
-            sizeof(uint32_t) * model->meshes.used);
-        }
-
-        // this only fits 1024 indices.
-        model->models.used = source->nodes.count;
-        if (model->models.used) {
-          assert(model->models.used <= elem_count);
-          memcpy(
-            model->models.indices,
-            source->nodes.indices,
-            sizeof(uint32_t) * model->models.used);
-        } 
       }
     }
   }
@@ -540,43 +278,6 @@ copy_node_data(
 
 static
 void
-populate_serializer_font_data(
-  scene_t* scene, 
-  serializer_scene_data_t* target, 
-  const allocator_t* allocator)
-{
-  assert(scene && target && allocator);
-
-  {
-    target->font_repo.used = scene->font_repo.count;
-    target->font_repo.data = NULL;
-    if (scene->font_repo.count) {
-      target->font_repo.data = 
-        (serializer_font_t*)allocator->mem_cont_alloc(
-          scene->font_repo.count, sizeof(serializer_font_t));
-
-      for (uint32_t i = 0; i < scene->font_repo.count; ++i) {
-        font_t* source = scene->font_repo.fonts + i;
-        serializer_font_t* font = target->font_repo.data + i;
-
-        memset(font->data_file.data, 0, sizeof(font->data_file.data));
-        memcpy(
-          font->data_file.data, 
-          source->data_file->str, 
-          source->data_file->size);
-
-        memset(font->image_file.data, 0, sizeof(font->image_file.data));
-        memcpy(
-          font->image_file.data, 
-          source->image_file->str, 
-          source->image_file->size);
-      }
-    }
-  }
-}
-
-static
-void
 copy_default_font(font_t* font, const allocator_t* allocator)
 {
   assert(font);
@@ -619,35 +320,6 @@ copy_font_data(
         allocate_font_array(target->font_repo.count, allocator);
 
       copy_default_font(target->font_repo.fonts, allocator);
-    }
-  }
-}
-
-static
-void
-populate_serializer_camera_data(
-  scene_t* scene, 
-  serializer_scene_data_t* target, 
-  const allocator_t* allocator)
-{
-  assert(scene && target && allocator);
-  
-  {
-    target->camera_repo.used = scene->camera_repo.count;
-    target->camera_repo.data = NULL;
-    if (scene->camera_repo.count) {
-      target->camera_repo.data = 
-        (serializer_camera_t*)allocator->mem_cont_alloc(
-          scene->camera_repo.count, sizeof(serializer_camera_t));
-
-      for (uint32_t i = 0; i < scene->camera_repo.count; ++i) {
-        camera_t* source = scene->camera_repo.cameras + i;
-        serializer_camera_t* camera = target->camera_repo.data + i;
-
-        camera->position = source->position;
-        camera->lookat_direction = source->lookat_direction;
-        camera->up_vector = source->up_vector;
-      }
     }
   }
 }
@@ -720,28 +392,6 @@ bin_to_scene(
     copy_font_data(scene, runtime_scene, allocator);
     copy_camera_data(scene, runtime_scene, allocator);
     return runtime_scene;
-  }
-}
-
-serializer_scene_data_t*
-scene_to_bin(
-  scene_t* scene, 
-  const allocator_t* allocator)
-{
-  assert(scene);
-  assert(allocator);
-
-  {
-    serializer_scene_data_t* serializer_scene = 
-      allocator->mem_alloc(sizeof(serializer_scene_data_t));
-    populate_serializer_light_data(scene, serializer_scene, allocator);
-    populate_serializer_texture_data(scene, serializer_scene, allocator);
-    populate_serializer_material_data(scene, serializer_scene, allocator);
-    populate_serializer_mesh_data(scene, serializer_scene, allocator);
-    populate_serializer_model_data(scene, serializer_scene, allocator);
-    populate_serializer_font_data(scene, serializer_scene, allocator);
-    populate_serializer_camera_data(scene, serializer_scene, allocator);
-    return serializer_scene;
   }
 }
 

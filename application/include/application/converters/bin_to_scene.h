@@ -28,11 +28,6 @@ bin_to_scene(
   serializer_scene_data_t* scene, 
   const allocator_t* allocator);
 
-serializer_scene_data_t*
-scene_to_bin(
-  scene_t* scene, 
-  const allocator_t* allocator);
-
 scene_t*
 load_scene_from_bin(
   const char* dataset, 

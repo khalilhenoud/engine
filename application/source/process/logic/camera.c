@@ -18,12 +18,12 @@
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <application/input.h>
-#include <application/process/spatial/bvh.h>
 #include <application/process/logic/camera.h>
 #include <math/c/capsule.h>
 #include <math/c/segment.h>
 #include <math/c/face.h>
 #include <math/c/sphere.h>
+#include <entity/c/spatial/bvh.h>
 #include <entity/c/runtime/font.h>
 #include <entity/c/runtime/font_utils.h>
 #include <application/process/text/utils.h>
@@ -57,6 +57,8 @@
 #define BINNED_MACRO_LIMIT        40
 
 #define REFERENCE_FRAME_TIME      0.033f
+
+#define FLOOR_ANGLE_DEGREES 60
 
 
 static int32_t draw_ignored_faces = 0;
@@ -213,7 +215,7 @@ static face_renderables_t renderable_faces;
 static
 void
 draw_face(
-  bvh_face_t* face, 
+  face_t* face, 
   vector3f* normal, 
   color_t* color, 
   int32_t thickness,
@@ -222,18 +224,18 @@ draw_face(
   const float mult = 0.1f;
   float vertices[12];
 
-  vertices[0 * 3 + 0] = face->points[0].data[0] + face->normal.data[0] * mult;
-  vertices[0 * 3 + 1] = face->points[0].data[1] + face->normal.data[1] * mult;
-  vertices[0 * 3 + 2] = face->points[0].data[2] + face->normal.data[2] * mult;
-  vertices[1 * 3 + 0] = face->points[1].data[0] + face->normal.data[0] * mult;
-  vertices[1 * 3 + 1] = face->points[1].data[1] + face->normal.data[1] * mult;
-  vertices[1 * 3 + 2] = face->points[1].data[2] + face->normal.data[2] * mult;
-  vertices[2 * 3 + 0] = face->points[2].data[0] + face->normal.data[0] * mult;
-  vertices[2 * 3 + 1] = face->points[2].data[1] + face->normal.data[1] * mult;
-  vertices[2 * 3 + 2] = face->points[2].data[2] + face->normal.data[2] * mult;
-  vertices[3 * 3 + 0] = face->points[0].data[0] + face->normal.data[0] * mult;
-  vertices[3 * 3 + 1] = face->points[0].data[1] + face->normal.data[1] * mult;
-  vertices[3 * 3 + 2] = face->points[0].data[2] + face->normal.data[2] * mult;
+  vertices[0 * 3 + 0] = face->points[0].data[0] + normal->data[0] * mult;
+  vertices[0 * 3 + 1] = face->points[0].data[1] + normal->data[1] * mult;
+  vertices[0 * 3 + 2] = face->points[0].data[2] + normal->data[2] * mult;
+  vertices[1 * 3 + 0] = face->points[1].data[0] + normal->data[0] * mult;
+  vertices[1 * 3 + 1] = face->points[1].data[1] + normal->data[1] * mult;
+  vertices[1 * 3 + 2] = face->points[1].data[2] + normal->data[2] * mult;
+  vertices[2 * 3 + 0] = face->points[2].data[0] + normal->data[0] * mult;
+  vertices[2 * 3 + 1] = face->points[2].data[1] + normal->data[1] * mult;
+  vertices[2 * 3 + 2] = face->points[2].data[2] + normal->data[2] * mult;
+  vertices[3 * 3 + 0] = face->points[0].data[0] + normal->data[0] * mult;
+  vertices[3 * 3 + 1] = face->points[0].data[1] + normal->data[1] * mult;
+  vertices[3 * 3 + 2] = face->points[0].data[2] + normal->data[2] * mult;
 
   if (disable_depth_debug) {
     disable_depth_test();
@@ -265,22 +267,40 @@ draw_renderable_faces(
     color_t normal_color;
     uint32_t gen_color = 0;
     if (renderable_faces.faces[i].color.data[3] == gen.data[3]) {
-      normal_color.data[0] = bvh->faces[index].normal.data[0] + 0.3f;
-      normal_color.data[1] = bvh->faces[index].normal.data[1] + 0.3f;
-      normal_color.data[2] = bvh->faces[index].normal.data[2] + 0.3f;
+      normal_color.data[0] = bvh->normals[index].data[0] + 0.3f;
+      normal_color.data[1] = bvh->normals[index].data[1] + 0.3f;
+      normal_color.data[2] = bvh->normals[index].data[2] + 0.3f;
       normal_color.data[3] = 1.f;
       gen_color = 1;
     }
 
     draw_face(
       bvh->faces + index, 
-      &bvh->faces[index].normal, 
+      bvh->normals + index, 
       gen_color ? &normal_color: &renderable_faces.faces[i].color, 
       renderable_faces.faces[i].thickness,
       pipeline);
   }
 
   renderable_faces.used = 0;
+}
+
+static
+uint32_t 
+is_floor(bvh_t* bvh, uint32_t index)
+{
+  float cosine_target = cosf(TO_RADIANS(FLOOR_ANGLE_DEGREES));
+  float normal_dot = bvh->normals[index].data[1];
+  return normal_dot > cosine_target;
+}
+
+static
+uint32_t 
+is_ceiling(bvh_t* bvh, uint32_t index)
+{
+  float cosine_target = cosf(TO_RADIANS(FLOOR_ANGLE_DEGREES));
+  float normal_dot = bvh->normals[index].data[1];
+  return normal_dot < -cosine_target;
 }
 
 // returns a copy of the camera with updated orientation
@@ -624,20 +644,20 @@ get_all_first_time_of_impact_filtered(
   collision_info[0] = info;
 
   populate_moving_capsule_aabb(&bounds, *capsule, &displacement, 1.025f);
-  query_intersection(bvh, &bounds, array, &used);
+  query_intersection_fixed_256(bvh, &bounds, array, &used);
 
   if (used && draw_collision_query) {
     for (uint32_t used_index = 0; used_index < used; ++used_index) {
       bvh_node_t* node = bvh->nodes + array[used_index];
-      for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
-        if (!bvh->faces[i].is_valid)
-          continue;
+      for (
+        uint32_t i = node->left_first, 
+        last = node->left_first + node->tri_count; 
+        i < last; ++i) {
 
         {
           color_t color = 
-            (bvh->faces[i].is_floor) ? green : 
-            (bvh->faces[i].is_ceiling ? white : gen);
-          int32_t thickness = (bvh->faces[i].is_floor) ? 3 : 2;
+            is_floor(bvh, i) ? green : (is_ceiling(bvh, i) ? white : gen);
+          int32_t thickness = is_floor(bvh, i) ? 3 : 2;
           add_face_to_render(i, color, thickness);
         }
       }
@@ -645,41 +665,36 @@ get_all_first_time_of_impact_filtered(
   }
 
   if (used) {
-    face_t face;
     float time;
 
     for (uint32_t used_index = 0; used_index < used; ++used_index) {
       bvh_node_t* node = bvh->nodes + array[used_index];
-      for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
-        if (!bvh->faces[i].is_valid)
-          continue;
+      for (
+        uint32_t i = node->left_first, 
+        last = node->left_first + node->tri_count; 
+        i < last; ++i) {
 
         if (to_filter && is_in_filtered(i, to_filter, filter_count))
           continue;
 
-        if (!bounds_intersect(&bounds, &bvh->faces[i].aabb))
+        if (!bounds_intersect(&bounds, bvh->bounds + i))
           continue;
-        
-        // TODO: we can avoid a copy here.
-        face.points[0] = bvh->faces[i].points[0];
-        face.points[1] = bvh->faces[i].points[1];
-        face.points[2] = bvh->faces[i].points[2];
 
         // ignore any face that does not intersect post displacement.
         if (
           !intersects_post_displacement(
             *capsule,
             displacement,
-            &face,
-            &bvh->faces[i].normal,
+            bvh->faces + i,
+            bvh->normals + i,
             iterations,
             limit_distance))
           continue;      
 
         time = find_capsule_face_intersection_time(
           *capsule,
-          &face,
-          &bvh->faces[i].normal,
+          bvh->faces + i,
+          bvh->normals + i,
           displacement,
           iterations,
           limit_distance);
@@ -694,11 +709,11 @@ get_all_first_time_of_impact_filtered(
           collision_info[collision_info_used].flags = COLLIDED_NONE;
 
           collision_info[collision_info_used].flags = 
-            bvh->faces[i].is_floor ? 
+            is_floor(bvh, i) ? 
             COLLIDED_FLOOR_FLAG : collision_info[collision_info_used].flags;
 
           collision_info[collision_info_used].flags = 
-            bvh->faces[i].is_ceiling ? 
+            is_ceiling(bvh, i) ? 
             COLLIDED_CEILING_FLAG : collision_info[collision_info_used].flags;
 
           collision_info[collision_info_used].flags = 
@@ -799,31 +814,25 @@ is_in_valid_space(
   uint32_t array[256];
   uint32_t used = 0;
   bvh_aabb_t bounds;
-  face_t face;
   capsule_face_classification_t classification;
   float length_sqrd;
 
   populate_capsule_aabb(&bounds, capsule, 1.025f);
-  query_intersection(bvh, &bounds, array, &used);
+  query_intersection_fixed_256(bvh, &bounds, array, &used);
 
   for (uint32_t used_index = 0; used_index < used; ++used_index) {
     bvh_node_t* node = bvh->nodes + array[used_index];
-    for (uint32_t i = node->first_prim; i < node->last_prim; ++i) {
-      if (!bvh->faces[i].is_valid)
+    for (
+      uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
+      i < last; ++i) {
+      if (!bounds_intersect(&bounds, bvh->bounds + i))
         continue;
-
-      if (!bounds_intersect(&bounds, &bvh->faces[i].aabb))
-        continue;
-
-      face.points[0] = bvh->faces[i].points[0];
-      face.points[1] = bvh->faces[i].points[1];
-      face.points[2] = bvh->faces[i].points[2];
 
       classification =
         classify_capsule_face(
           capsule,
-          &face,
-          &bvh->faces[i].normal,
+          bvh->faces + i,
+          bvh->normals + i,
           0,
           &penetration,
           &sphere_center);
@@ -851,33 +860,26 @@ ensure_in_valid_space(
   uint32_t array[256];
   uint32_t used = 0;
   bvh_aabb_t bounds;
-  face_t face;
   capsule_face_classification_t classification;
   float length_sqrd;
 
   populate_capsule_aabb(&bounds, capsule, 1.025f);
-  query_intersection(bvh, &bounds, array, &used);
+  query_intersection_fixed_256(bvh, &bounds, array, &used);
 
   for (uint32_t used_index = 0; used_index < used; ++used_index) {
     bvh_node_t* node = bvh->nodes + array[used_index];
-    for (uint32_t i = node->first_prim; i < node->last_prim; ++i) { 
-      if (!bvh->faces[i].is_valid)
-        continue;
+    for (
+      uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
+      i < last; ++i) {
 
-      if (!bounds_intersect(&bounds, &bvh->faces[i].aabb))
+      if (!bounds_intersect(&bounds, bvh->bounds + i))
         continue;
-
-      // TODO(khalil): we can avoid the copy by providing an alternative to
-      // the function or a cast the 3 float vecs to face_t.
-      face.points[0] = bvh->faces[i].points[0];
-      face.points[1] = bvh->faces[i].points[1];
-      face.points[2] = bvh->faces[i].points[2];
 
       classification =
         classify_capsule_face(
           capsule,
-          &face,
-          &bvh->faces[i].normal,
+          bvh->faces + i,
+          bvh->normals + i,
           0,
           &penetration,
           &sphere_center);
@@ -951,11 +953,8 @@ can_step_up(
 
     if (info.flags == COLLIDED_FLOOR_FLAG) {
        float t;
-       vector3f *normal = &bvh->faces[info.bvh_face_index].normal;
-       face_t face;
-       face.points[0] = bvh->faces[info.bvh_face_index].points[0];
-       face.points[1] = bvh->faces[info.bvh_face_index].points[1];
-       face.points[2] = bvh->faces[info.bvh_face_index].points[2];
+       vector3f *normal = bvh->normals + info.bvh_face_index;
+       face_t face = bvh->faces[info.bvh_face_index];
        face = get_extended_face(&face, capsule->radius * 2);
 
        {
@@ -1003,7 +1002,7 @@ classify_buckets(
   uint32_t bucket_index,
   uint32_t excluded_index)
 {
-  face_t face0, face1;
+  face_t* face0,* face1;
   vector3f* normal0;
   uint32_t index0, index1;
   point_halfspace_classification_t classify[3];
@@ -1023,18 +1022,18 @@ classify_buckets(
     // this is the plane, test the original bucket faces to check if they lie on 
     // both sides of the plane. 
     index0 = collision_info[bucket_offset[i]].bvh_face_index;
-    memcpy(face0.points, bvh->faces[index0].points, sizeof(face0.points));
-    normal0 = &bvh->faces[index0].normal;
+    face0 = bvh->faces + index0;
+    normal0 = bvh->normals + index0;
     faces_in_front = faces_to_back = 0;
 
     for (uint32_t j = 0; j < buckets[bucket_index]; ++j) {
       uint32_t points_in_front = 0, points_to_back = 0;
       index1 = collision_info[bucket_offset[bucket_index] + j].bvh_face_index;
-      memcpy(face1.points, bvh->faces[index1].points, sizeof(face1.points));
+      face1 = bvh->faces + index1;
 
-      classify[0] = classify_point_halfspace(&face0, normal0, face1.points + 0);
-      classify[1] = classify_point_halfspace(&face0, normal0, face1.points + 1);
-      classify[2] = classify_point_halfspace(&face0, normal0, face1.points + 2);
+      classify[0] = classify_point_halfspace(face0, normal0, face1->points + 0);
+      classify[1] = classify_point_halfspace(face0, normal0, face1->points + 1);
+      classify[2] = classify_point_halfspace(face0, normal0, face1->points + 2);
       
       points_in_front += (classify[0] == POINT_IN_POSITIVE_HALFSPACE) ? 1 : 0;
       points_in_front += (classify[1] == POINT_IN_POSITIVE_HALFSPACE) ? 1 : 0;
@@ -1142,7 +1141,7 @@ process_buckets(
     planes_classification_t result;
     int32_t parters[] = { -1, -1 };
     int32_t found = 1;
-    face_t face0, face1;
+    face_t* face0, * face1;
     vector3f* normal0, * normal1;
     uint32_t index0, index1;
     collision_flags_t flag = flags[flag_index];
@@ -1157,8 +1156,8 @@ process_buckets(
           continue;
         
         index0 = collision_info[bucket_offset[i]].bvh_face_index;
-        memcpy(face0.points, bvh->faces[index0].points, sizeof(face0.points));
-        normal0 = &bvh->faces[index0].normal;
+        face0 = bvh->faces + index0;
+        normal0 = bvh->normals + index0;
 
         for (uint32_t j = i + 1; j < bucket_count; ++j) {
           // again limit it to the same spec
@@ -1166,10 +1165,10 @@ process_buckets(
             continue;
 
           index1 = collision_info[bucket_offset[j]].bvh_face_index;
-          memcpy(face1.points, bvh->faces[index1].points, sizeof(face1.points));
-          normal1 = &bvh->faces[index1].normal;
+          face1 = bvh->faces + index1;
+          normal1 = bvh->normals + index1;
 
-          result = classify_planes(&face0, normal0, &face1, normal1);
+          result = classify_planes(face0, normal0, face1, normal1);
           if (result == PLANES_COLINEAR_OPPOSITE_FACING) {
             parters[0] = i;
             parters[1] = j; 
@@ -1244,17 +1243,15 @@ sort_in_buckets(
   intersection_info_t sorted[256];
   uint32_t sorted_index = 0;
   uint32_t copy_info_used = info_used;
-  bvh_face_t* a_bvh_face, *b_bvh_face;
-  face_t a, b;
-  vector3f* a_normal, *b_normal;
+  face_t* face_a, *face_b;
+  vector3f* normal_a, *normal_b;
   int64_t i, to_swap;
   intersection_info_t copy;
   planes_classification_t classify;
 
   while (info_used--) {
-    a_bvh_face = &bvh->faces[collision_info[info_used].bvh_face_index]; 
-    memcpy(a.points, a_bvh_face->points, sizeof(a.points));
-    a_normal = &a_bvh_face->normal;
+    face_a = bvh->faces + collision_info[info_used].bvh_face_index; 
+    normal_a = bvh->normals + collision_info[info_used].bvh_face_index;
     
     // copy into the first sorted index.
     sorted[sorted_index++] = collision_info[info_used];
@@ -1262,13 +1259,12 @@ sort_in_buckets(
 
     i = to_swap = (int64_t)info_used - 1;
     for (; i >= 0; --i) {
-      b_bvh_face = &bvh->faces[collision_info[i].bvh_face_index];
-      memcpy(b.points, b_bvh_face->points, sizeof(b.points));
-      b_normal = &b_bvh_face->normal;
+      face_b = bvh->faces + collision_info[i].bvh_face_index;
+      normal_b = bvh->normals + collision_info[i].bvh_face_index;
 
       // if colinear copy into the first sorted index, swap it with to_swap 
       // index and decrease info_used.
-      classify = classify_planes(&a, a_normal, &b, b_normal);
+      classify = classify_planes(face_a, normal_a, face_b, normal_b);
       if (classify == PLANES_COLINEAR) {
         sorted[sorted_index++] = collision_info[i];
         buckets[bucket_count - 1]++;
@@ -1313,11 +1309,11 @@ get_averaged_normal(
   for (uint32_t i = 0, index = 0, face_i, is_wall; i < bucket_count; ++i) {
     is_wall = 0;
     face_i = collision_info[index].bvh_face_index;
-    normal = bvh->faces[face_i].normal;
+    normal = bvh->normals[face_i];
 
-    if (bvh->faces[face_i].is_floor)
+    if (is_floor(bvh, face_i))
       *flags |= COLLIDED_FLOOR_FLAG;
-    else if (bvh->faces[face_i].is_ceiling)
+    else if (is_ceiling(bvh, face_i))
       *flags |= COLLIDED_CEILING_FLAG;
     else {
       *flags |= COLLIDED_WALLS_FLAG;
@@ -1341,8 +1337,8 @@ get_averaged_normal(
        for (uint32_t k = index; k < (index + buckets[i]); ++k) {
          uint32_t d_face_i = collision_info[k].bvh_face_index;
          color_t color =
-           (bvh->faces[d_face_i].is_floor) ? green :
-           (bvh->faces[d_face_i].is_ceiling ? white : gen);
+           is_floor(bvh, d_face_i) ? green :
+           (is_ceiling(bvh, d_face_i) ? white : gen);
          add_face_to_render(d_face_i, color, 2);
        }
      }
@@ -1368,7 +1364,7 @@ trim_backfacing(
 
   for (uint32_t i = 0, index = 0; i < info_used; ++i) {
     index = collision_info[i].bvh_face_index;
-    normal = &bvh->faces[index].normal;
+    normal = bvh->normals + index;
     if (dot_product_v3f(velocity, normal) > EPSILON_FLOAT_LOW_PRECISION)
       continue;
     else
@@ -1524,11 +1520,8 @@ handle_vertical_velocity(
 
     if (info.flags == COLLIDED_FLOOR_FLAG) {
       float t;
-      vector3f* normal = &bvh->faces[info.bvh_face_index].normal;
-      face_t face;
-      face.points[0] = bvh->faces[info.bvh_face_index].points[0];
-      face.points[1] = bvh->faces[info.bvh_face_index].points[1];
-      face.points[2] = bvh->faces[info.bvh_face_index].points[2];
+      vector3f* normal = bvh->normals + info.bvh_face_index;
+      face_t face = bvh->faces[info.bvh_face_index];
       face = get_extended_face(&face, capsule->radius * 2);
 
       t = find_capsule_face_intersection_time(
@@ -1561,8 +1554,7 @@ handle_vertical_velocity(
       {
         uint32_t i = info.bvh_face_index;
         color_t color = 
-          (bvh->faces[i].is_floor) ? green : 
-          (bvh->faces[i].is_ceiling ? white : gen);
+          is_floor(bvh, i) ? green : (is_ceiling(bvh, i)? white : gen);
         add_face_to_render(i, color, 1);
       }
     }

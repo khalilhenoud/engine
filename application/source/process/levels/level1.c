@@ -21,13 +21,13 @@
 #include <entity/c/scene/scene.h>
 #include <entity/c/scene/scene_utils.h>
 #include <entity/c/level/level.h>
+#include <entity/c/spatial/bvh.h>
+#include <entity/c/spatial/bvh_utils.h>
 #include <application/process/text/utils.h>
 #include <application/process/logic/camera.h>
-#include <application/process/spatial/bvh.h>
-#include <application/process/spatial/bvh_utils.h>
 #include <application/process/render_data/utils.h>
 #include <application/converters/to_render_data.h>
-#include <application/converters/bin_to_scene_to_bin.h>
+#include <application/converters/bin_to_scene.h>
 #include <application/converters/to_render_data.h>
 
 #define TILDE   0xC0

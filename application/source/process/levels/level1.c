@@ -70,12 +70,13 @@ load_level(
 
   // guaranteed to exist, same with the font.
   camera = scene_render_data->camera_data.cameras;
+  camera->position = scene->metadata.player_start;
 
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
   font_image_id = scene_render_data->font_data.texture_ids[0];
 
-  bvh = create_bvh_from_scene(scene, allocator);
+  bvh = scene->bvh_repo.bvhs + 0;
 
   exit_level = 0;
   disable_input = 0;
@@ -178,7 +179,6 @@ unload_level(const allocator_t* allocator)
 {
   free_scene(scene, allocator);
   cleanup_packaged_render_data(scene_render_data, allocator);
-  free_bvh(bvh, allocator);
 }
 
 uint32_t

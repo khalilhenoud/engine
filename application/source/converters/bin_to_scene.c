@@ -30,10 +30,27 @@
 #include <entity/c/scene/camera_utils.h>
 #include <entity/c/scene/light.h>
 #include <entity/c/scene/light_utils.h>
+#include <entity/c/spatial/bvh.h>
+#include <entity/c/spatial/bvh_utils.h>
 #include <serializer/serializer_scene_data.h>
 #include <serializer/serializer_bin.h>
 #include <application/converters/bin_to_scene.h>
 
+
+static
+void
+copy_metadata(
+  serializer_scene_data_t* scene, 
+  scene_t* target, 
+  const allocator_t* allocator)
+{
+  assert(scene && target && allocator);
+
+  {
+    target->metadata.player_start = scene->metadata.player_start;
+    target->metadata.player_angle = scene->metadata.player_angle;
+  }
+}
 
 static
 void
@@ -374,6 +391,45 @@ copy_camera_data(
   }
 }
 
+static
+void
+copy_bvh_data(
+  serializer_scene_data_t* scene,
+  scene_t* target,
+  const allocator_t* allocator)
+{
+  assert(scene && target && allocator);
+
+  {
+    target->bvh_repo.count = scene->bvh_repo.used;
+    target->bvh_repo.bvhs = NULL;
+
+    if (target->bvh_repo.count) { 
+      target->bvh_repo.bvhs = allocate_bvh_array(
+        scene->bvh_repo.used, allocator);
+
+      for (uint32_t i = 0; i < target->bvh_repo.count; ++i) {
+        bvh_t *bvh = target->bvh_repo.bvhs + i;
+        serializer_bvh_t *source = scene->bvh_repo.data + i;
+
+        // move the pointers around.
+        bvh->count = source->count;
+        bvh->faces = source->faces;
+        source->faces = NULL;
+        bvh->normals = source->normals;
+        source->normals = NULL;
+        bvh->bounds = (bvh_aabb_t*)source->bounds;
+        source->bounds = NULL;
+
+        bvh->nodes_used = source->nodes_used;
+        bvh->nodes = (bvh_node_t*)source->nodes;
+        source->nodes = NULL;
+      }
+    }
+  }
+}
+
+static
 scene_t*
 bin_to_scene(
   serializer_scene_data_t* scene,
@@ -384,6 +440,7 @@ bin_to_scene(
   
   {
     scene_t* runtime_scene = create_scene("current", allocator);
+    copy_metadata(scene, runtime_scene, allocator);
     copy_light_data(scene, runtime_scene, allocator);
     copy_texture_data(scene, runtime_scene, allocator);
     copy_material_data(scene, runtime_scene, allocator);
@@ -391,6 +448,7 @@ bin_to_scene(
     copy_node_data(scene, runtime_scene, allocator);
     copy_font_data(scene, runtime_scene, allocator);
     copy_camera_data(scene, runtime_scene, allocator);
+    copy_bvh_data(scene, runtime_scene, allocator);
     return runtime_scene;
   }
 }

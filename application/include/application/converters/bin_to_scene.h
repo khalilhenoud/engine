@@ -19,14 +19,8 @@ extern "C" {
 #include <entity/c/mesh/color.h>
 
 
-typedef struct serializer_scene_data_t serializer_scene_data_t;
 typedef struct scene_t scene_t;
 typedef struct allocator_t allocator_t;
-
-scene_t*
-bin_to_scene(
-  serializer_scene_data_t* scene, 
-  const allocator_t* allocator);
 
 scene_t*
 load_scene_from_bin(

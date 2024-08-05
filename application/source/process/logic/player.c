@@ -1,5 +1,5 @@
 /**
- * @file camera.c
+ * @file player.c
  * @author khalilhenoud@gmail.com
  * @brief first attempt at decompose logic into separate files.
  * @version 0.1
@@ -18,7 +18,8 @@
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <application/input.h>
-#include <application/process/logic/camera.h>
+#include <application/process/logic/player.h>
+#include <application/process/logic/player_collision_utils.h>
 #include <math/c/capsule.h>
 #include <math/c/segment.h>
 #include <math/c/face.h>
@@ -58,8 +59,6 @@
 
 #define REFERENCE_FRAME_TIME      0.033f
 
-#define FLOOR_ANGLE_DEGREES 60
-
 
 static int32_t draw_ignored_faces = 0;
 static int32_t disable_depth_debug = 0;
@@ -74,6 +73,7 @@ static const float gravity_acc = 1.f;
 static const float friction_dec = 2.f;
 static const float friction_k = 1.f;
 static const float jump_speed = 10.f;
+static capsule_t capsule = { { 0.f, 0.f, 0.f }, 12.f, 16.f };
 
 // 0 is walking, 1 is flying (not yet used).
 static uint32_t flying = 0;
@@ -84,21 +84,6 @@ static color_t blue = { 0.f, 0.f, 1.f, 1.f };
 static color_t yellow = { 1.f, 1.f, 0.f, 1.f };
 static color_t white = { 1.f, 1.f, 1.f, 1.f };
 static color_t gen = { 1.f, 1.f, 1.f, -1.f };
-
-typedef
-enum {
-  COLLIDED_FLOOR_FLAG = 1 << 0,
-  COLLIDED_CEILING_FLAG = 1 << 1,
-  COLLIDED_WALLS_FLAG = 1 << 2,
-  COLLIDED_NONE = 1 << 3
-} collision_flags_t;
-
-typedef
-struct {
-  float time;
-  collision_flags_t flags;
-  uint32_t bvh_face_index;
-} intersection_info_t;
 
 typedef
 struct {
@@ -195,112 +180,6 @@ draw_renderable_text(
   }
 
   renderable_text.used = 0;
-}
-
-typedef
-struct {
-  uint32_t index;
-  color_t color;
-  int32_t thickness;
-} renderable_face_properties_t;
-
-typedef
-struct {
-  renderable_face_properties_t faces[2048];
-  uint32_t used;
-} face_renderables_t;
-
-static face_renderables_t renderable_faces; 
-
-static
-void
-draw_face(
-  face_t* face, 
-  vector3f* normal, 
-  color_t* color, 
-  int32_t thickness,
-  pipeline_t* pipeline)
-{
-  const float mult = 0.1f;
-  float vertices[12];
-
-  vertices[0 * 3 + 0] = face->points[0].data[0] + normal->data[0] * mult;
-  vertices[0 * 3 + 1] = face->points[0].data[1] + normal->data[1] * mult;
-  vertices[0 * 3 + 2] = face->points[0].data[2] + normal->data[2] * mult;
-  vertices[1 * 3 + 0] = face->points[1].data[0] + normal->data[0] * mult;
-  vertices[1 * 3 + 1] = face->points[1].data[1] + normal->data[1] * mult;
-  vertices[1 * 3 + 2] = face->points[1].data[2] + normal->data[2] * mult;
-  vertices[2 * 3 + 0] = face->points[2].data[0] + normal->data[0] * mult;
-  vertices[2 * 3 + 1] = face->points[2].data[1] + normal->data[1] * mult;
-  vertices[2 * 3 + 2] = face->points[2].data[2] + normal->data[2] * mult;
-  vertices[3 * 3 + 0] = face->points[0].data[0] + normal->data[0] * mult;
-  vertices[3 * 3 + 1] = face->points[0].data[1] + normal->data[1] * mult;
-  vertices[3 * 3 + 2] = face->points[0].data[2] + normal->data[2] * mult;
-
-  if (disable_depth_debug) {
-    disable_depth_test();
-    draw_lines(vertices, 4, *color, thickness, pipeline);
-    enable_depth_test();
-  } else
-    draw_lines(vertices, 4, *color, thickness, pipeline);
-}
-
-static
-void
-add_face_to_render(uint32_t index, color_t color, int32_t thickness)
-{
-  renderable_faces.faces[renderable_faces.used].index = index;
-  renderable_faces.faces[renderable_faces.used].color = color;
-  renderable_faces.faces[renderable_faces.used].thickness = thickness;
-  renderable_faces.used++;
-  renderable_faces.used %= 2048;
-}
-
-static
-void
-draw_renderable_faces(
-  bvh_t* bvh,
-  pipeline_t* pipeline)
-{
-  for (uint32_t i = 0; i < renderable_faces.used; ++i) {
-    uint32_t index = renderable_faces.faces[i].index;
-    color_t normal_color;
-    uint32_t gen_color = 0;
-    if (renderable_faces.faces[i].color.data[3] == gen.data[3]) {
-      normal_color.data[0] = bvh->normals[index].data[0] + 0.3f;
-      normal_color.data[1] = bvh->normals[index].data[1] + 0.3f;
-      normal_color.data[2] = bvh->normals[index].data[2] + 0.3f;
-      normal_color.data[3] = 1.f;
-      gen_color = 1;
-    }
-
-    draw_face(
-      bvh->faces + index, 
-      bvh->normals + index, 
-      gen_color ? &normal_color: &renderable_faces.faces[i].color, 
-      renderable_faces.faces[i].thickness,
-      pipeline);
-  }
-
-  renderable_faces.used = 0;
-}
-
-static
-uint32_t 
-is_floor(bvh_t* bvh, uint32_t index)
-{
-  float cosine_target = cosf(TO_RADIANS(FLOOR_ANGLE_DEGREES));
-  float normal_dot = bvh->normals[index].data[1];
-  return normal_dot > cosine_target;
-}
-
-static
-uint32_t 
-is_ceiling(bvh_t* bvh, uint32_t index)
-{
-  float cosine_target = cosf(TO_RADIANS(FLOOR_ANGLE_DEGREES));
-  float normal_dot = bvh->normals[index].data[1];
-  return normal_dot < -cosine_target;
 }
 
 // returns a copy of the camera with updated orientation
@@ -539,77 +418,6 @@ handle_macro_keys(camera_t* camera)
 }
 
 static
-void
-populate_capsule_aabb(
-  bvh_aabb_t* aabb, 
-  const capsule_t* capsule, 
-  const float multiplier)
-{
-  aabb->min_max[0] = capsule->center;
-  aabb->min_max[1] = capsule->center;
-
-  {
-    vector3f min;
-    vector3f_set_3f(
-      &min,
-      -capsule->radius * multiplier,
-      (-capsule->half_height - capsule->radius) * multiplier,
-      -capsule->radius * multiplier);
-    add_set_v3f(aabb->min_max, &min);
-    mult_set_v3f(&min, -1.f);
-    add_set_v3f(aabb->min_max + 1, &min);
-  }
-}
-
-static
-void
-populate_moving_capsule_aabb(
-  bvh_aabb_t* aabb, 
-  capsule_t capsule, 
-  const vector3f* displacement, 
-  const float multiplier)
-{
-  bvh_aabb_t start_end[2];
-  populate_capsule_aabb(start_end + 0, &capsule, multiplier);
-  add_set_v3f(&capsule.center, displacement);
-  populate_capsule_aabb(start_end + 1, &capsule, multiplier);
-  merge_aabb(aabb, start_end + 0, start_end + 1);
-}
-
-static
-uint32_t
-is_in_filtered(
-  uint32_t index, 
-  const uint32_t to_filter[1024],
-  uint32_t filter_count)
-{
-  for (uint32_t i = 0; i < filter_count; ++i) 
-    if (to_filter[i] == index)
-      return 1;
-  return 0;
-}
-
-static
-int32_t
-intersects_post_displacement(
-  capsule_t capsule,
-  const vector3f displacement,
-  const face_t* face,
-  const vector3f* normal,
-  const uint32_t iterations,
-  const float limit_distance)
-{
-  vector3f penetration;
-  point3f sphere_center;
-  capsule_face_classification_t classification;
-
-  add_set_v3f(&capsule.center, &displacement);
-  classification = classify_capsule_face(
-    &capsule, face, normal, 0, &penetration, &sphere_center);
-  return classification != CAPSULE_FACE_NO_COLLISION;
-}
-
-static
 int32_t
 get_floor_info(
   intersection_info_t collision_info[256], 
@@ -620,274 +428,6 @@ get_floor_info(
       return (int32_t)i;
   
   return -1;
-}
-
-static
-uint32_t
-get_all_first_time_of_impact_filtered(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
-  intersection_info_t collision_info[256],
-  const uint32_t to_filter[1024],
-  uint32_t filter_count,
-  const uint32_t iterations,
-  const float limit_distance)
-{
-  uint32_t array[256];
-  uint32_t used = 0;
-  uint32_t collision_info_used = 0;
-  bvh_aabb_t bounds;
-  intersection_info_t info = { 1.f, COLLIDED_NONE, (uint32_t)-1 };
-
-  // initialize the first element.
-  collision_info[0] = info;
-
-  populate_moving_capsule_aabb(&bounds, *capsule, &displacement, 1.025f);
-  query_intersection_fixed_256(bvh, &bounds, array, &used);
-
-  if (used && draw_collision_query) {
-    for (uint32_t used_index = 0; used_index < used; ++used_index) {
-      bvh_node_t* node = bvh->nodes + array[used_index];
-      for (
-        uint32_t i = node->left_first, 
-        last = node->left_first + node->tri_count; 
-        i < last; ++i) {
-
-        {
-          color_t color = 
-            is_floor(bvh, i) ? green : (is_ceiling(bvh, i) ? white : gen);
-          int32_t thickness = is_floor(bvh, i) ? 3 : 2;
-          add_face_to_render(i, color, thickness);
-        }
-      }
-    }
-  }
-
-  if (used) {
-    float time;
-
-    for (uint32_t used_index = 0; used_index < used; ++used_index) {
-      bvh_node_t* node = bvh->nodes + array[used_index];
-      for (
-        uint32_t i = node->left_first, 
-        last = node->left_first + node->tri_count; 
-        i < last; ++i) {
-
-        if (to_filter && is_in_filtered(i, to_filter, filter_count))
-          continue;
-
-        if (!bounds_intersect(&bounds, bvh->bounds + i))
-          continue;
-
-        // ignore any face that does not intersect post displacement.
-        if (
-          !intersects_post_displacement(
-            *capsule,
-            displacement,
-            bvh->faces + i,
-            bvh->normals + i,
-            iterations,
-            limit_distance))
-          continue;      
-
-        time = find_capsule_face_intersection_time(
-          *capsule,
-          bvh->faces + i,
-          bvh->normals + i,
-          displacement,
-          iterations,
-          limit_distance);
-
-        if (
-          time < collision_info[0].time || 
-          IS_SAME_MP(time, collision_info[0].time)) {
-          collision_info_used = 
-            time < collision_info[0].time ? 0 : collision_info_used;
-            
-          collision_info[collision_info_used].time = time;
-          collision_info[collision_info_used].flags = COLLIDED_NONE;
-
-          collision_info[collision_info_used].flags = 
-            is_floor(bvh, i) ? 
-            COLLIDED_FLOOR_FLAG : collision_info[collision_info_used].flags;
-
-          collision_info[collision_info_used].flags = 
-            is_ceiling(bvh, i) ? 
-            COLLIDED_CEILING_FLAG : collision_info[collision_info_used].flags;
-
-          collision_info[collision_info_used].flags = 
-            collision_info[collision_info_used].flags == COLLIDED_NONE ? 
-            COLLIDED_WALLS_FLAG : collision_info[collision_info_used].flags;
-
-          collision_info[collision_info_used].bvh_face_index = i;
-          collision_info_used++;
-          assert(collision_info_used < 256);
-        }
-      }
-    }
-  }
-
-  return collision_info_used;
-}
-
-static
-uint32_t
-get_all_first_time_of_impact(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
-  intersection_info_t collision_info[256],
-  const uint32_t iterations,
-  const float limit_distance)
-{
-  return 
-    get_all_first_time_of_impact_filtered(
-      bvh, 
-      capsule, 
-      displacement, 
-      collision_info,
-      NULL, 
-      0, 
-      iterations, 
-      limit_distance);
-}
-
-static
-intersection_info_t
-get_any_first_time_of_impact_filtered(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
-  const uint32_t to_filter[1024],
-  uint32_t filter_count,
-  const uint32_t iterations,
-  const float limit_distance)
-{
-  uint32_t info_used = 0;
-  intersection_info_t collision_info[256];
-  collision_info[0].time = 1.f;
-  collision_info[0].flags = COLLIDED_NONE;
-  collision_info[0].bvh_face_index = (uint32_t)-1;
-
-  get_all_first_time_of_impact_filtered(
-    bvh, 
-    capsule, 
-    displacement, 
-    collision_info,
-    to_filter,
-    filter_count,
-    iterations, 
-    limit_distance);
-
-  return collision_info[0];
-}
-
-static
-intersection_info_t
-get_any_first_time_of_impact(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
-  const uint32_t iterations,
-  const float limit_distance)
-{
-  return 
-    get_any_first_time_of_impact_filtered(
-      bvh, 
-      capsule, 
-      displacement,
-      NULL, 
-      0, 
-      iterations, 
-      limit_distance);
-}
-
-static
-int32_t
-is_in_valid_space(
-  bvh_t* bvh,
-  capsule_t* capsule)
-{
-  vector3f penetration;
-  point3f sphere_center;
-  uint32_t array[256];
-  uint32_t used = 0;
-  bvh_aabb_t bounds;
-  capsule_face_classification_t classification;
-  float length_sqrd;
-
-  populate_capsule_aabb(&bounds, capsule, 1.025f);
-  query_intersection_fixed_256(bvh, &bounds, array, &used);
-
-  for (uint32_t used_index = 0; used_index < used; ++used_index) {
-    bvh_node_t* node = bvh->nodes + array[used_index];
-    for (
-      uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
-      i < last; ++i) {
-      if (!bounds_intersect(&bounds, bvh->bounds + i))
-        continue;
-
-      classification =
-        classify_capsule_face(
-          capsule,
-          bvh->faces + i,
-          bvh->normals + i,
-          0,
-          &penetration,
-          &sphere_center);
-
-      length_sqrd = length_squared_v3f(&penetration);
-
-      if (
-        classification != CAPSULE_FACE_NO_COLLISION && 
-        !IS_ZERO_LP(length_sqrd))
-        return 0;
-    }
-  }
-
-  return 1;
-}
-
-static
-void
-ensure_in_valid_space(
-  bvh_t* bvh,
-  capsule_t* capsule)
-{
-  vector3f penetration;
-  point3f sphere_center;
-  uint32_t array[256];
-  uint32_t used = 0;
-  bvh_aabb_t bounds;
-  capsule_face_classification_t classification;
-  float length_sqrd;
-
-  populate_capsule_aabb(&bounds, capsule, 1.025f);
-  query_intersection_fixed_256(bvh, &bounds, array, &used);
-
-  for (uint32_t used_index = 0; used_index < used; ++used_index) {
-    bvh_node_t* node = bvh->nodes + array[used_index];
-    for (
-      uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
-      i < last; ++i) {
-
-      if (!bounds_intersect(&bounds, bvh->bounds + i))
-        continue;
-
-      classification =
-        classify_capsule_face(
-          capsule,
-          bvh->faces + i,
-          bvh->normals + i,
-          0,
-          &penetration,
-          &sphere_center);
-
-      if (classification != CAPSULE_FACE_NO_COLLISION)
-        add_set_v3f(&capsule->center, &penetration);
-    }
-  }
 }
 
 static
@@ -945,7 +485,8 @@ can_step_up(
       displacement, 
       collision_info, 
       16, 
-      EPSILON_FLOAT_MIN_PRECISION);
+      EPSILON_FLOAT_MIN_PRECISION,
+      draw_collision_query);
 
     floor_info_i = get_floor_info(collision_info, info_used);
     if (floor_info_i != -1)
@@ -1423,7 +964,8 @@ handle_collision_detection(
       velocity,
       collision_info,  
       iterations, 
-      limit_distance);
+      limit_distance,
+      draw_collision_query);
 
     info_used = process_collision_info(
       bvh, &velocity, collision_info, info_used);
@@ -1512,7 +1054,8 @@ handle_vertical_velocity(
       displacement, 
       collision_info, 
       iterations, 
-      limit_distance);
+      limit_distance,
+      draw_collision_query);
 
     floor_info_i = get_floor_info(collision_info, info_used);
     if (floor_info_i != -1)
@@ -1573,8 +1116,23 @@ handle_vertical_velocity(
   return velocity;
 }
 
+////////////////////////////////////////////////////////////////////////////////
 void
-camera_update(
+player_init(
+  point3f player_start,
+  float player_angle,
+  camera_t* camera,
+  bvh_t* bvh)
+{
+  capsule.center = player_start;
+  camera->position = player_start;
+
+  if (!is_in_valid_space(bvh, &capsule)) 
+    ensure_in_valid_space(bvh, &capsule);
+}
+
+void
+player_update(
   float delta_time,
   camera_t* camera,
   bvh_t* bvh,
@@ -1582,18 +1140,12 @@ camera_update(
   font_runtime_t* font,
   const uint32_t font_image_id)
 {
-  static capsule_t capsule = { { 0.f, 0.f, 0.f }, 12.f, 16.f };
   static uint32_t on_solid_floor = 0;
 
   // TODO: cap the detla time when debugging.
   delta_time = fmin(delta_time, REFERENCE_FRAME_TIME);
 
   handle_macro_keys(camera);
-
-  capsule.center = camera->position;
-  // TODO: this should be called from level1.c, remove it.
-  if (!is_in_valid_space(bvh, &capsule)) 
-    ensure_in_valid_space(bvh, &capsule);
   
   cursor_info_t info = update_cursor(delta_time);
   camera_t oriented = get_camera_orientation(
@@ -1684,6 +1236,7 @@ camera_update(
     add_text_to_render(
       "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, (y+=20.f));
     draw_renderable_text(pipeline, font, font_image_id);
-    draw_renderable_faces(bvh, pipeline);
+    
+    draw_collision_debug_data(bvh, pipeline, disable_depth_debug);
   }
 }

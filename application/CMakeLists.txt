@@ -14,9 +14,10 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/converters/bin_to_scene.c
       ./source/converters/png_to_image.c
       ./source/process/render_data/utils.c
-      ./source/process/logic/camera.c
+      ./source/process/logic/player.c
+      ./source/process/logic/player_collision_utils.c
       ./source/process/text/utils.c
-      ./source/process/levels/level1.c
+      ./source/process/levels/generic_level.c
       ./source/process/levels/room_select.c
 			./source/application.cpp
 			./source/main.cpp

@@ -1,5 +1,5 @@
 /**
- * @file camera.h
+ * @file player.h
  * @author khalilhenoud@gmail.com
  * @brief first attempt at decompose logic into separate files.
  * @version 0.1
@@ -16,6 +16,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <math/c/vector3f.h>
 
 
 typedef struct bvh_t bvh_t;
@@ -25,19 +26,20 @@ typedef struct pipeline_t pipeline_t;
 typedef struct font_runtime_t font_runtime_t;
 
 void
-camera_update(
+player_init(
+  point3f player_start,
+  float player_angle,
+  camera_t* camera,
+  bvh_t* bvh);
+
+void
+player_update(
   float delta_time,
   camera_t* camera, 
   bvh_t* bvh,
   pipeline_t* pipeline, 
   font_runtime_t* font, 
   const uint32_t font_image_id);
-
-uint32_t
-is_falling(
-  capsule_t capsule,
-  bvh_t* bvh,
-  vector3f* to_add);
 
 #ifdef __cplusplus
 }

@@ -24,7 +24,7 @@
 #include <entity/c/spatial/bvh.h>
 #include <entity/c/spatial/bvh_utils.h>
 #include <application/process/text/utils.h>
-#include <application/process/logic/camera.h>
+#include <application/process/logic/player.h>
 #include <application/process/render_data/utils.h>
 #include <application/converters/to_render_data.h>
 #include <application/converters/bin_to_scene.h>
@@ -70,7 +70,6 @@ load_level(
 
   // guaranteed to exist, same with the font.
   camera = scene_render_data->camera_data.cameras;
-  camera->position = scene->metadata.player_start;
 
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
@@ -100,6 +99,12 @@ load_level(
   show_cursor(0);
 
   initialize_controller(&controller, 60, 1u);
+
+  player_init(
+    scene->metadata.player_start, 
+    scene->metadata.player_angle, 
+    camera, 
+    bvh);
 }
 
 void
@@ -121,7 +126,7 @@ update_level(const allocator_t* allocator)
     }
 
     if (!disable_input) {
-      camera_update(
+      player_update(
         dt_seconds, 
         camera, 
         bvh,
@@ -188,7 +193,7 @@ should_unload(void)
 }
 
 void
-construct_level1(level_t* level)
+construct_generic_level(level_t* level)
 {
   assert(level);
 

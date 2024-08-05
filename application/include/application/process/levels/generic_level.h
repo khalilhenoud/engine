@@ -1,5 +1,5 @@
 /**
- * @file level1.h
+ * @file generic_level.h
  * @author khalilhenoud@gmail.com
  * @brief 
  * @version 0.1
@@ -8,8 +8,8 @@
  * @copyright Copyright (c) 2024
  * 
  */
-#ifndef APP_LEVEL1_H
-#define APP_LEVEL1_H
+#ifndef APP_GENERIC_LEVEL_H
+#define APP_GENERIC_LEVEL_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,7 +20,7 @@ typedef struct level_t level_t;
 
 // TODO: implement a factory construction system, this is why we need it.
 void
-construct_level1(level_t* level);
+construct_generic_level(level_t* level);
 
 #ifdef __cplusplus
 }

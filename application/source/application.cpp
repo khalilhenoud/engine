@@ -16,7 +16,7 @@
 #include <application/application.h>
 
 #include <entity/c/level/level.h>
-#include <application/process/levels/level1.h>
+#include <application/process/levels/generic_level.h>
 #include <application/process/levels/room_select.h>
 
 
@@ -108,7 +108,7 @@ construct_level()
   if (in_level_select)
     construct_level_selector(&level);
   else
-    construct_level1(&level);
+    construct_generic_level(&level);
 } 
 
 application::application(

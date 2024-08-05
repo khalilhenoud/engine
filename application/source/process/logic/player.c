@@ -182,6 +182,7 @@ draw_renderable_text(
   renderable_text.used = 0;
 }
 
+////////////////////////////////////////////////////////////////////////////////
 // returns a copy of the camera with updated orientation
 static
 camera_t

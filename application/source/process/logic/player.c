@@ -87,46 +87,6 @@ static color_t gen = { 1.f, 1.f, 1.f, -1.f };
 
 typedef
 struct {
-  float delta_x;
-  float delta_y;
-  float previous_x;
-  float previous_y;
-  float current_x;
-  float current_y;
-} cursor_info_t;
-
-static
-cursor_info_t
-update_cursor(float delta_time)
-{
-  static int32_t previous_x = -1;
-  static int32_t previous_y = -1;
-  int32_t current_x, current_y;
-  cursor_info_t info;
-
-  // center the mouse cursor at first call.
-  if (previous_x == -1) {
-    center_cursor();
-    get_position(&current_x, &current_y);
-    previous_x = current_x;
-    previous_y = current_y;
-  } else
-    get_position(&current_x, &current_y);
-
-  // reset the cursor position.
-  set_position(previous_x, previous_y);
-
-  info.delta_x = current_x - previous_x;
-  info.delta_y = current_y - previous_y;
-  info.current_x = current_x;
-  info.current_y = current_y;
-  info.previous_x = previous_x;
-  info.previous_y = previous_y;
-  return info;
-}
-
-typedef
-struct {
   char text[512];
   color_t color;
   float x, y;
@@ -183,6 +143,46 @@ draw_renderable_text(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+typedef
+struct {
+  float delta_x;
+  float delta_y;
+  float previous_x;
+  float previous_y;
+  float current_x;
+  float current_y;
+} cursor_info_t;
+
+static
+cursor_info_t
+update_cursor(float delta_time)
+{
+  static int32_t previous_x = -1;
+  static int32_t previous_y = -1;
+  int32_t current_x, current_y;
+  cursor_info_t info;
+
+  // center the mouse cursor at first call.
+  if (previous_x == -1) {
+    center_cursor();
+    get_position(&current_x, &current_y);
+    previous_x = current_x;
+    previous_y = current_y;
+  } else
+    get_position(&current_x, &current_y);
+
+  // reset the cursor position.
+  set_position(previous_x, previous_y);
+
+  info.delta_x = current_x - previous_x;
+  info.delta_y = current_y - previous_y;
+  info.current_x = current_x;
+  info.current_y = current_y;
+  info.previous_x = previous_x;
+  info.previous_y = previous_y;
+  return info;
+}
+
 // returns a copy of the camera with updated orientation
 static
 camera_t

@@ -13,7 +13,7 @@
 #include <string.h>
 #include <application/converters/png_to_image.h>
 #include <library/allocator/allocator.h>
-#include <library/string/string.h>
+#include <library/string/cstring.h>
 #include <library/string/fixed_string.h>
 #include <loaders/loader_png.h>
 #include <entity/c/runtime/texture.h>

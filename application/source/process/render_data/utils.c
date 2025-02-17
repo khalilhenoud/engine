@@ -9,7 +9,7 @@
  * 
  */
 #include <assert.h>
-#include <library/string/string.h>
+#include <library/string/cstring.h>
 #include <application/process/render_data/utils.h>
 #include <application/converters/to_render_data.h>
 #include <entity/c/runtime/texture.h>
@@ -41,7 +41,7 @@ prep_packaged_render_data(
   // load the images and upload them to the gpu.
   for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
     texture_runtime_t* runtime = render_data->mesh_data.texture_runtimes + i;
-    if (runtime->texture.path && runtime->texture.path->size) {
+    if (runtime->texture.path && runtime->texture.path->length) {
       load_image_buffer(texture_path, runtime, allocator);
       render_data->mesh_data.texture_ids[i] = upload_to_gpu(
         runtime->texture.path->str,
@@ -62,7 +62,7 @@ prep_packaged_render_data(
     // TODO: Ultimately we need a system for this, we need to be able to handle
     // deduplication.
     texture_runtime_t* runtime = render_data->font_data.texture_runtimes + i;
-    if (runtime->texture.path && runtime->texture.path->size) {
+    if (runtime->texture.path && runtime->texture.path->length) {
       load_image_buffer(data_set, runtime, allocator);
       render_data->font_data.texture_ids[i] = upload_to_gpu(
         runtime->texture.path->str,

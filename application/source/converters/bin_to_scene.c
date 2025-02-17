@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <library/allocator/allocator.h>
-#include <library/string/string.h>
+#include <library/string/cstring.h>
 #include <entity/c/scene/node.h>
 #include <entity/c/scene/node_utils.h>
 #include <entity/c/mesh/mesh.h>
@@ -36,6 +36,16 @@
 #include <serializer/serializer_bin.h>
 #include <application/converters/bin_to_scene.h>
 
+
+static
+cstring_t *
+allocate_string(const char *ptr, const allocator_t *allocator)
+{
+  cstring_t *string = allocator->mem_alloc(sizeof(cstring_t));
+  cstring_def(string);
+  cstring_setup(string, ptr, allocator);
+  return string;
+}
 
 static
 void

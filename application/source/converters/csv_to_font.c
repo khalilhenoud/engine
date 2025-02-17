@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <library/string/fixed_string.h>
-#include <library/string/string.h>
+#include <library/string/cstring.h>
 #include <library/allocator/allocator.h>
 #include <application/converters/csv_to_font.h>
 #include <loaders/loader_csv.h>

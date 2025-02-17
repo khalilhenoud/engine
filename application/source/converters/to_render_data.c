@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <string.h>
 #include <library/allocator/allocator.h>
-#include <library/string/string.h>
+#include <library/string/cstring.h>
 #include <application/converters/to_render_data.h>
 #include <entity/c/scene/node.h>
 #include <entity/c/scene/node_utils.h>
@@ -31,6 +31,24 @@
 #include <entity/c/runtime/font_utils.h>
 #include <renderer/renderer_opengl_data.h>
 
+
+static
+cstring_t *
+allocate_string(const char *ptr, const allocator_t *allocator)
+{
+  cstring_t *string = allocator->mem_alloc(sizeof(cstring_t));
+  cstring_def(string);
+  cstring_setup(string, ptr, allocator);
+  return string;
+}
+
+static
+void
+free_string(cstring_t *string, const allocator_t *allocator)
+{
+  cstring_cleanup(string, NULL);
+  allocator->mem_free(string);
+}
 
 static
 void
@@ -183,7 +201,7 @@ free_packaged_node_data_internal(
   {
     for (uint32_t i = 0; i < node_data->count; ++i) {
       node_t* current = node_data->nodes + i;
-      free_string(current->name);
+      free_string(current->name, allocator);
       allocator->mem_free(current->nodes.indices);
       allocator->mem_free(current->meshes.indices);
     }

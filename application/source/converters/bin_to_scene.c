@@ -449,7 +449,7 @@ bin_to_scene(
   assert(scene->model_repo.used != 0);
   
   {
-    scene_t* runtime_scene = create_scene("current", allocator);
+    scene_t* runtime_scene = scene_create("current", allocator);
     copy_metadata(scene, runtime_scene, allocator);
     copy_light_data(scene, runtime_scene, allocator);
     copy_texture_data(scene, runtime_scene, allocator);

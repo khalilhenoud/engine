@@ -182,7 +182,7 @@ update_level(const allocator_t* allocator)
 void
 unload_level(const allocator_t* allocator)
 {
-  free_scene(scene, allocator);
+  scene_free(scene, allocator);
   cleanup_packaged_render_data(scene_render_data, allocator);
 }
 

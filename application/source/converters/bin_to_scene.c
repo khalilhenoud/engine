@@ -36,6 +36,10 @@
 #include <serializer/serializer_bin.h>
 #include <application/converters/bin_to_scene.h>
 
+#include <serializer/utils.h>
+#include <library/streams/binary_stream.h>
+#include <library/containers/cvector.h>
+
 
 static
 cstring_t *
@@ -229,16 +233,32 @@ copy_mesh_data(
 
       // move the pointers around.
       mesh->vertices_count = source->vertices_count;
-      mesh->vertices = source->vertices;
-      source->vertices = NULL;
-      mesh->normals = source->normals;
-      source->normals = NULL;
-      mesh->uvs = source->uvs;
-      source->uvs = NULL;
+      if (mesh->vertices_count) {
+        mesh->vertices = allocator->mem_alloc(
+          sizeof(float) * 3 * mesh->vertices_count);
+        memcpy(
+          mesh->vertices, source->vertices, 
+          sizeof(float) * 3 * mesh->vertices_count);
+        mesh->normals = allocator->mem_alloc(
+          sizeof(float) * 3 * mesh->vertices_count);
+        memcpy(
+          mesh->normals, source->normals, 
+          sizeof(float) * 3 * mesh->vertices_count);
+        mesh->uvs = allocator->mem_alloc(
+          sizeof(float) * 3 * mesh->vertices_count);
+        memcpy(
+          mesh->uvs, source->uvs, 
+          sizeof(float) * 3 * mesh->vertices_count);
+      }
 
       mesh->indices_count = source->faces_count * 3;
-      mesh->indices = source->indices;
-      source->indices = NULL;
+      if (mesh->indices_count) {
+        mesh->indices = allocator->mem_alloc(
+          sizeof(uint32_t) * mesh->indices_count);
+        memcpy(
+          mesh->indices, source->indices, 
+          sizeof(uint32_t) * mesh->indices_count);
+      }
 
       // copy the first 4 material indices, discard everything else.
       // TODO: Add logging functionality to notify the user if any materials
@@ -476,6 +496,40 @@ load_scene_from_bin(
   char fullpath[1024] = {0};
   snprintf(fullpath, 1024, "%s\\%s\\%s.bin", dataset, folder, file);
   
+#if 0
+  {
+    scene_t* local;
+    binary_stream_t stream;
+    char fullpath2[1024] = { 0 };
+
+    binary_stream_def(&stream);
+    binary_stream_setup(&stream, allocator);
+    snprintf(fullpath2, 1024, "%s\\%s\\%s_alt.bin", dataset, folder, file);
+
+    {
+      size_t read = 0;
+      uint8_t buffer[1024];
+      file_handle_t file;
+      file = open_file(fullpath2, FILE_OPEN_MODE_READ | FILE_OPEN_MODE_BINARY);
+      assert((void*)file != NULL);
+      do {
+        read = read_buffer(
+          file,
+          buffer, sizeof(uint8_t), 1024);
+        binary_stream_write(&stream, buffer, 1024);
+      } while (read);
+      close_file(file);
+
+      //scene_free(local, allocator);
+      local = scene_create(NULL, allocator);
+      scene_deserialize(local, allocator, &stream);
+      scene_free(local, allocator);
+    }
+
+    binary_stream_cleanup(&stream);
+  }
+#endif
+
   {
     scene_t* local = NULL;
     serializer_scene_data_t *scene_bin = deserialize_bin(fullpath, allocator);
@@ -487,6 +541,63 @@ load_scene_from_bin(
     }
     local = bin_to_scene(scene_bin, allocator);
     free_bin(scene_bin, allocator);
+
+#if 0
+    {
+      binary_stream_t stream;
+      char fullpath2[1024] = {0};
+
+      binary_stream_def(&stream);
+      binary_stream_setup(&stream, allocator);
+      snprintf(fullpath2, 1024, "%s\\%s\\%s_alt.bin", dataset, folder, file);
+      scene_serialize(local, &stream);
+
+      {
+        file_handle_t file;
+        file = open_file(fullpath2, FILE_OPEN_MODE_WRITE | FILE_OPEN_MODE_BINARY);
+        assert((void *)file != NULL);
+        write_buffer(
+          file, 
+          stream.data->data, stream.data->elem_data.size, stream.data->size);
+        close_file(file);
+      }
+      
+      binary_stream_cleanup(&stream);
+    }
+#endif
+
+#if 0
+    {
+      binary_stream_t stream;
+      char fullpath2[1024] = {0};
+
+      binary_stream_def(&stream);
+      binary_stream_setup(&stream, allocator);
+      snprintf(fullpath2, 1024, "%s\\%s\\%s_alt.bin", dataset, folder, file);
+
+      {
+        size_t read = 0;
+        uint8_t buffer[1024];
+        file_handle_t file;
+        file = open_file(fullpath2, FILE_OPEN_MODE_READ | FILE_OPEN_MODE_BINARY);
+        assert((void *)file != NULL);
+        do {
+          read = read_buffer(
+            file,
+            buffer, sizeof(uint8_t), 1024);
+          binary_stream_write(&stream, buffer, 1024);
+        } while (read);
+        close_file(file);
+
+        scene_free(local, allocator);
+        local = scene_create(NULL, allocator);
+        scene_deserialize(local, allocator, &stream);
+      }
+      
+      binary_stream_cleanup(&stream);
+    }
+#endif
+
     return local;
   }
 }

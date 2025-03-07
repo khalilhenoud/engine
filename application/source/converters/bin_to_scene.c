@@ -508,15 +508,15 @@ load_scene_from_bin(
 
     {
       size_t read = 0;
-      uint8_t buffer[1024];
+      uint8_t buffer[16 * 1024];
       file_handle_t file;
       file = open_file(fullpath2, FILE_OPEN_MODE_READ | FILE_OPEN_MODE_BINARY);
       assert((void*)file != NULL);
       do {
         read = read_buffer(
           file,
-          buffer, sizeof(uint8_t), 1024);
-        binary_stream_write(&stream, buffer, 1024);
+          buffer, sizeof(uint8_t), 16 * 1024);
+        binary_stream_write(&stream, buffer, 16 * 1024);
       } while (read);
       close_file(file);
 
@@ -577,15 +577,15 @@ load_scene_from_bin(
 
       {
         size_t read = 0;
-        uint8_t buffer[1024];
+        uint8_t buffer[16 * 1024];
         file_handle_t file;
         file = open_file(fullpath2, FILE_OPEN_MODE_READ | FILE_OPEN_MODE_BINARY);
         assert((void *)file != NULL);
         do {
           read = read_buffer(
             file,
-            buffer, sizeof(uint8_t), 1024);
-          binary_stream_write(&stream, buffer, 1024);
+            buffer, sizeof(uint8_t), 16 * 1024);
+          binary_stream_write(&stream, buffer, 16 * 1024);
         } while (read);
         close_file(file);
 

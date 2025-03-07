@@ -41,8 +41,17 @@ void* container_allocate(size_t count, size_t elem_size)
 
 void* reallocate(void* block, size_t size)
 {
-  block = realloc(block, size);
-  assert(block);
+  void* tmp = realloc(block, size);
+  assert(tmp);
+
+  uintptr_t item = (uintptr_t)block;
+  auto iter = std::find(allocated.begin(), allocated.end(), item);
+  assert(iter != allocated.end());
+  allocated.erase(iter);
+  
+  block = tmp;
+  allocated.push_back(uintptr_t(block));
+
   return block;
 }
 

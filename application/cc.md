@@ -1,3 +1,8 @@
+Update Sumodules
+================
+git submodule update --recursive
+use the command above to update all submodules the project uses.
+
 Detached heads and submodules
 =============================
 Reference:

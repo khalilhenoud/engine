@@ -16,7 +16,6 @@
 #include <entity/c/runtime/font_utils.h>
 #include <entity/c/mesh/color.h>
 #include <entity/c/scene/scene.h>
-#include <entity/c/scene/scene_utils.h>
 #include <entity/c/level/level.h>
 #include <application/process/text/utils.h>
 #include <application/process/render_data/utils.h>

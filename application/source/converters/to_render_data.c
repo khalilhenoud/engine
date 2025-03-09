@@ -14,12 +14,9 @@
 #include <library/string/cstring.h>
 #include <application/converters/to_render_data.h>
 #include <entity/c/scene/node.h>
-#include <entity/c/scene/node_utils.h>
 #include <entity/c/scene/scene.h>
-#include <entity/c/scene/scene_utils.h>
 #include <entity/c/scene/camera.h>
 #include <entity/c/scene/light.h>
-#include <entity/c/scene/light_utils.h>
 #include <entity/c/mesh/mesh.h>
 #include <entity/c/mesh/mesh_utils.h>
 #include <entity/c/mesh/material.h>

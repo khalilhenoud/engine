@@ -13,7 +13,6 @@
 #include <math/c/capsule.h>
 #include <entity/c/mesh/color.h>
 #include <entity/c/spatial/bvh.h>
-#include <entity/c/spatial/bvh_utils.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <application/process/logic/player_collision_utils.h>

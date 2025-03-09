@@ -19,10 +19,8 @@
 #include <entity/c/mesh/mesh_utils.h>
 #include <entity/c/scene/camera.h>
 #include <entity/c/scene/scene.h>
-#include <entity/c/scene/scene_utils.h>
 #include <entity/c/level/level.h>
 #include <entity/c/spatial/bvh.h>
-#include <entity/c/spatial/bvh_utils.h>
 #include <application/process/text/utils.h>
 #include <application/process/logic/player.h>
 #include <application/process/render_data/utils.h>

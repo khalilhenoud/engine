@@ -13,11 +13,9 @@
 #include <application/process/render_data/utils.h>
 #include <application/converters/to_render_data.h>
 #include <entity/c/runtime/texture.h>
-#include <entity/c/runtime/texture_utils.h>
 #include <entity/c/runtime/font.h>
 #include <entity/c/runtime/font_utils.h>
 #include <entity/c/scene/camera.h>
-#include <entity/c/scene/camera_utils.h>
 #include <entity/c/scene/node.h>
 #include <entity/c/scene/light.h>
 #include <renderer/renderer_opengl.h>
@@ -199,7 +197,7 @@ render_packaged_scene_data(
   {
     matrix4f out;
     memset(&out, 0, sizeof(matrix4f));
-    get_view_transformation(camera, &out);
+    camera_view_matrix(camera, &out);
     set_matrix_mode(pipeline, MODELVIEW);
     load_identity(pipeline);
     post_multiply(pipeline, &out);

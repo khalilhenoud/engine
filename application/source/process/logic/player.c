@@ -14,7 +14,6 @@
 #include <math/c/vector3f.h>
 #include <math/c/matrix4f.h>
 #include <entity/c/scene/camera.h>
-#include <entity/c/scene/camera_utils.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <application/input.h>
@@ -379,7 +378,7 @@ handle_macro_keys(camera_t* camera)
     vector3f up = { 0.f, 0.f, 0.f };
     at.data[2] = -1.f;
     up.data[1] = 1.f;
-    set_camera_lookat(camera, center, at, up);
+    camera_set_lookat(camera, center, at, up);
   }
 
   if (is_key_triggered(KEY_COLLISION_QUERY))

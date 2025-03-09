@@ -17,7 +17,6 @@
 #include <application/converters/csv_to_font.h>
 #include <loaders/loader_csv.h>
 #include <entity/c/misc/font.h>
-#include <entity/c/misc/font_utils.h>
 #include <entity/c/runtime/font.h>
 #include <entity/c/runtime/font_utils.h>
 
@@ -69,9 +68,9 @@ load_font(
   const char* data_file, 
   const allocator_t* allocator)
 {
-  font_t* font = create_font(image_file, data_file, allocator);
+  font_t* font = font_create(image_file, data_file, allocator);
   font_runtime_t* runtime = create_font_runtime(font, allocator);
-  free_font(font, allocator);
+  font_free(font, allocator);
 
   {
     fixed_str_t csv_file;

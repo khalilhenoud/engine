@@ -1,5 +1,6 @@
 Update Sumodules
 ================
+?? Not sure if it is --remote or --recursive or both.
 git submodule update --recursive
 use the command above to update all submodules the project uses.
 

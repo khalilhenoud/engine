@@ -19,8 +19,8 @@
 #include <entity/c/level/level.h>
 #include <application/process/text/utils.h>
 #include <application/process/render_data/utils.h>
+#include <application/process/utils/load_scene.h>
 #include <application/converters/to_render_data.h>
-#include <application/converters/bin_to_scene.h>
 #include <application/converters/to_render_data.h>
 #include <library/filesystem/filesystem.h>
 #include <library/framerate_controller/framerate_controller.h>
@@ -56,12 +56,10 @@ load_room_select(
   char room[256] = {0};
   sprintf(room, "rooms\\%s", context.level);
 
-  scene = load_scene_from_bin(
+  scene = load_scene(
     context.data_set,
     room,
     context.level,
-    0, 
-    scene_color, 
     allocator);
 
   // load the scene render data.

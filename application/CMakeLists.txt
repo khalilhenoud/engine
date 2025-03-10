@@ -11,7 +11,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 add_executable(${PROJECT_NAME} WIN32
       ./source/converters/to_render_data.c
       ./source/converters/csv_to_font.c
-      ./source/converters/bin_to_scene.c
       ./source/converters/png_to_image.c
       ./source/process/render_data/utils.c
       ./source/process/logic/player.c
@@ -19,6 +18,7 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/process/text/utils.c
       ./source/process/levels/generic_level.c
       ./source/process/levels/room_select.c
+      ./source/process/utils/load_scene.c
 			./source/application.cpp
 			./source/main.cpp
       ./source/input.c
@@ -30,8 +30,7 @@ target_link_libraries(${PROJECT_NAME}
 						PRIVATE entity
 						PRIVATE loaders
 						PRIVATE renderer
-						PRIVATE winmm
-            PRIVATE serializer)
+						PRIVATE winmm)
 
 target_include_directories(${PROJECT_NAME} PUBLIC 
 							"${PROJECT_BINARY_DIR}"

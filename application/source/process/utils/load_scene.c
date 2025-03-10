@@ -1,7 +1,7 @@
 /**
  * @file bin_to_scene.c
  * @author khalilhenoud@gmail.com
- * @brief convert a bin scene into an entity scene.
+ * @brief
  * @version 0.1
  * @date 2023-07-16
  * 
@@ -11,29 +11,27 @@
 #include <assert.h>
 #include <string.h>
 #include <stdint.h>
-#include <library/allocator/allocator.h>
-#include <library/string/cstring.h>
+#include <application/process/utils/load_scene.h>
 #include <entity/c/scene/scene.h>
-#include <application/converters/bin_to_scene.h>
-#include <library/filesystem/io.h>
-#include <library/streams/binary_stream.h>
+#include <library/allocator/allocator.h>
 #include <library/containers/cvector.h>
+#include <library/filesystem/io.h>
+#include <library/string/cstring.h>
+#include <library/streams/binary_stream.h>
 
 
 scene_t*
-load_scene_from_bin(
+load_scene(
   const char* dataset, 
   const char* folder, 
   const char* file,
-  uint32_t override_ambient, 
-  color_rgba_t ambient, 
   const allocator_t* allocator)
 {
   // TODO: This is temporary, this needs to be generalized in packaged content.
   char fullpath[1024] = {0};
   snprintf(fullpath, 1024, "%s\\%s\\%s.bin", dataset, folder, file);
   
-  scene_t* local;
+  scene_t *scene;
   binary_stream_t stream;
 
   binary_stream_def(&stream);
@@ -53,10 +51,10 @@ load_scene_from_bin(
     } while (read);
     close_file(file);
 
-    local = scene_create(NULL, allocator);
-    scene_deserialize(local, allocator, &stream);
+    scene = scene_create(NULL, allocator);
+    scene_deserialize(scene, allocator, &stream);
   }
 
   binary_stream_cleanup(&stream);
-  return local;
+  return scene;
 }

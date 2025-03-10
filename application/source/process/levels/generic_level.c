@@ -24,8 +24,8 @@
 #include <application/process/text/utils.h>
 #include <application/process/logic/player.h>
 #include <application/process/render_data/utils.h>
+#include <application/process/utils/load_scene.h>
 #include <application/converters/to_render_data.h>
-#include <application/converters/bin_to_scene.h>
 #include <application/converters/to_render_data.h>
 
 #define TILDE   0xC0
@@ -53,12 +53,10 @@ load_level(
   char room[256] = {0};
   sprintf(room, "rooms\\%s", context.level);
 
-  scene = load_scene_from_bin(
+  scene = load_scene(
     context.data_set,
     room,
     context.level,
-    1, 
-    scene_color,
     allocator);
 
   // load the scene render data.

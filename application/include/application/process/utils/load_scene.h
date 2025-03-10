@@ -23,12 +23,10 @@ typedef struct scene_t scene_t;
 typedef struct allocator_t allocator_t;
 
 scene_t*
-load_scene_from_bin(
+load_scene(
   const char* dataset, 
   const char* folder, 
   const char* file,
-  uint32_t override_ambient, 
-  color_rgba_t ambient, 
   const allocator_t* allocator);
 
 #ifdef __cplusplus

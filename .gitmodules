@@ -13,6 +13,3 @@
 [submodule "external/renderer"]
 	path = external/renderer
 	url = https://github.com/khalilhenoud/renderer.git
-[submodule "external/serializer"]
-	path = external/serializer
-	url = https://github.com/khalilhenoud/serializer.git

@@ -15,7 +15,7 @@
 #include <library/string/cstring.h>
 #include <entity/c/scene/scene.h>
 #include <application/converters/bin_to_scene.h>
-#include <serializer/utils.h>
+#include <library/filesystem/io.h>
 #include <library/streams/binary_stream.h>
 #include <library/containers/cvector.h>
 

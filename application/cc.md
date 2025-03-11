@@ -1,4 +1,11 @@
-Update Sumodules
+Remove a Submodule
+==================
+git rm <path-to-module>
+example:
+git rm external/serializer
+then commit.
+
+Update Submodules
 ================
 ?? Not sure if it is --remote or --recursive or both.
 git submodule update --recursive

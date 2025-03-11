@@ -4,6 +4,7 @@ git rm <path-to-module>
 example:
 git rm external/serializer
 then commit.
+@see https://stackoverflow.com/questions/1260748/how-do-i-remove-a-submodule
 
 Update Submodules
 ================

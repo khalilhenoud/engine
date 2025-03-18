@@ -1157,6 +1157,7 @@ player_update(
     camera->up_vector = oriented.up_vector;
   }
 
+  // unoriented velocity, in relative space to the camera.
   cam_speed = get_velocity(
     delta_time, 
     cam_speed, 

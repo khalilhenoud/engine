@@ -23,6 +23,12 @@ already be loaded because another object is already using it in the scene.
 In short, the runtime component is responsible for deserializing the data, which
 usually happen through specialized loaders (png loader, etc...).
 
+A asset can depend on several loaders types, for example the runtime font asset
+depend on the texture and the csv file. Even though that is the case, the font
+asset may not reference the image it depend on, it can only access the type 
+associated with the loader defined in its package. And indeed the font data is
+not related to the image in question.
+
 Restructuring
 =============
 Game
@@ -49,12 +55,20 @@ modules depending on the granularity we require). The base structure of the
 scene should be modified to be type agnostic; basically it should be a list of
 node of nodes, where each node holds a type agnostic pointer (either a 'void *' 
 or a new pointer type to be introduced in the clib).
+Additionally the scene will have a repo of types, this is similar to our current
+setup where identical types are kept in arrays consecutively. This would be
+useful to index into, as opposed to hold a hard references.
 
 Note: might be smart to rename this to scene? Entity is more general though...
 
-Braindump
-=========
-1- entity package separation... type agnostic.
-2- types that hold asset references and the loaders tied to those.
-3- data types.
-etc...
+Steps
+=====
+1- Define a pointer type that holds the type guid it refers to. The pointer type
+also caches the vtable of the type in question.
+2- Move bvh, font, mesh, material and texture to their own corresponding
+packages.
+3- Define the appropriate loaders in their respective packages.
+4- Define a Game package that references everything else. This will replace the
+application package that does that right now.
+5- Modify the converter to hold a reference to the game package.
+6- rename converter to tool.

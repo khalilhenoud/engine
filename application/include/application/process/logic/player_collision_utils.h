@@ -25,6 +25,18 @@ typedef struct bvh_aabb_t bvh_aabb_t;
 typedef struct capsule_t capsule_t;
 typedef struct pipeline_t pipeline_t;
 
+void
+draw_collision_debug_data(
+  bvh_t* bvh,
+  pipeline_t* pipeline,
+  const int32_t disable_depth);
+
+void
+add_face_to_render(
+  uint32_t index, 
+  color_t color, 
+  int32_t thickness);
+
 typedef
 enum {
   COLLIDED_FLOOR_FLAG = 1 << 0,
@@ -60,43 +72,11 @@ populate_moving_capsule_aabb(
   const float multiplier);
 
 uint32_t
-get_all_first_time_of_impact_filtered(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
-  intersection_info_t collision_info[256],
-  const uint32_t to_filter[1024],
-  uint32_t filter_count,
-  const uint32_t iterations,
-  const float limit_distance,
-  const int32_t draw_collision_query);
-
-uint32_t
 get_all_first_time_of_impact(
   bvh_t* bvh,
   capsule_t* capsule,
   vector3f displacement,
   intersection_info_t collision_info[256],
-  const uint32_t iterations,
-  const float limit_distance,
-  const int32_t draw_collision_query);
-
-intersection_info_t
-get_any_first_time_of_impact_filtered(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
-  const uint32_t to_filter[1024],
-  uint32_t filter_count,
-  const uint32_t iterations,
-  const float limit_distance,
-  const int32_t draw_collision_query);
-
-intersection_info_t
-get_any_first_time_of_impact(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
   const uint32_t iterations,
   const float limit_distance,
   const int32_t draw_collision_query);
@@ -110,27 +90,6 @@ void
 ensure_in_valid_space(
   bvh_t* bvh,
   capsule_t* capsule);
-
-int32_t
-intersects_post_displacement(
-  capsule_t capsule,
-  const vector3f displacement,
-  const face_t* face,
-  const vector3f* normal,
-  const uint32_t iterations,
-  const float limit_distance);
-
-void
-draw_collision_debug_data(
-  bvh_t* bvh,
-  pipeline_t* pipeline,
-  const int32_t disable_depth);
-
-void
-add_face_to_render(
-  uint32_t index, 
-  color_t color, 
-  int32_t thickness);
 
 #ifdef __cplusplus
 }

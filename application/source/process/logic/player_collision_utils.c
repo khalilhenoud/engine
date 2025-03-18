@@ -20,6 +20,7 @@
 #define FLOOR_ANGLE_DEGREES 60
 
 
+////////////////////////////// DEBUG FACE RENDERING ////////////////////////////
 typedef
 struct {
   uint32_t index;
@@ -183,16 +184,23 @@ populate_moving_capsule_aabb(
   merge_aabb(aabb, start_end + 0, start_end + 1);
 }
 
+int32_t
+intersects_post_displacement(
+  capsule_t capsule,
+  const vector3f displacement,
+  const face_t* face,
+  const vector3f* normal,
+  const uint32_t iterations,
+  const float limit_distance);
+
 uint32_t
-get_all_first_time_of_impact_filtered(
+get_all_first_time_of_impact(
   bvh_t* bvh,
   capsule_t* capsule,
   vector3f displacement,
   intersection_info_t collision_info[256],
-  const uint32_t to_filter[1024],
-  uint32_t filter_count,
   const uint32_t iterations,
-  const float limit_distance, 
+  const float limit_distance,
   const int32_t draw_collision_query)
 {
   uint32_t array[256];
@@ -234,9 +242,6 @@ get_all_first_time_of_impact_filtered(
         uint32_t i = node->left_first, 
         last = node->left_first + node->tri_count; 
         i < last; ++i) {
-
-        if (to_filter && is_in_filtered(i, to_filter, filter_count))
-          continue;
 
         if (!bounds_intersect(&bounds, bvh->bounds + i))
           continue;
@@ -291,81 +296,6 @@ get_all_first_time_of_impact_filtered(
   }
 
   return collision_info_used;
-}
-
-uint32_t
-get_all_first_time_of_impact(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
-  intersection_info_t collision_info[256],
-  const uint32_t iterations,
-  const float limit_distance,
-  const int32_t draw_collision_query)
-{
-  return 
-    get_all_first_time_of_impact_filtered(
-      bvh, 
-      capsule, 
-      displacement, 
-      collision_info,
-      NULL, 
-      0, 
-      iterations, 
-      limit_distance,
-      draw_collision_query);
-}
-
-intersection_info_t
-get_any_first_time_of_impact_filtered(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
-  const uint32_t to_filter[1024],
-  uint32_t filter_count,
-  const uint32_t iterations,
-  const float limit_distance,
-  const int32_t draw_collision_query)
-{
-  uint32_t info_used = 0;
-  intersection_info_t collision_info[256];
-  collision_info[0].time = 1.f;
-  collision_info[0].flags = COLLIDED_NONE;
-  collision_info[0].bvh_face_index = (uint32_t)-1;
-
-  get_all_first_time_of_impact_filtered(
-    bvh, 
-    capsule, 
-    displacement, 
-    collision_info,
-    to_filter,
-    filter_count,
-    iterations, 
-    limit_distance,
-    draw_collision_query);
-
-  return collision_info[0];
-}
-
-intersection_info_t
-get_any_first_time_of_impact(
-  bvh_t* bvh,
-  capsule_t* capsule,
-  vector3f displacement,
-  const uint32_t iterations,
-  const float limit_distance,
-  const int32_t draw_collision_query)
-{
-  return 
-    get_any_first_time_of_impact_filtered(
-      bvh, 
-      capsule, 
-      displacement,
-      NULL, 
-      0, 
-      iterations, 
-      limit_distance,
-      draw_collision_query);
 }
 
 int32_t
@@ -453,6 +383,7 @@ ensure_in_valid_space(
   }
 }
 
+static
 int32_t
 intersects_post_displacement(
   capsule_t capsule,

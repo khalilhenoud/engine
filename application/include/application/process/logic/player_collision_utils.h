@@ -17,6 +17,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <math/c/vector3f.h>
+#include <application/process/logic/collision_data.h>
 
 
 typedef struct face_t face_t;
@@ -36,21 +37,6 @@ add_face_to_render(
   uint32_t index, 
   color_t color, 
   int32_t thickness);
-
-typedef
-enum {
-  COLLIDED_FLOOR_FLAG = 1 << 0,
-  COLLIDED_CEILING_FLAG = 1 << 1,
-  COLLIDED_WALLS_FLAG = 1 << 2,
-  COLLIDED_NONE = 1 << 3
-} collision_flags_t;
-
-typedef
-struct {
-  float time;
-  collision_flags_t flags;
-  uint32_t bvh_face_index;
-} intersection_info_t;
 
 uint32_t 
 is_floor(bvh_t* bvh, uint32_t index);

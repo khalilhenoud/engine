@@ -15,6 +15,7 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/process/render_data/utils.c
       ./source/process/logic/player.c
       ./source/process/logic/player_collision_utils.c
+      ./source/process/logic/bucket_processing.c
       ./source/process/text/utils.c
       ./source/process/levels/generic_level.c
       ./source/process/levels/room_select.c

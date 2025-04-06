@@ -27,7 +27,9 @@
 #include <entity/c/spatial/bvh.h>
 #include <entity/c/runtime/font.h>
 #include <entity/c/runtime/font_utils.h>
-#include <application/process/text/utils.h>
+
+#include <application/process/debug/face.h>
+#include <application/process/debug/text.h>
 
 #define KEY_SPEED_PLUS            '1'
 #define KEY_SPEED_MINUS           '2'
@@ -77,70 +79,6 @@ static capsule_t capsule = { { 0.f, 0.f, 0.f }, 12.f, 16.f };
 
 // 0 is walking, 1 is flying (not yet used).
 static uint32_t flying = 0;
-
-color_t red = { 1.f, 0.f, 0.f, 1.f };
-color_t green = { 0.f, 1.f, 0.f, 1.f };
-color_t blue = { 0.f, 0.f, 1.f, 1.f };
-color_t yellow = { 1.f, 1.f, 0.f, 1.f };
-color_t white = { 1.f, 1.f, 1.f, 1.f };
-color_t gen = { 1.f, 1.f, 1.f, -1.f };
-
-typedef
-struct {
-  char text[512];
-  color_t color;
-  float x, y;
-} text_properties_t;
-
-typedef
-struct {
-  text_properties_t text_props[512];
-  uint32_t used;
-} text_renderables_t;
-
-static text_renderables_t renderable_text; 
-
-static
-void
-add_text_to_render(const char* text, color_t color, float x, float y)
-{
-  memset(
-    renderable_text.text_props[renderable_text.used].text, 
-    0, 
-    sizeof(renderable_text.text_props[renderable_text.used].text));
-  memcpy(
-    renderable_text.text_props[renderable_text.used].text, 
-    text, strlen(text));
-
-  renderable_text.text_props[renderable_text.used].color = color;
-  renderable_text.text_props[renderable_text.used].x = x;
-  renderable_text.text_props[renderable_text.used].y = y;
-  renderable_text.used++;
-}
-
-static
-void
-draw_renderable_text(
-  pipeline_t* pipeline,
-  font_runtime_t* font,
-  const uint32_t font_image_id)
-{
-  const char* text;
-  for (uint32_t i = 0; i < renderable_text.used; ++i) {
-    text = renderable_text.text_props[i].text;
-    render_text_to_screen(
-      font, 
-      font_image_id, 
-      pipeline, 
-      &text,
-      1, 
-      &renderable_text.text_props[i].color, 
-      renderable_text.text_props[i].x, 
-      renderable_text.text_props[i].y);
-  }
-
-  renderable_text.used = 0;
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 typedef
@@ -589,7 +527,7 @@ handle_collision_detection(
           char text[512];
           memset(text, 0, sizeof(text));
           sprintf(text, "STEPUP %f", value);
-          add_text_to_render(text, red, 400.f, 320.f);
+          add_debug_text_to_frame(text, red, 400.f, 320.f);
         }
 
         capsule->center.data[1] = step_y;
@@ -684,13 +622,16 @@ handle_vertical_velocity(
       char text[512];
       memset(text, 0, sizeof(text));
       sprintf(text, "SNAPPING %f", distance);
-      add_text_to_render(text, green, 400.f, 300.f);
+      add_debug_text_to_frame(text, green, 400.f, 300.f);
 
       {
         uint32_t i = info.bvh_face_index;
-        color_t color = 
-          is_floor(bvh, i) ? green : (is_ceiling(bvh, i)? white : gen);
-        add_face_to_render(i, color, 1);
+        debug_color_t color = 
+          is_floor(bvh, i) ? green : (is_ceiling(bvh, i)? white : blue);
+        add_debug_face_to_frame(
+          bvh->faces + i, 
+          bvh->normals + i, 
+          color, 1);
       }
     }
   }
@@ -806,30 +747,30 @@ player_update(
       capsule.center.data[1], 
       capsule.center.data[2]);
 
-    add_text_to_render(
+    add_debug_text_to_frame(
       array, green, 0.f, (y+=20.f));
-    add_text_to_render(
+    add_debug_text_to_frame(
       "[3] RENDER COLLISION QUERIES", 
       draw_collision_query ? red : white, 0.f, (y+=20.f));
-    add_text_to_render(
+    add_debug_text_to_frame(
       "[4] RENDER COLLISION FACE", 
       draw_collided_face ? red : white, 0.f, (y+=20.f));
-    add_text_to_render(
+    add_debug_text_to_frame(
       "[5] SHOW SNAPPING/FALLING STATE", 
       draw_status ? red : white, 0.f, (y+=20.f));
-    add_text_to_render(
+    add_debug_text_to_frame(
       "[6] DRAW IGNORED FACES", 
       draw_ignored_faces ? red : white, 0.f, (y+=20.f));
-    add_text_to_render(
+    add_debug_text_to_frame(
       "[7] DISABLE DEPTH TEST DEBUG", 
       disable_depth_debug ? red : white, 0.f, (y+=20.f));
-    add_text_to_render(
+    add_debug_text_to_frame(
       "[8] LOCK DIRECTIONAL MOTION", 
       use_locked_motion ? red : white, 0.f, (y+=20.f));
-    add_text_to_render(
+    add_debug_text_to_frame(
       "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, (y+=20.f));
-    draw_renderable_text(pipeline, font, font_image_id);
+    draw_debug_text_frame(pipeline, font, font_image_id);
     
-    draw_collision_debug_data(bvh, pipeline, disable_depth_debug);
+    draw_debug_face_frame(pipeline, disable_depth_debug);
   }
 }

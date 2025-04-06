@@ -26,18 +26,6 @@ typedef struct bvh_aabb_t bvh_aabb_t;
 typedef struct capsule_t capsule_t;
 typedef struct pipeline_t pipeline_t;
 
-void
-draw_collision_debug_data(
-  bvh_t* bvh,
-  pipeline_t* pipeline,
-  const int32_t disable_depth);
-
-void
-add_face_to_render(
-  uint32_t index, 
-  color_t color, 
-  int32_t thickness);
-
 uint32_t 
 is_floor(bvh_t* bvh, uint32_t index);
 

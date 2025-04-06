@@ -16,6 +16,7 @@
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <application/process/logic/bucket_processing.h>
+#include <application/process/debug/face.h>
 
 
 extern int32_t draw_ignored_faces;
@@ -25,12 +26,12 @@ extern int32_t draw_collision_query;
 extern int32_t draw_collided_face;
 extern int32_t draw_status;
 
-extern color_t red;
-extern color_t green;
-extern color_t blue;
-extern color_t yellow;
-extern color_t white;
-extern color_t gen;
+// extern color_t red;
+// extern color_t green;
+// extern color_t blue;
+// extern color_t yellow;
+// extern color_t white;
+// extern color_t gen;
 
 // return 0 if not split, 1 if split.
 static
@@ -111,6 +112,7 @@ classify_buckets(
 static
 uint32_t
 remove_bucket(
+  bvh_t* const bvh,
   intersection_info_t collision_info[256], 
   uint32_t info_used, 
   uint32_t buckets[256], 
@@ -145,7 +147,10 @@ remove_bucket(
   for (uint32_t i = 0, index = 0; i < info_used; ++i) {
     if (i >= start_index && i < end_index) {
       if (draw_ignored_faces)
-        add_face_to_render(collision_info[i].bvh_face_index, yellow, 2);
+        add_debug_face_to_frame(
+          bvh->faces + collision_info[i].bvh_face_index, 
+          bvh->normals + collision_info[i].bvh_face_index, 
+          yellow, 2);
       continue;
     }
     new_info[index++] = collision_info[i];
@@ -235,6 +240,7 @@ process_buckets(
           parters[0], parters[1])) {
           // remove parters[1]
           info_used = remove_bucket(
+            bvh,
             collision_info, info_used, 
             buckets, bucket_offset, bucket_count, 
             parters[1]);
@@ -247,6 +253,7 @@ process_buckets(
           parters[1], parters[0])) {
           // remove parters[0]
           info_used = remove_bucket(
+            bvh,
             collision_info, info_used, 
             buckets, bucket_offset, bucket_count, 
             parters[0]);
@@ -254,12 +261,14 @@ process_buckets(
         } else {
           // remove parters[0, 1].
           info_used = remove_bucket(
+            bvh,
             collision_info, info_used, 
             buckets, bucket_offset, bucket_count, 
             parters[0]);
           --bucket_count;
           --parters[1];
           info_used = remove_bucket(
+            bvh,
             collision_info, info_used, 
             buckets, bucket_offset, bucket_count, 
             parters[1]);
@@ -379,10 +388,13 @@ get_averaged_normal(
      if (draw_collided_face) {
        for (uint32_t k = index; k < (index + buckets[i]); ++k) {
          uint32_t d_face_i = collision_info[k].bvh_face_index;
-         color_t color =
+         debug_color_t color =
            is_floor(bvh, d_face_i) ? green :
-           (is_ceiling(bvh, d_face_i) ? white : gen);
-         add_face_to_render(d_face_i, color, 2);
+           (is_ceiling(bvh, d_face_i) ? white : blue);
+         add_debug_face_to_frame(
+          bvh->faces + d_face_i,
+          bvh->normals + d_face_i, 
+          color, 2);
        }
      }
 

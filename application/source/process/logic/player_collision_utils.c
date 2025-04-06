@@ -16,108 +16,11 @@
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <application/process/logic/player_collision_utils.h>
+#include <application/process/debug/face.h>
 
 #define FLOOR_ANGLE_DEGREES 60
 
 
-////////////////////////////// DEBUG FACE RENDERING ////////////////////////////
-typedef
-struct {
-  uint32_t index;
-  color_t color;
-  int32_t thickness;
-} renderable_face_properties_t;
-
-typedef
-struct {
-  renderable_face_properties_t faces[2048];
-  uint32_t used;
-} face_renderables_t;
-
-static face_renderables_t renderable_faces; 
-
-static color_t red = { 1.f, 0.f, 0.f, 1.f };
-static color_t green = { 0.f, 1.f, 0.f, 1.f };
-static color_t blue = { 0.f, 0.f, 1.f, 1.f };
-static color_t yellow = { 1.f, 1.f, 0.f, 1.f };
-static color_t white = { 1.f, 1.f, 1.f, 1.f };
-static color_t gen = { 1.f, 1.f, 1.f, -1.f };
-
-void
-add_face_to_render(uint32_t index, color_t color, int32_t thickness)
-{
-  renderable_faces.faces[renderable_faces.used].index = index;
-  renderable_faces.faces[renderable_faces.used].color = color;
-  renderable_faces.faces[renderable_faces.used].thickness = thickness;
-  renderable_faces.used++;
-  renderable_faces.used %= 2048;
-}
-
-static
-void
-draw_face(
-  face_t* face, 
-  vector3f* normal, 
-  color_t* color, 
-  int32_t thickness,
-  pipeline_t* pipeline,
-  const int32_t disable_depth)
-{
-  const float mult = 0.1f;
-  float vertices[12];
-
-  vertices[0 * 3 + 0] = face->points[0].data[0] + normal->data[0] * mult;
-  vertices[0 * 3 + 1] = face->points[0].data[1] + normal->data[1] * mult;
-  vertices[0 * 3 + 2] = face->points[0].data[2] + normal->data[2] * mult;
-  vertices[1 * 3 + 0] = face->points[1].data[0] + normal->data[0] * mult;
-  vertices[1 * 3 + 1] = face->points[1].data[1] + normal->data[1] * mult;
-  vertices[1 * 3 + 2] = face->points[1].data[2] + normal->data[2] * mult;
-  vertices[2 * 3 + 0] = face->points[2].data[0] + normal->data[0] * mult;
-  vertices[2 * 3 + 1] = face->points[2].data[1] + normal->data[1] * mult;
-  vertices[2 * 3 + 2] = face->points[2].data[2] + normal->data[2] * mult;
-  vertices[3 * 3 + 0] = face->points[0].data[0] + normal->data[0] * mult;
-  vertices[3 * 3 + 1] = face->points[0].data[1] + normal->data[1] * mult;
-  vertices[3 * 3 + 2] = face->points[0].data[2] + normal->data[2] * mult;
-
-  if (disable_depth) {
-    disable_depth_test();
-    draw_lines(vertices, 4, *color, thickness, pipeline);
-    enable_depth_test();
-  } else
-    draw_lines(vertices, 4, *color, thickness, pipeline);
-}
-
-void
-draw_collision_debug_data(
-  bvh_t* bvh,
-  pipeline_t* pipeline,
-  const int32_t disable_depth)
-{
-  for (uint32_t i = 0; i < renderable_faces.used; ++i) {
-    uint32_t index = renderable_faces.faces[i].index;
-    color_t normal_color;
-    uint32_t gen_color = 0;
-    if (renderable_faces.faces[i].color.data[3] == gen.data[3]) {
-      normal_color.data[0] = bvh->normals[index].data[0] + 0.3f;
-      normal_color.data[1] = bvh->normals[index].data[1] + 0.3f;
-      normal_color.data[2] = bvh->normals[index].data[2] + 0.3f;
-      normal_color.data[3] = 1.f;
-      gen_color = 1;
-    }
-
-    draw_face(
-      bvh->faces + index, 
-      bvh->normals + index, 
-      gen_color ? &normal_color: &renderable_faces.faces[i].color, 
-      renderable_faces.faces[i].thickness,
-      pipeline,
-      disable_depth);
-  }
-
-  renderable_faces.used = 0;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 static
 uint32_t
 is_in_filtered(
@@ -224,10 +127,11 @@ get_all_first_time_of_impact(
         i < last; ++i) {
 
         {
-          color_t color = 
-            is_floor(bvh, i) ? green : (is_ceiling(bvh, i) ? white : gen);
+          debug_color_t color = 
+            is_floor(bvh, i) ? green : (is_ceiling(bvh, i) ? white : blue);
           int32_t thickness = is_floor(bvh, i) ? 3 : 2;
-          add_face_to_render(i, color, thickness);
+          add_debug_face_to_frame(
+            bvh->faces + i, bvh->normals + i, color, thickness);
         }
       }
     }

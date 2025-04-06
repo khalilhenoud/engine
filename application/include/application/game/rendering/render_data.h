@@ -31,6 +31,7 @@ typedef struct renderer_light_t renderer_light_t;
 typedef struct font_runtime_t font_runtime_t;
 typedef struct camera_t camera_t;
 typedef struct texture_runtime_t texture_runtime_t;
+typedef struct pipeline_t pipeline_t;
 
 typedef
 struct packaged_mesh_data_t {
@@ -97,6 +98,24 @@ load_mesh_renderer_data(
   mesh_t* mesh, 
   const color_rgba_t color, 
   const allocator_t* allocator);
+
+void
+prep_packaged_render_data(
+  const char* data_set,
+  const char* folder,
+  packaged_scene_render_data_t* render_data, 
+  const allocator_t* allocator);
+
+void
+cleanup_packaged_render_data(
+  packaged_scene_render_data_t* render_data, 
+  const allocator_t* allocator);
+
+void
+render_packaged_scene_data(
+  packaged_scene_render_data_t* render_data,
+  pipeline_t* pipeline,
+  camera_t* camera);
 
 #ifdef __cplusplus
 }

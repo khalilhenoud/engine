@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
-#include <application/converters/png_to_image.h>
+#include <application/game/rendering/load_image.h>
 #include <library/allocator/allocator.h>
 #include <library/string/cstring.h>
 #include <library/string/fixed_string.h>

@@ -11,10 +11,10 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <application/game/rendering/load_font.h>
 #include <library/string/fixed_string.h>
 #include <library/string/cstring.h>
 #include <library/allocator/allocator.h>
-#include <application/converters/csv_to_font.h>
 #include <loaders/loader_csv.h>
 #include <entity/c/misc/font.h>
 #include <entity/c/runtime/font.h>

@@ -9,10 +9,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # add the executable
 add_executable(${PROJECT_NAME} WIN32
-      ./source/converters/to_render_data.c
-      ./source/converters/csv_to_font.c
-      ./source/converters/png_to_image.c
-      ./source/game/render_data/utils.c
+      ./source/game/rendering/load_font.c
+      ./source/game/rendering/load_image.c
+      ./source/game/rendering/render_data.c
       ./source/game/logic/player.c
       ./source/game/logic/player_collision_utils.c
       ./source/game/logic/bucket_processing.c

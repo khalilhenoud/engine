@@ -10,6 +10,10 @@
  */
 #include <assert.h>
 #include <application/input.h>
+#include <application/game/logic/player.h>
+#include <application/game/levels/load_scene.h>
+#include <application/game/rendering/render_data.h>
+#include <application/game/debug/text.h>
 #include <library/framerate_controller/framerate_controller.h>
 #include <renderer/pipeline.h>
 #include <renderer/renderer_opengl.h>
@@ -21,12 +25,6 @@
 #include <entity/c/scene/scene.h>
 #include <entity/c/level/level.h>
 #include <entity/c/spatial/bvh.h>
-#include <application/game/logic/player.h>
-#include <application/game/render_data/utils.h>
-#include <application/game/levels/load_scene.h>
-#include <application/converters/to_render_data.h>
-#include <application/converters/to_render_data.h>
-#include <application/game/debug/text.h>
 
 #define TILDE   0xC0
 #define KEY_EXIT_LEVEL           '0'

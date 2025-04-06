@@ -16,8 +16,8 @@
 #include <application/application.h>
 
 #include <entity/c/level/level.h>
-#include <application/process/levels/generic_level.h>
-#include <application/process/levels/room_select.h>
+#include <application/game/levels/generic_level.h>
+#include <application/game/levels/room_select.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////

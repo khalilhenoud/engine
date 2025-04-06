@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <application/process/debug/color.h>
+#include <application/game/debug/color.h>
 
 
 typedef struct pipeline_t pipeline_t;

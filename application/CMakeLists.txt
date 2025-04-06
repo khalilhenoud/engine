@@ -12,16 +12,16 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/converters/to_render_data.c
       ./source/converters/csv_to_font.c
       ./source/converters/png_to_image.c
-      ./source/process/render_data/utils.c
-      ./source/process/logic/player.c
-      ./source/process/logic/player_collision_utils.c
-      ./source/process/logic/bucket_processing.c
-      ./source/process/debug/color.c
-      ./source/process/debug/text.c
-      ./source/process/debug/face.c
-      ./source/process/levels/generic_level.c
-      ./source/process/levels/room_select.c
-      ./source/process/levels/load_scene.c
+      ./source/game/render_data/utils.c
+      ./source/game/logic/player.c
+      ./source/game/logic/player_collision_utils.c
+      ./source/game/logic/bucket_processing.c
+      ./source/game/debug/color.c
+      ./source/game/debug/text.c
+      ./source/game/debug/face.c
+      ./source/game/levels/generic_level.c
+      ./source/game/levels/room_select.c
+      ./source/game/levels/load_scene.c
 			./source/application.cpp
 			./source/main.cpp
       ./source/input.c

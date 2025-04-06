@@ -17,9 +17,9 @@
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
 #include <application/input.h>
-#include <application/process/logic/player.h>
-#include <application/process/logic/player_collision_utils.h>
-#include <application/process/logic/bucket_processing.h>
+#include <application/game/logic/player.h>
+#include <application/game/logic/player_collision_utils.h>
+#include <application/game/logic/bucket_processing.h>
 #include <math/c/capsule.h>
 #include <math/c/segment.h>
 #include <math/c/face.h>
@@ -27,8 +27,8 @@
 #include <entity/c/spatial/bvh.h>
 #include <entity/c/runtime/font.h>
 #include <entity/c/runtime/font_utils.h>
-#include <application/process/debug/face.h>
-#include <application/process/debug/text.h>
+#include <application/game/debug/face.h>
+#include <application/game/debug/text.h>
 
 #define KEY_SPEED_PLUS            '1'
 #define KEY_SPEED_MINUS           '2'

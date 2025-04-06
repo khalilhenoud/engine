@@ -10,7 +10,7 @@
  */
 #include <assert.h>
 #include <library/string/cstring.h>
-#include <application/process/render_data/utils.h>
+#include <application/game/render_data/utils.h>
 #include <application/converters/to_render_data.h>
 #include <entity/c/runtime/texture.h>
 #include <entity/c/runtime/font.h>

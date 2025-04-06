@@ -17,7 +17,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <math/c/vector3f.h>
-#include <application/process/logic/collision_data.h>
+#include <application/game/logic/collision_data.h>
 
 
 typedef struct face_t face_t;

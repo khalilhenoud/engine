@@ -15,8 +15,8 @@
 #include <entity/c/spatial/bvh.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
-#include <application/process/logic/player_collision_utils.h>
-#include <application/process/debug/face.h>
+#include <application/game/logic/player_collision_utils.h>
+#include <application/game/debug/face.h>
 
 #define FLOOR_ANGLE_DEGREES 60
 

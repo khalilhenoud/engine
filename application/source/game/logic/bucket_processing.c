@@ -15,8 +15,8 @@
 #include <entity/c/spatial/bvh.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
-#include <application/process/logic/bucket_processing.h>
-#include <application/process/debug/face.h>
+#include <application/game/logic/bucket_processing.h>
+#include <application/game/debug/face.h>
 
 
 extern int32_t draw_ignored_faces;

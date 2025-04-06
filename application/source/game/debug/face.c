@@ -10,7 +10,7 @@
  */
 #include <assert.h>
 #include <string.h>
-#include <application/process/debug/face.h>
+#include <application/game/debug/face.h>
 #include <math/c/face.h>
 #include <renderer/pipeline.h>
 #include <renderer/renderer_opengl.h>

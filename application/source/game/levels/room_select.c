@@ -1,5 +1,5 @@
 /**
- * @file level1.c
+ * @file room_select.c
  * @author khalilhenoud@gmail.com
  * @brief 
  * @version 0.1
@@ -10,42 +10,45 @@
  */
 #include <assert.h>
 #include <application/input.h>
-#include <library/framerate_controller/framerate_controller.h>
 #include <renderer/pipeline.h>
 #include <renderer/renderer_opengl.h>
 #include <entity/c/runtime/font.h>
 #include <entity/c/runtime/font_utils.h>
 #include <entity/c/mesh/color.h>
-#include <entity/c/mesh/mesh_utils.h>
-#include <entity/c/scene/camera.h>
 #include <entity/c/scene/scene.h>
 #include <entity/c/level/level.h>
-#include <entity/c/spatial/bvh.h>
-#include <application/process/logic/player.h>
-#include <application/process/render_data/utils.h>
-#include <application/process/levels/load_scene.h>
+#include <application/game/render_data/utils.h>
+#include <application/game/levels/load_scene.h>
 #include <application/converters/to_render_data.h>
 #include <application/converters/to_render_data.h>
-#include <application/process/debug/text.h>
+#include <library/filesystem/filesystem.h>
+#include <library/framerate_controller/framerate_controller.h>
+#include <application/game/debug/text.h>
 
-#define TILDE   0xC0
 #define KEY_EXIT_LEVEL           '0'
 
 
 static framerate_controller_t controller;
-static uint32_t exit_level = 0;
-static color_rgba_t scene_color = { 0.4f, 0.4f, 0.4f, 1.f};
-static int32_t disable_input;
+static int32_t exit_room_select = -1;
+static color_rgba_t scene_color = { 0.2f, 0.2f, 0.2f, 1.f};
 static pipeline_t pipeline;
-static camera_t* camera;
 static scene_t* scene;
 static packaged_scene_render_data_t* scene_render_data;
 static font_runtime_t* font;
 static uint32_t font_image_id;
-static bvh_t* bvh;
+static dir_entries_t rooms;
+
+static
+void
+load_rooms(const char* dataset)
+{
+  char directory[260];
+  sprintf(directory, "%srooms\\*", dataset);
+  get_subdirectories(directory, &rooms);
+}
 
 void
-load_level(
+load_room_select(
   const level_context_t context,
   const allocator_t* allocator)
 {
@@ -63,17 +66,12 @@ load_level(
   prep_packaged_render_data(
     context.data_set, room, scene_render_data, allocator);
 
-  // guaranteed to exist, same with the font.
-  camera = scene_render_data->camera_data.cameras;
-
   // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
   font_image_id = scene_render_data->font_data.texture_ids[0];
 
-  bvh = scene->bvh_repo.bvhs + 0;
-
-  exit_level = 0;
-  disable_input = 0;
+  load_rooms(context.data_set);
+  exit_room_select = -1;
 
   pipeline_set_default(&pipeline);
   set_viewport(
@@ -94,16 +92,10 @@ load_level(
   show_cursor(0);
 
   initialize_controller(&controller, 60, 1u);
-
-  player_init(
-    scene->metadata.player_start, 
-    scene->metadata.player_angle, 
-    camera, 
-    bvh);
 }
 
 void
-update_level(const allocator_t* allocator)
+update_room_select(const allocator_t* allocator)
 {
   uint64_t frame_rate = (uint64_t)controller_end(&controller);
   float dt_seconds = (float)controller_start(&controller);
@@ -111,89 +103,71 @@ update_level(const allocator_t* allocator)
   input_update();
   clear_color_and_depth_buffers();
 
-  render_packaged_scene_data(scene_render_data, &pipeline, camera);
-
   {
-    // disable/enable input with '~' key.
-    if (is_key_triggered(TILDE)) {
-      disable_input = !disable_input;
-      show_cursor((int32_t)disable_input);
+    char rooms_names[1024][260];
+    const char* text[1024];
+    uint32_t used = rooms.used;
+
+    for (uint32_t i = 0; i < rooms.used; ++i) {
+      if (strcmp(rooms.dir_names[i], "room_select") == 0)
+        sprintf(rooms_names[i], "[%s] %s", "-", rooms.dir_names[i]);
+      else
+        sprintf(rooms_names[i], "[%u] %s", (i + 1), rooms.dir_names[i]);
+      text[i] = rooms_names[i];
     }
 
-    if (!disable_input) {
-      player_update(
-        dt_seconds, 
-        camera, 
-        bvh,
-        &pipeline, 
-        font, 
-        font_image_id);
-    } else {
-      if (is_key_triggered(KEY_EXIT_LEVEL))
-        exit_level = 1;
-    }
+    render_text_to_screen(
+      font, 
+      font_image_id,
+      &pipeline, 
+      text, 
+      used,
+      white, 
+      20.f, 0.f);
   }
 
-  if (disable_input) {
-    const char* text[1];
-
-    text[0] = "press [0] to return to room selection";
-    render_text_to_screen(
-      font, 
-      font_image_id, 
-      &pipeline, 
-      text, 
-      1,
-      white, 
-      0.f, 0.f);
-  } else {
-    const char* text[6];
-    char delta_str[128] = { 0 };
-    char frame_str[128] = { 0 };
-
-    sprintf(delta_str, "delta: %f", dt_seconds);
-    sprintf(frame_str, "fps: %llu", frame_rate);
-
-    // display simple instructions.
-    text[0] = delta_str;
-    text[1] = frame_str;
-    text[2] = "----------------";
-    text[3] = "[C] RESET CAMERA";
-    text[4] = "[~] CAMERA UNLOCK/LOCK";
-    text[5] = "[1/2/WASD/EQ] CAMERA SPEED/MOVEMENT";
-    render_text_to_screen(
-      font, 
-      font_image_id, 
-      &pipeline, 
-      text, 
-      6,
-      white, 
-      0.f, 0.f);
+  // only support 9 levels for now.
+  for (int32_t i = 0; i < 9; ++i) {
+    if (
+      is_key_triggered('1' + i) && 
+      i < (int32_t)rooms.used && 
+      strcmp(rooms.dir_names[i], "room_select") != 0) {
+        exit_room_select = i;
+        break;
+      } 
   }
 
   flush_operations();
 }
 
 void
-unload_level(const allocator_t* allocator)
+unload_room_select(const allocator_t* allocator)
 {
   scene_free(scene, allocator);
   cleanup_packaged_render_data(scene_render_data, allocator);
 }
 
+void
+set_level_to_load(const char* source);
+
 uint32_t
-should_unload(void)
+should_unload_room_select(void)
 {
-  return exit_level;
+  if (exit_room_select == -1)
+    return 0;
+  else {
+    set_level_to_load(rooms.dir_names[exit_room_select]);
+    return 1;
+  }
 }
 
 void
-construct_generic_level(level_t* level)
+construct_level_selector(level_t* level)
 {
   assert(level);
 
-  level->load = load_level;
-  level->update = update_level;
-  level->unload = unload_level;
-  level->should_unload = should_unload;
+  level->load = load_room_select;
+  level->update = update_room_select;
+  level->unload = unload_room_select;
+  level->should_unload = should_unload_room_select;
 }

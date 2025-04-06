@@ -10,7 +10,7 @@
  */
 #include <assert.h>
 #include <string.h>
-#include <application/process/debug/text.h>
+#include <application/game/debug/text.h>
 #include <renderer/pipeline.h>
 #include <renderer/renderer_opengl.h>
 #include <entity/c/runtime/font.h>

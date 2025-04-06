@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2025
  * 
  */
-#include <application/process/debug/color.h>
+#include <application/game/debug/color.h>
 
 
 debug_color_t red = { 1.f, 0.f, 0.f, 1.f };

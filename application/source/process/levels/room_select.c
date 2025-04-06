@@ -18,7 +18,7 @@
 #include <entity/c/scene/scene.h>
 #include <entity/c/level/level.h>
 #include <application/process/render_data/utils.h>
-#include <application/process/utils/load_scene.h>
+#include <application/process/levels/load_scene.h>
 #include <application/converters/to_render_data.h>
 #include <application/converters/to_render_data.h>
 #include <library/filesystem/filesystem.h>

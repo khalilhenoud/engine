@@ -21,7 +21,7 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/process/debug/face.c
       ./source/process/levels/generic_level.c
       ./source/process/levels/room_select.c
-      ./source/process/utils/load_scene.c
+      ./source/process/levels/load_scene.c
 			./source/application.cpp
 			./source/main.cpp
       ./source/input.c

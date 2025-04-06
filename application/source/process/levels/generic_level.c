@@ -23,7 +23,7 @@
 #include <entity/c/spatial/bvh.h>
 #include <application/process/logic/player.h>
 #include <application/process/render_data/utils.h>
-#include <application/process/utils/load_scene.h>
+#include <application/process/levels/load_scene.h>
 #include <application/converters/to_render_data.h>
 #include <application/converters/to_render_data.h>
 #include <application/process/debug/text.h>

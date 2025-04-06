@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdint.h>
-#include <application/process/utils/load_scene.h>
+#include <application/process/levels/load_scene.h>
 #include <entity/c/scene/scene.h>
 #include <library/allocator/allocator.h>
 #include <library/containers/cvector.h>

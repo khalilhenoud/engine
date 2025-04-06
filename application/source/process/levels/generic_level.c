@@ -21,12 +21,12 @@
 #include <entity/c/scene/scene.h>
 #include <entity/c/level/level.h>
 #include <entity/c/spatial/bvh.h>
-#include <application/process/text/utils.h>
 #include <application/process/logic/player.h>
 #include <application/process/render_data/utils.h>
 #include <application/process/utils/load_scene.h>
 #include <application/converters/to_render_data.h>
 #include <application/converters/to_render_data.h>
+#include <application/process/debug/text.h>
 
 #define TILDE   0xC0
 #define KEY_EXIT_LEVEL           '0'
@@ -34,7 +34,6 @@
 
 static framerate_controller_t controller;
 static uint32_t exit_level = 0;
-static color_t white = { 1.f, 1.f, 1.f, 1.f };
 static color_rgba_t scene_color = { 0.4f, 0.4f, 0.4f, 1.f};
 static int32_t disable_input;
 static pipeline_t pipeline;
@@ -145,7 +144,7 @@ update_level(const allocator_t* allocator)
       &pipeline, 
       text, 
       1,
-      &white, 
+      white, 
       0.f, 0.f);
   } else {
     const char* text[6];
@@ -168,7 +167,7 @@ update_level(const allocator_t* allocator)
       &pipeline, 
       text, 
       6,
-      &white, 
+      white, 
       0.f, 0.f);
   }
 

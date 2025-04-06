@@ -26,13 +26,6 @@ extern int32_t draw_collision_query;
 extern int32_t draw_collided_face;
 extern int32_t draw_status;
 
-// extern color_t red;
-// extern color_t green;
-// extern color_t blue;
-// extern color_t yellow;
-// extern color_t white;
-// extern color_t gen;
-
 // return 0 if not split, 1 if split.
 static
 int32_t

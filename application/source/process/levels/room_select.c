@@ -17,20 +17,19 @@
 #include <entity/c/mesh/color.h>
 #include <entity/c/scene/scene.h>
 #include <entity/c/level/level.h>
-#include <application/process/text/utils.h>
 #include <application/process/render_data/utils.h>
 #include <application/process/utils/load_scene.h>
 #include <application/converters/to_render_data.h>
 #include <application/converters/to_render_data.h>
 #include <library/filesystem/filesystem.h>
 #include <library/framerate_controller/framerate_controller.h>
+#include <application/process/debug/text.h>
 
 #define KEY_EXIT_LEVEL           '0'
 
 
 static framerate_controller_t controller;
 static int32_t exit_room_select = -1;
-static color_t white = { 1.f, 1.f, 1.f, 1.f };
 static color_rgba_t scene_color = { 0.2f, 0.2f, 0.2f, 1.f};
 static pipeline_t pipeline;
 static scene_t* scene;
@@ -123,7 +122,7 @@ update_room_select(const allocator_t* allocator)
       &pipeline, 
       text, 
       used,
-      &white, 
+      white, 
       20.f, 0.f);
   }
 

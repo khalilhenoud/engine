@@ -27,7 +27,6 @@
 #include <entity/c/spatial/bvh.h>
 #include <entity/c/runtime/font.h>
 #include <entity/c/runtime/font_utils.h>
-
 #include <application/process/debug/face.h>
 #include <application/process/debug/text.h>
 

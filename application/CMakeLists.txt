@@ -19,7 +19,6 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/process/debug/color.c
       ./source/process/debug/text.c
       ./source/process/debug/face.c
-      ./source/process/text/utils.c
       ./source/process/levels/generic_level.c
       ./source/process/levels/room_select.c
       ./source/process/utils/load_scene.c

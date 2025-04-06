@@ -35,6 +35,17 @@ draw_debug_text_frame(
   font_runtime_t *font,
   const uint32_t font_image_id);
 
+void
+render_text_to_screen(
+  font_runtime_t* font, 
+  uint32_t font_image_id,
+  pipeline_t* pipeline, 
+  const char** text, 
+  uint32_t count,
+  const debug_color_t color,
+  float x,
+  float y);
+
 #ifdef __cplusplus
 }
 #endif

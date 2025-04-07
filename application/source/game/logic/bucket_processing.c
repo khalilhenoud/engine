@@ -17,14 +17,8 @@
 #include <renderer/pipeline.h>
 #include <application/game/logic/bucket_processing.h>
 #include <application/game/debug/face.h>
+#include <application/game/debug/flags.h>
 
-
-extern int32_t draw_ignored_faces;
-extern int32_t disable_depth_debug;
-extern int32_t use_locked_motion;
-extern int32_t draw_collision_query;
-extern int32_t draw_collided_face;
-extern int32_t draw_status;
 
 // return 0 if not split, 1 if split.
 static
@@ -139,7 +133,7 @@ remove_bucket(
 
   for (uint32_t i = 0, index = 0; i < info_used; ++i) {
     if (i >= start_index && i < end_index) {
-      if (draw_ignored_faces)
+      if (g_debug_flags.draw_ignored_faces)
         add_debug_face_to_frame(
           bvh->faces + collision_info[i].bvh_face_index, 
           bvh->normals + collision_info[i].bvh_face_index, 
@@ -378,7 +372,7 @@ get_averaged_normal(
 
     add_set_v3f(&averaged, &normal);
 
-     if (draw_collided_face) {
+     if (g_debug_flags.draw_collided_face) {
        for (uint32_t k = index; k < (index + buckets[i]); ++k) {
          uint32_t d_face_i = collision_info[k].bvh_face_index;
          debug_color_t color =

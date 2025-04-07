@@ -10,6 +10,7 @@
  */
 #include <assert.h>
 #include <application/input.h>
+#include <application/game/debug/flags.h>
 #include <application/game/logic/player.h>
 #include <application/game/levels/load_scene.h>
 #include <application/game/rendering/render_data.h>
@@ -32,7 +33,6 @@
 
 static framerate_controller_t controller;
 static uint32_t exit_level = 0;
-static color_rgba_t scene_color = { 0.4f, 0.4f, 0.4f, 1.f};
 static int32_t disable_input;
 static pipeline_t pipeline;
 static camera_t* camera;
@@ -119,6 +119,7 @@ update_level(const allocator_t* allocator)
     }
 
     if (!disable_input) {
+      update_debug_flags();
       player_update(
         dt_seconds, 
         camera, 
@@ -126,6 +127,9 @@ update_level(const allocator_t* allocator)
         &pipeline, 
         font, 
         font_image_id);
+
+      draw_debug_text_frame(&pipeline, font, font_image_id);
+      draw_debug_face_frame(&pipeline, g_debug_flags.disable_depth_debug);
     } else {
       if (is_key_triggered(KEY_EXIT_LEVEL))
         exit_level = 1;

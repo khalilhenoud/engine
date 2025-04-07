@@ -29,16 +29,11 @@
 #include <entity/c/runtime/font_utils.h>
 #include <application/game/debug/face.h>
 #include <application/game/debug/text.h>
+#include <application/game/debug/flags.h>
 
+#define KEY_MOVEMENT_MODE         '9'
 #define KEY_SPEED_PLUS            '1'
 #define KEY_SPEED_MINUS           '2'
-#define KEY_COLLISION_QUERY       '3'
-#define KEY_COLLISION_FACE        '4'
-#define KEY_DRAW_STATUS           '5'
-#define KEY_DRAW_IGNORED_FACES    '6'
-#define KEY_DISABLE_DEPTH         '7'
-#define KEY_MOVEMENT_LOCK         '8'
-#define KEY_MOVEMENT_MODE         '9'
 #define KEY_JUMP                  0x20
 #define KEY_STRAFE_LEFT           'A'
 #define KEY_STRAFE_RIGHT          'D'
@@ -48,25 +43,9 @@
 #define KEY_MOVE_DOWN             'E'
 #define KEY_RESET_CAMERA          'C'
 
-#define SNAP_THRESHOLD            0.1f
-#define SNAP_EXTENT               25
-#define SNAP_UP_EXTENT            10
-#define PROTRUSION_RATIO          0.5f
-#define SORTED_ITERATIONS         16
-#define ITERATIONS                6
-#define BINS                      5
-#define BINNED_MICRO_DISTANCE     25
-#define BINNED_MACRO_LIMIT        40
-
 #define REFERENCE_FRAME_TIME      0.033f
 
 
-int32_t draw_ignored_faces = 0;
-int32_t disable_depth_debug = 0;
-int32_t use_locked_motion = 0;
-int32_t draw_collision_query = 0;
-int32_t draw_collided_face = 0;
-int32_t draw_status = 0;
 static vector3f cam_acc = { 5.f, 5.f, 5.f };
 static vector3f cam_speed = { 0.f, 0.f, 0.f };
 static vector3f cam_speed_limit = { 10.f, 10.f, 10.f };
@@ -196,7 +175,7 @@ get_velocity(
   float friction = friction_constant * multiplier;
   vector3f velocity = current_velocity;
 
-  if (use_locked_motion)
+  if (g_debug_flags.use_locked_motion)
     return current_velocity;
 
   if (is_key_pressed(KEY_STRAFE_LEFT))
@@ -319,18 +298,6 @@ handle_macro_keys(camera_t* camera)
     camera_set_lookat(camera, center, at, up);
   }
 
-  if (is_key_triggered(KEY_COLLISION_QUERY))
-    draw_collision_query = !draw_collision_query;
-
-  if (is_key_triggered(KEY_DRAW_IGNORED_FACES))
-    draw_ignored_faces = !draw_ignored_faces;
-
-  if (is_key_triggered(KEY_COLLISION_FACE))
-    draw_collided_face = !draw_collided_face;
-
-  if (is_key_triggered(KEY_DRAW_STATUS))
-    draw_status = !draw_status;
-
   if (is_key_pressed(KEY_SPEED_PLUS))
     cam_speed_limit.data[0] = 
     cam_speed_limit.data[1] = 
@@ -347,12 +314,6 @@ handle_macro_keys(camera_t* camera)
 
   if (is_key_triggered(KEY_MOVEMENT_MODE))
     flying = !flying;
-
-  if (is_key_triggered(KEY_MOVEMENT_LOCK))
-    use_locked_motion = !use_locked_motion;
-
-  if (is_key_triggered(KEY_DISABLE_DEPTH))
-    disable_depth_debug = !disable_depth_debug;
 }
 
 static
@@ -424,7 +385,7 @@ can_step_up(
       collision_info, 
       16, 
       EPSILON_FLOAT_MIN_PRECISION,
-      draw_collision_query);
+      g_debug_flags.draw_collision_query);
 
     floor_info_i = get_floor_info(collision_info, info_used);
     if (floor_info_i != -1)
@@ -494,7 +455,7 @@ handle_collision_detection(
       collision_info,  
       iterations, 
       limit_distance,
-      draw_collision_query);
+      g_debug_flags.draw_collision_query);
 
     info_used = process_collision_info(
       bvh, &velocity, collision_info, info_used);
@@ -521,7 +482,7 @@ handle_collision_detection(
         (l_flags & COLLIDED_WALLS_FLAG) && 
         can_step_up(bvh, capsule, velocity, toi, 0.5f, &step_y)) {
         
-        if (draw_status) {
+        if (g_debug_flags.draw_status) {
           float value = capsule->center.data[1] - step_y;
           char text[512];
           memset(text, 0, sizeof(text));
@@ -584,7 +545,7 @@ handle_vertical_velocity(
       collision_info, 
       iterations, 
       limit_distance,
-      draw_collision_query);
+      g_debug_flags.draw_collision_query);
 
     floor_info_i = get_floor_info(collision_info, info_used);
     if (floor_info_i != -1)
@@ -615,7 +576,7 @@ handle_vertical_velocity(
     capsule->center.data[1] += y_trace_start_offset;
     capsule->center.data[1] += displacement.data[1] * info.time;
 
-    if (draw_status) {
+    if (g_debug_flags.draw_status) {
       float distance = 
         displacement.data[1] * info.time + y_trace_start_offset;
       char text[512];
@@ -682,7 +643,7 @@ player_update(
   cursor_info_t info = update_cursor(delta_time);
   camera_t oriented = get_camera_orientation(
     delta_time, &info, camera, 1/1000.f, 1/1000.f, TO_RADIANS(60));
-  if (use_locked_motion)
+  if (g_debug_flags.use_locked_motion)
     oriented = *camera;
   else {
     camera->lookat_direction = oriented.lookat_direction;
@@ -749,27 +710,6 @@ player_update(
     add_debug_text_to_frame(
       array, green, 0.f, (y+=20.f));
     add_debug_text_to_frame(
-      "[3] RENDER COLLISION QUERIES", 
-      draw_collision_query ? red : white, 0.f, (y+=20.f));
-    add_debug_text_to_frame(
-      "[4] RENDER COLLISION FACE", 
-      draw_collided_face ? red : white, 0.f, (y+=20.f));
-    add_debug_text_to_frame(
-      "[5] SHOW SNAPPING/FALLING STATE", 
-      draw_status ? red : white, 0.f, (y+=20.f));
-    add_debug_text_to_frame(
-      "[6] DRAW IGNORED FACES", 
-      draw_ignored_faces ? red : white, 0.f, (y+=20.f));
-    add_debug_text_to_frame(
-      "[7] DISABLE DEPTH TEST DEBUG", 
-      disable_depth_debug ? red : white, 0.f, (y+=20.f));
-    add_debug_text_to_frame(
-      "[8] LOCK DIRECTIONAL MOTION", 
-      use_locked_motion ? red : white, 0.f, (y+=20.f));
-    add_debug_text_to_frame(
       "[9] SWITCH CAMERA MODE", flying ? red : white, 0.f, (y+=20.f));
-    draw_debug_text_frame(pipeline, font, font_image_id);
-    
-    draw_debug_face_frame(pipeline, disable_depth_debug);
   }
 }

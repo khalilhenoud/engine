@@ -49,14 +49,8 @@ load_level(
 {
   char room[256] = {0};
   sprintf(room, "rooms\\%s", context.level);
-
-  scene = load_scene(
-    context.data_set,
-    room,
-    context.level,
-    allocator);
-
-  // load the scene render data.
+  scene = load_scene(context.data_set, room, context.level, allocator);
+  
   scene_render_data = load_scene_render_data(scene, allocator);
   prep_packaged_render_data(
     context.data_set, room, scene_render_data, allocator);
@@ -64,7 +58,6 @@ load_level(
   // guaranteed to exist, same with the font.
   camera = scene_render_data->camera_data.cameras;
 
-  // need to load the images required by the scene.
   font = scene_render_data->font_data.fonts;
   font_image_id = scene_render_data->font_data.texture_ids[0];
 

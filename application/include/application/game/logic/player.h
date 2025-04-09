@@ -8,8 +8,8 @@
  * @copyright Copyright (c) 2023
  * 
  */
-#ifndef CAMERA_PROCESS_LOGIC_H
-#define CAMERA_PROCESS_LOGIC_H
+#ifndef PLAYER_PROCESS_LOGIC_H
+#define PLAYER_PROCESS_LOGIC_H
 
 #ifdef __cplusplus
 extern "C" {

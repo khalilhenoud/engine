@@ -14,7 +14,7 @@ add_executable(${PROJECT_NAME} WIN32
       ./source/game/rendering/render_data.c
       ./source/game/logic/player.c
       ./source/game/logic/camera.c
-      ./source/game/logic/player_collision_utils.c
+      ./source/game/logic/collision_utils.c
       ./source/game/logic/bucket_processing.c
       ./source/game/debug/color.c
       ./source/game/debug/text.c

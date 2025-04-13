@@ -11,10 +11,14 @@
 #include <assert.h>
 #include <application/input.h>
 #include <application/game/logic/camera.h>
+#include <application/game/debug/flags.h>
 #include <entity/c/scene/camera.h>
 #include <math/c/matrix4f.h>
 
 #define KEY_RESET_CAMERA          'C'
+#define VERTICAL_LIMIT            TO_RADIANS(60)
+#define HORIZONTAL_SENSITIVITY    (1.f/1000.f)
+#define VERTICAL_SENSITIVITY      (1.f/1000.f)
 
 
 typedef
@@ -85,10 +89,7 @@ static
 void
 update_orientation(
   camera_t *camera, 
-  float delta_time, 
-  const float vertical_sensitivity,
-  const float horizontal_sensitivity,
-  const float vertical_angle_limit_radians)
+  float delta_time)
 {
   // used to keep track of the current maximum offset.
   static float current_y = 0.f;
@@ -113,18 +114,17 @@ update_orientation(
   }
 
   // limit the rotation along y, we test against the limit.
-  frame_dy = -cursor.delta_y * vertical_sensitivity;
+  frame_dy = -cursor.delta_y * VERTICAL_SENSITIVITY;
   tmp_y = current_y + frame_dy;
   
   // limit the frame dy.
-  frame_dy = (tmp_y > vertical_angle_limit_radians) ? 
-    (vertical_angle_limit_radians - current_y) : frame_dy;
-  frame_dy = (tmp_y < -vertical_angle_limit_radians) ? 
-    (-vertical_angle_limit_radians - current_y) : frame_dy;
+  frame_dy = (tmp_y > VERTICAL_LIMIT) ? (VERTICAL_LIMIT - current_y) : frame_dy;
+  frame_dy = (tmp_y < -VERTICAL_LIMIT) ? 
+    (-VERTICAL_LIMIT - current_y) : frame_dy;
   current_y += frame_dy;
 
   // rotate the camera left and right
-  matrix4f_rotation_y(&rotation_x, -cursor.delta_x * horizontal_sensitivity);
+  matrix4f_rotation_y(&rotation_x, -cursor.delta_x * HORIZONTAL_SENSITIVITY);
   // rotate the camera up and down
   matrix4f_set_axisangle(&axis_xz, &ortho_xz, TO_DEGREES(frame_dy));
 
@@ -139,16 +139,11 @@ update_orientation(
 void
 camera_update(
   camera_t *camera, 
-  float delta_time, 
-  const float vertical_sensitivity,
-  const float horizontal_sensitivity,
-  const float vertical_angle_limit_radians)
+  float delta_time)
 {
+  if (g_debug_flags.use_locked_motion)
+    return;
+  
   handle_input(camera);
-  update_orientation(
-    camera, 
-    delta_time, 
-    vertical_sensitivity, 
-    horizontal_sensitivity, 
-    vertical_angle_limit_radians);
+  update_orientation(camera, delta_time);
 }

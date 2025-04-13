@@ -31,10 +31,7 @@ camera_init(
 void
 camera_update(
   camera_t* camera, 
-  float delta_time, 
-  const float vertical_sensitivity,
-  const float horizontal_sensitivity,
-  const float vertical_angle_limit_radians);
+  float delta_time);
 
 #ifdef __cplusplus
 }

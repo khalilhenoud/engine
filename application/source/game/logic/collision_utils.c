@@ -1,5 +1,5 @@
 /**
- * @file player_collision_utils.c
+ * @file collision_utils.c
  * @author khalilhenoud@gmail.com
  * @brief 
  * @version 0.1
@@ -15,24 +15,12 @@
 #include <entity/c/spatial/bvh.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/pipeline.h>
-#include <application/game/logic/player_collision_utils.h>
+#include <application/game/logic/collision_utils.h>
 #include <application/game/debug/face.h>
+#include <application/game/debug/flags.h>
 
 #define FLOOR_ANGLE_DEGREES 60
 
-
-static
-uint32_t
-is_in_filtered(
-  uint32_t index, 
-  const uint32_t to_filter[1024],
-  uint32_t filter_count)
-{
-  for (uint32_t i = 0; i < filter_count; ++i) 
-    if (to_filter[i] == index)
-      return 1;
-  return 0;
-}
 
 uint32_t 
 is_floor(bvh_t* bvh, uint32_t index)
@@ -88,6 +76,91 @@ populate_moving_capsule_aabb(
 }
 
 int32_t
+is_in_valid_space(
+  bvh_t* bvh,
+  capsule_t* capsule)
+{
+  vector3f penetration;
+  point3f sphere_center;
+  uint32_t array[256];
+  uint32_t used = 0;
+  bvh_aabb_t bounds;
+  capsule_face_classification_t classification;
+  float length_sqrd;
+
+  populate_capsule_aabb(&bounds, capsule, 1.025f);
+  query_intersection_fixed_256(bvh, &bounds, array, &used);
+
+  for (uint32_t used_index = 0; used_index < used; ++used_index) {
+    bvh_node_t *node = bvh->nodes + array[used_index];
+    for (
+      uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
+      i < last; ++i) {
+      if (!bounds_intersect(&bounds, bvh->bounds + i))
+        continue;
+
+      classification =
+        classify_capsule_face(
+          capsule,
+          bvh->faces + i,
+          bvh->normals + i,
+          0,
+          &penetration,
+          &sphere_center);
+
+      length_sqrd = length_squared_v3f(&penetration);
+
+      if (
+        classification != CAPSULE_FACE_NO_COLLISION && 
+        !IS_ZERO_LP(length_sqrd))
+        return 0;
+    }
+  }
+
+  return 1;
+}
+
+void
+ensure_in_valid_space(
+  bvh_t* bvh,
+  capsule_t* capsule)
+{
+  vector3f penetration;
+  point3f sphere_center;
+  uint32_t array[256];
+  uint32_t used = 0;
+  bvh_aabb_t bounds;
+  capsule_face_classification_t classification;
+  float length_sqrd;
+
+  populate_capsule_aabb(&bounds, capsule, 1.025f);
+  query_intersection_fixed_256(bvh, &bounds, array, &used);
+
+  for (uint32_t used_index = 0; used_index < used; ++used_index) {
+    bvh_node_t* node = bvh->nodes + array[used_index];
+    for (
+      uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
+      i < last; ++i) {
+
+      if (!bounds_intersect(&bounds, bvh->bounds + i))
+        continue;
+
+      classification =
+        classify_capsule_face(
+          capsule,
+          bvh->faces + i,
+          bvh->normals + i,
+          0,
+          &penetration,
+          &sphere_center);
+
+      if (classification != CAPSULE_FACE_NO_COLLISION)
+        add_set_v3f(&capsule->center, &penetration);
+    }
+  }
+}
+
+int32_t
 intersects_post_displacement(
   capsule_t capsule,
   const vector3f displacement,
@@ -97,14 +170,13 @@ intersects_post_displacement(
   const float limit_distance);
 
 uint32_t
-get_all_first_time_of_impact(
-  bvh_t* bvh,
-  capsule_t* capsule,
+get_time_of_impact(
+  bvh_t *bvh,
+  capsule_t *capsule,
   vector3f displacement,
   intersection_info_t collision_info[256],
   const uint32_t iterations,
-  const float limit_distance,
-  const int32_t draw_collision_query)
+  const float limit_distance)
 {
   uint32_t array[256];
   uint32_t used = 0;
@@ -118,7 +190,7 @@ get_all_first_time_of_impact(
   populate_moving_capsule_aabb(&bounds, capsule, &displacement, 1.025f);
   query_intersection_fixed_256(bvh, &bounds, array, &used);
 
-  if (used && draw_collision_query) {
+  if (used && g_debug_flags.draw_collision_query) {
     for (uint32_t used_index = 0; used_index < used; ++used_index) {
       bvh_node_t* node = bvh->nodes + array[used_index];
       for (
@@ -200,91 +272,6 @@ get_all_first_time_of_impact(
   }
 
   return collision_info_used;
-}
-
-int32_t
-is_in_valid_space(
-  bvh_t* bvh,
-  capsule_t* capsule)
-{
-  vector3f penetration;
-  point3f sphere_center;
-  uint32_t array[256];
-  uint32_t used = 0;
-  bvh_aabb_t bounds;
-  capsule_face_classification_t classification;
-  float length_sqrd;
-
-  populate_capsule_aabb(&bounds, capsule, 1.025f);
-  query_intersection_fixed_256(bvh, &bounds, array, &used);
-
-  for (uint32_t used_index = 0; used_index < used; ++used_index) {
-    bvh_node_t* node = bvh->nodes + array[used_index];
-    for (
-      uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
-      i < last; ++i) {
-      if (!bounds_intersect(&bounds, bvh->bounds + i))
-        continue;
-
-      classification =
-        classify_capsule_face(
-          capsule,
-          bvh->faces + i,
-          bvh->normals + i,
-          0,
-          &penetration,
-          &sphere_center);
-
-      length_sqrd = length_squared_v3f(&penetration);
-
-      if (
-        classification != CAPSULE_FACE_NO_COLLISION && 
-        !IS_ZERO_LP(length_sqrd))
-        return 0;
-    }
-  }
-
-  return 1;
-}
-
-void
-ensure_in_valid_space(
-  bvh_t* bvh,
-  capsule_t* capsule)
-{
-  vector3f penetration;
-  point3f sphere_center;
-  uint32_t array[256];
-  uint32_t used = 0;
-  bvh_aabb_t bounds;
-  capsule_face_classification_t classification;
-  float length_sqrd;
-
-  populate_capsule_aabb(&bounds, capsule, 1.025f);
-  query_intersection_fixed_256(bvh, &bounds, array, &used);
-
-  for (uint32_t used_index = 0; used_index < used; ++used_index) {
-    bvh_node_t* node = bvh->nodes + array[used_index];
-    for (
-      uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
-      i < last; ++i) {
-
-      if (!bounds_intersect(&bounds, bvh->bounds + i))
-        continue;
-
-      classification =
-        classify_capsule_face(
-          capsule,
-          bvh->faces + i,
-          bvh->normals + i,
-          0,
-          &penetration,
-          &sphere_center);
-
-      if (classification != CAPSULE_FACE_NO_COLLISION)
-        add_set_v3f(&capsule->center, &penetration);
-    }
-  }
 }
 
 static

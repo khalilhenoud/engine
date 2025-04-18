@@ -113,12 +113,7 @@ update_level(const allocator_t* allocator)
 
     if (!disable_input) {
       update_debug_flags();
-      player_update(
-        dt_seconds, 
-        camera, 
-        bvh,
-        &pipeline);
-
+      player_update(dt_seconds);
       draw_debug_text_frame(&pipeline, font, font_image_id);
       draw_debug_face_frame(&pipeline, g_debug_flags.disable_depth_debug);
     } else {

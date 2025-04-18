@@ -20,7 +20,6 @@ extern "C" {
 
 
 typedef struct bvh_t bvh_t;
-typedef struct capsule_t capsule_t;
 typedef struct camera_t camera_t;
 
 void

@@ -33,6 +33,12 @@ struct {
   uint32_t bvh_face_index;
 } intersection_info_t;
 
+typedef
+struct {
+  intersection_info_t hits[256];
+  uint32_t count;
+} intersection_data_t;
+
 #ifdef __cplusplus
 }
 #endif

@@ -21,9 +21,7 @@
 #include <application/game/logic/bucket_processing.h>
 #include <application/game/logic/camera.h>
 #include <math/c/capsule.h>
-#include <math/c/segment.h>
 #include <math/c/face.h>
-#include <math/c/sphere.h>
 #include <entity/c/spatial/bvh.h>
 #include <application/game/debug/face.h>
 #include <application/game/debug/text.h>
@@ -64,6 +62,14 @@ static
 player_t s_player;
 
 ////////////////////////////////////////////////////////////////////////////////
+inline
+void
+clamp(float *f, float min, float max)
+{
+  *f = (*f < min) ? min : *f;
+  *f = (*f > max) ? max : *f;
+}
+
 static
 void
 update_velocity(float delta_time)
@@ -75,24 +81,22 @@ update_velocity(float delta_time)
     return;
 
   if (is_key_pressed(KEY_STRAFE_LEFT))
-     s_player.velocity.data[0] -= s_player.acceleration.data[0] * multiplier;
+    s_player.velocity.data[0] -= s_player.acceleration.data[0] * multiplier;
 
   if (is_key_pressed(KEY_STRAFE_RIGHT))
-     s_player.velocity.data[0] += s_player.acceleration.data[0] * multiplier;
+    s_player.velocity.data[0] += s_player.acceleration.data[0] * multiplier;
 
   if (is_key_pressed(KEY_MOVE_FWD))
-     s_player.velocity.data[2] += s_player.acceleration.data[2] * multiplier;
+    s_player.velocity.data[2] += s_player.acceleration.data[2] * multiplier;
 
   if (is_key_pressed(KEY_MOVE_BACK))
-     s_player.velocity.data[2] -= s_player.acceleration.data[2] * multiplier;
+    s_player.velocity.data[2] -= s_player.acceleration.data[2] * multiplier;
 
-  if (s_player.is_flying) {
-    if (is_key_pressed(KEY_MOVE_UP))
-       s_player.velocity.data[1] += s_player.acceleration.data[1] * multiplier;
+  if (is_key_pressed(KEY_MOVE_UP) && s_player.is_flying)
+    s_player.velocity.data[1] += s_player.acceleration.data[1] * multiplier;
 
-    if (is_key_pressed(KEY_MOVE_DOWN))
-       s_player.velocity.data[1] -= s_player.acceleration.data[1] * multiplier;
-  }
+  if (is_key_pressed(KEY_MOVE_DOWN) && s_player.is_flying)
+    s_player.velocity.data[1] -= s_player.acceleration.data[1] * multiplier;
 
   {
     // apply friction.
@@ -119,29 +123,12 @@ update_velocity(float delta_time)
   }
 
   {
-    // apply limits.
-    s_player.velocity.data[0] = 
-      (s_player.velocity.data[0] < -s_player.velocity_limit.data[0]) ? 
-      -s_player.velocity_limit.data[0] : s_player.velocity.data[0];
-    s_player.velocity.data[0] = 
-      (s_player.velocity.data[0] > +s_player.velocity_limit.data[0]) ? 
-      +s_player.velocity_limit.data[0] : s_player.velocity.data[0];
-  
-    s_player.velocity.data[2] = 
-      (s_player.velocity.data[2] < -s_player.velocity_limit.data[2]) ? 
-      -s_player.velocity_limit.data[2] : s_player.velocity.data[2];
-    s_player.velocity.data[2] = 
-      (s_player.velocity.data[2] > +s_player.velocity_limit.data[2]) ? 
-      +s_player.velocity_limit.data[2] : s_player.velocity.data[2];
-  
-    if (s_player.is_flying) {
-      s_player.velocity.data[1] = 
-        (s_player.velocity.data[1] < -s_player.velocity_limit.data[1]) ? 
-        -s_player.velocity_limit.data[1] : s_player.velocity.data[1];
-      s_player.velocity.data[1] = 
-        (s_player.velocity.data[1] > +s_player.velocity_limit.data[1]) ?
-        +s_player.velocity_limit.data[1] : s_player.velocity.data[1];
-    }
+    // clamp the velocity.
+    vector3f limit = s_player.velocity_limit;
+    clamp(s_player.velocity.data + 0, -limit.data[0], limit.data[0]);
+    clamp(s_player.velocity.data + 2, -limit.data[2], limit.data[2]);
+    if (s_player.is_flying)
+      clamp(s_player.velocity.data + 1, -limit.data[1], limit.data[1]);
   }
 }
 
@@ -173,13 +160,12 @@ get_world_relative_velocity(float delta_time)
   length = length_v3f(&lookat_xz);
 
   if (!IS_ZERO_MP(length)) {
+    float vely = s_player.velocity.data[2];
     lookat_xz.data[0] /= length;
     lookat_xz.data[2] /= length;
 
-    relative.data[0] += 
-      lookat_xz.data[0] * s_player.velocity.data[2] * multiplier;
-    relative.data[2] += 
-      lookat_xz.data[2] * s_player.velocity.data[2] * multiplier;
+    relative.data[0] += lookat_xz.data[0] * vely * multiplier;
+    relative.data[2] += lookat_xz.data[2] * vely * multiplier;
   }
 
   return relative;
@@ -187,17 +173,112 @@ get_world_relative_velocity(float delta_time)
 
 static
 int32_t
-get_floor_info(
-  intersection_info_t collision_info[256], 
-  uint32_t used)
+get_floor_index(const intersection_data_t *collisions)
 {
-  for (uint32_t i = 0; i < used; ++i)
-    if (collision_info[i].flags == COLLIDED_FLOOR_FLAG)
+  for (uint32_t i = 0; i < collisions->count; ++i)
+    if (collisions->hits[i].flags == COLLIDED_FLOOR_FLAG)
       return (int32_t)i;
   
   return -1;
 }
 
+static
+void
+update_vertical_velocity(float delta_time)
+{
+  float multiplier = delta_time / REFERENCE_FRAME_TIME;
+  bvh_t *bvh = s_player.bvh;
+  intersection_data_t collisions;
+  int32_t floor_index;
+  intersection_info_t info = { 1.f, COLLIDED_NONE, (uint32_t)-1 };
+  // move the capsule up by radius and then trace down by adjust diameter.
+  const float radius = s_player.capsule.radius;
+  const float diameter = s_player.capsule.radius * 2;
+  // this is necessary as the time of first impact precision is 1 / iterations.
+  vector3f displacement = { 0.f, 0.f, 0.f };
+  displacement.data[1] = -(diameter + diameter / ITERATIONS);
+  // assume the player is not on solid floor.
+  s_player.on_solid_floor = 0;
+
+  if (s_player.is_flying)
+    return;
+
+  {
+    capsule_t duplicate = s_player.capsule;
+    duplicate.center.data[1] += radius;
+
+    collisions.count = get_time_of_impact(
+      bvh, 
+      &duplicate, 
+      displacement, 
+      collisions.hits, 
+      ITERATIONS, 
+      LIMIT_DISTANCE);
+
+    floor_index = get_floor_index(&collisions);
+    if (floor_index != -1)
+      info = collisions.hits[floor_index];
+
+    // after the sweep if we collided with any floor face.
+    if (info.flags == COLLIDED_FLOOR_FLAG) {
+      float t;
+      vector3f *normal = bvh->normals + info.bvh_face_index;
+      face_t face = bvh->faces[info.bvh_face_index];
+
+      // extend the face and find the toi.
+      face = get_extended_face(&face, s_player.capsule.radius * 2);
+      t = find_capsule_face_intersection_time(
+        duplicate,
+        &face,
+        normal,
+        displacement,
+        ITERATIONS,
+        LIMIT_DISTANCE);
+
+      info.time = t;
+      s_player.on_solid_floor = 1;
+    }
+  }
+
+  // snap the capsule to the nearest floor, debug info
+  if (s_player.on_solid_floor && s_player.velocity.data[1] <= 0.f) {
+    s_player.velocity.data[1] = 0.f;
+    s_player.capsule.center.data[1] += radius;
+    s_player.capsule.center.data[1] += displacement.data[1] * info.time;
+
+    if (g_debug_flags.draw_status) {
+      // display the distance we moved.
+      float distance = displacement.data[1] * info.time + radius;
+      char text[512];
+      memset(text, 0, sizeof(text));
+      sprintf(text, "SNAPPING %f", distance);
+      add_debug_text_to_frame(text, green, 400.f, 300.f);
+
+      {
+        // add the face to draw.
+        uint32_t i = info.bvh_face_index;
+        debug_color_t color = 
+          is_floor(bvh, i) ? green : (is_ceiling(bvh, i)? white : blue);
+        add_debug_face_to_frame(bvh->faces + i, bvh->normals + i, color, 1);
+      }
+    }
+  }
+
+  // jump
+  if (is_key_triggered(KEY_JUMP) && s_player.on_solid_floor) {
+    s_player.on_solid_floor = 0;
+    s_player.velocity.data[1] = s_player.jump_velocity;
+  }
+
+  // apply gravity
+  if (!s_player.on_solid_floor) {
+    s_player.velocity.data[1] -= s_player.gravity * multiplier;
+    s_player.velocity.data[1] = 
+      fmax(s_player.velocity.data[1], -s_player.velocity_limit.data[1]);
+  }
+}
+
+// MAJOR ERROR HERE; I NEED TO UNDERSTAND HOW THIS IS USED.
 static
 vector3f
 get_adjusted_velocity(
@@ -209,7 +290,8 @@ get_adjusted_velocity(
   // if we are moving and there is intersection.
   if (!IS_ZERO_LP(length_squared_v3f(&velocity)) && toi != 1.f) {
     vector3f resultant = normalize_v3f(&velocity);
-    mult_v3f(&resultant, capsule->radius  *radius_scale);
+    // DA FUCK: This is doing nothing, mult_v3f is not a setter.
+    mult_v3f(&resultant, capsule->radius * radius_scale);
     add_set_v3f(&resultant, &velocity);
     return resultant;
   }
@@ -217,6 +299,10 @@ get_adjusted_velocity(
   return velocity;
 }
 
+// can_step_up is used to move the capsule upward, conserve the velocity and 
+// then loop again in the handle_collision_detection function. I prefer
+// splitting the update_vertical_function in 2 appropriate parts and getting rid
+// of this function.
 static
 int32_t
 can_step_up(
@@ -227,8 +313,7 @@ can_step_up(
 {
   bvh_t *bvh = s_player.bvh;
   const capsule_t *capsule = &s_player.capsule;
-  intersection_info_t collision_info[256];
-  uint32_t info_used;
+  intersection_data_t collisions;
   int32_t floor_info_i;
   intersection_info_t info = { 1.f, COLLIDED_NONE, (uint32_t)-1 };
   vector3f displacement = { 0.f, -(capsule->radius + 1) * 2, 0.f };
@@ -247,17 +332,17 @@ can_step_up(
     if (!is_in_valid_space(bvh, &duplicate))
       return 0;
 
-    info_used = get_time_of_impact(
+    collisions.count = get_time_of_impact(
       bvh, 
       &duplicate, 
       displacement, 
-      collision_info, 
+      collisions.hits, 
       16, 
       EPSILON_FLOAT_MIN_PRECISION);
 
-    floor_info_i = get_floor_info(collision_info, info_used);
+    floor_info_i = get_floor_index(&collisions);
     if (floor_info_i != -1)
-      info = collision_info[floor_info_i];
+      info = collisions.hits[floor_info_i];
 
     if (info.flags == COLLIDED_FLOOR_FLAG) {
        float t;
@@ -319,6 +404,7 @@ handle_collision_detection(const vector3f displacement)
       ITERATIONS, 
       LIMIT_DISTANCE);
 
+    // bucket processing
     info_used = process_collision_info(
       bvh, &velocity, collision_info, info_used);
 
@@ -344,6 +430,8 @@ handle_collision_detection(const vector3f displacement)
       distance_to_go -= length_v3f(&to_apply);
       distance_to_go = fmax(distance_to_go, 0.f);
 
+      // can_step_up is used to move the capsule up and continue the movement
+      // forward.
       if (
         (l_flags & COLLIDED_WALLS_FLAG) && 
         can_step_up(velocity, toi, 0.5f, &step_y)) {
@@ -372,99 +460,6 @@ handle_collision_detection(const vector3f displacement)
   }
 
   return flags;
-}
-
-static
-void
-update_vertical_velocity(float delta_time)
-{
-  if (s_player.is_flying)
-    return;
-
-  bvh_t *bvh = s_player.bvh;
-  float multiplier = delta_time / REFERENCE_FRAME_TIME;
-  intersection_info_t collision_info[256];
-  uint32_t info_used;
-  int32_t floor_info_i;
-  intersection_info_t info = { 1.f, COLLIDED_NONE, (uint32_t)-1 };
-  vector3f displacement = { 0.f, 0.f, 0.f };
-  const float y_trace_start_offset = s_player.capsule.radius;
-  const float y_trace_end_offset = -s_player.capsule.radius * 2;
-  // this is necessary as the time of first impact precision is 1 / iterations.
-  displacement.data[1] = y_trace_end_offset + y_trace_end_offset / ITERATIONS;
-  s_player.on_solid_floor = 0;
-
-  {
-    capsule_t duplicate = s_player.capsule;
-    duplicate.center.data[1] += y_trace_start_offset;
-
-    info_used = get_time_of_impact(
-      bvh, 
-      &duplicate, 
-      displacement, 
-      collision_info, 
-      ITERATIONS, 
-      LIMIT_DISTANCE);
-
-    floor_info_i = get_floor_info(collision_info, info_used);
-    if (floor_info_i != -1)
-      info = collision_info[floor_info_i];
-
-    if (info.flags == COLLIDED_FLOOR_FLAG) {
-      float t;
-      vector3f *normal = bvh->normals + info.bvh_face_index;
-      face_t face = bvh->faces[info.bvh_face_index];
-      face = get_extended_face(&face, s_player.capsule.radius * 2);
-
-      t = find_capsule_face_intersection_time(
-        duplicate,
-        &face,
-        normal,
-        displacement,
-        ITERATIONS,
-        LIMIT_DISTANCE);
-
-      info.time = t;
-      s_player.on_solid_floor = 1;
-    }
-  }
-
-  // snap the capsule to the nearst floor.
-  if (s_player.on_solid_floor && s_player.velocity.data[1] <= 0.f) {
-    s_player.velocity.data[1] = 0.f;
-    s_player.capsule.center.data[1] += y_trace_start_offset;
-    s_player.capsule.center.data[1] += displacement.data[1] * info.time;
-
-    if (g_debug_flags.draw_status) {
-      float distance = 
-        displacement.data[1] * info.time + y_trace_start_offset;
-      char text[512];
-      memset(text, 0, sizeof(text));
-      sprintf(text, "SNAPPING %f", distance);
-      add_debug_text_to_frame(text, green, 400.f, 300.f);
-
-      {
-        uint32_t i = info.bvh_face_index;
-        debug_color_t color = 
-          is_floor(bvh, i) ? green : (is_ceiling(bvh, i)? white : blue);
-        add_debug_face_to_frame(
-          bvh->faces + i, 
-          bvh->normals + i, 
-          color, 1);
-      }
-    }
-  }
-
-  if (is_key_triggered(KEY_JUMP) && s_player.on_solid_floor) {
-    s_player.on_solid_floor = 0;
-    s_player.velocity.data[1] = s_player.jump_velocity;
-  }
-
-  if (!s_player.on_solid_floor) {
-    s_player.velocity.data[1] -= s_player.gravity * multiplier;
-    s_player.velocity.data[1] = 
-      fmax(s_player.velocity.data[1], -s_player.velocity_limit.data[1]);
-  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

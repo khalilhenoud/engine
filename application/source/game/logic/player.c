@@ -182,6 +182,69 @@ get_floor_index(const intersection_data_t *collisions)
   return -1;
 }
 
+// does a vertical sweep to determine if we can snap the provided capsule. the 
+// sweep is from [+radius, -(diameter + (diameter/iterations))]. The error term
+// is necessary due to the collision term imprecision.
+static
+int32_t
+can_snap_vertically(
+  capsule_t capsule, 
+  intersection_info_t *info, 
+  float *out_y)
+{
+  bvh_t *bvh = s_player.bvh;
+  intersection_data_t collisions;
+  int32_t floor_index;
+  const float diameter = capsule.radius * 2;
+  vector3f displacement = { 0.f, -(diameter + diameter / ITERATIONS), 0.f };
+
+  info->time = 1.f;
+  info->flags = COLLIDED_NONE;
+  info->bvh_face_index = (uint32_t)-1;
+  
+  {
+    capsule.center.data[1] += capsule.radius;
+    // early out if the sweep starts in collision.
+    if (!is_in_valid_space(bvh, &capsule))
+      return 0;
+    
+    collisions.count = get_time_of_impact(
+      bvh, 
+      &capsule, 
+      displacement, 
+      collisions.hits, 
+      ITERATIONS, 
+      LIMIT_DISTANCE);
+
+    floor_index = get_floor_index(&collisions);
+    if (floor_index != -1)
+      *info = collisions.hits[floor_index];
+
+    // after the sweep if we collided with any floor face.
+    if (info->flags == COLLIDED_FLOOR_FLAG) {
+      float t;
+      vector3f *normal = bvh->normals + info->bvh_face_index;
+      face_t face = bvh->faces[info->bvh_face_index];
+
+      // extend the face and find the toi.
+      face = get_extended_face(&face, capsule.radius * 2);
+      t = find_capsule_face_intersection_time(
+        capsule,
+        &face,
+        normal,
+        displacement,
+        ITERATIONS,
+        LIMIT_DISTANCE);
+
+      info->time = t;
+      *out_y = capsule.center.data[1] + displacement.data[1] * info->time;
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
 static
 void
 update_vertical_velocity(float delta_time)
@@ -191,74 +254,25 @@ update_vertical_velocity(float delta_time)
   intersection_data_t collisions;
   int32_t floor_index;
   intersection_info_t info = { 1.f, COLLIDED_NONE, (uint32_t)-1 };
-  // move the capsule up by radius and then trace down by adjust diameter.
-  const float radius = s_player.capsule.radius;
-  const float diameter = s_player.capsule.radius * 2;
-  // this is necessary as the time of first impact precision is 1 / iterations.
-  vector3f displacement = { 0.f, 0.f, 0.f };
-  displacement.data[1] = -(diameter + diameter / ITERATIONS);
-  // assume the player is not on solid floor.
+  float out_y;
+  
   s_player.on_solid_floor = 0;
-
-  if (s_player.is_flying)
-    return;
-
-  {
-    capsule_t duplicate = s_player.capsule;
-    duplicate.center.data[1] += radius;
-
-    collisions.count = get_time_of_impact(
-      bvh, 
-      &duplicate, 
-      displacement, 
-      collisions.hits, 
-      ITERATIONS, 
-      LIMIT_DISTANCE);
-
-    floor_index = get_floor_index(&collisions);
-    if (floor_index != -1)
-      info = collisions.hits[floor_index];
-
-    // after the sweep if we collided with any floor face.
-    if (info.flags == COLLIDED_FLOOR_FLAG) {
-      float t;
-      vector3f *normal = bvh->normals + info.bvh_face_index;
-      face_t face = bvh->faces[info.bvh_face_index];
-
-      // extend the face and find the toi.
-      face = get_extended_face(&face, s_player.capsule.radius * 2);
-      t = find_capsule_face_intersection_time(
-        duplicate,
-        &face,
-        normal,
-        displacement,
-        ITERATIONS,
-        LIMIT_DISTANCE);
-
-      info.time = t;
+  if (can_snap_vertically(s_player.capsule, &info, &out_y)) {
+    if (s_player.velocity.data[1] <= 0.f) {
+      float copy_y = s_player.capsule.center.data[1];
       s_player.on_solid_floor = 1;
-    }
-  }
+      s_player.velocity.data[1] = 0.f;
+      s_player.capsule.center.data[1] = out_y;
 
-  // snap the capsule to the nearest floor, debug info
-  if (s_player.on_solid_floor && s_player.velocity.data[1] <= 0.f) {
-    s_player.velocity.data[1] = 0.f;
-    s_player.capsule.center.data[1] += radius;
-    s_player.capsule.center.data[1] += displacement.data[1] * info.time;
-
-    if (g_debug_flags.draw_status) {
-      // display the distance we moved.
-      float distance = displacement.data[1] * info.time + radius;
-      char text[512];
-      memset(text, 0, sizeof(text));
-      sprintf(text, "SNAPPING %f", distance);
-      add_debug_text_to_frame(text, green, 400.f, 300.f);
-
-      {
-        // add the face to draw.
+      if (g_debug_flags.draw_status) {
         uint32_t i = info.bvh_face_index;
         debug_color_t color = 
           is_floor(bvh, i) ? green : (is_ceiling(bvh, i)? white : blue);
+        float distance = copy_y - out_y;
+        char text[512];
+        memset(text, 0, sizeof(text));
+        sprintf(text, "SNAPPING %f", distance);
+        add_debug_text_to_frame(text, green, 400.f, 300.f);
         add_debug_face_to_frame(bvh->faces + i, bvh->normals + i, color, 1);
       }
     }
@@ -292,6 +306,8 @@ get_adjusted_velocity(
     vector3f resultant = normalize_v3f(&velocity);
     // DA FUCK: This is doing nothing, mult_v3f is not a setter.
     mult_v3f(&resultant, capsule->radius * radius_scale);
+    // NOTE: basically all we are doing is adding the normalized velocity vector 
+    // to itself.
     add_set_v3f(&resultant, &velocity);
     return resultant;
   }
@@ -522,7 +538,8 @@ player_update(float delta_time)
   
   camera_update(s_player.camera, delta_time);
   update_velocity(delta_time);
-  update_vertical_velocity(delta_time);
+  if (!s_player.is_flying) 
+    update_vertical_velocity(delta_time);
 
   {
     vector3f displacement = get_world_relative_velocity(delta_time);

@@ -11,10 +11,7 @@
 #include <assert.h>
 #include <math/c/face.h>
 #include <math/c/capsule.h>
-#include <entity/c/mesh/color.h>
 #include <entity/c/spatial/bvh.h>
-#include <renderer/renderer_opengl.h>
-#include <renderer/pipeline.h>
 #include <application/game/logic/collision_utils.h>
 #include <application/game/debug/face.h>
 #include <application/game/debug/flags.h>
@@ -23,7 +20,7 @@
 
 
 uint32_t 
-is_floor(bvh_t* bvh, uint32_t index)
+is_floor(bvh_t *bvh, uint32_t index)
 {
   float cosine_target = cosf(TO_RADIANS(FLOOR_ANGLE_DEGREES));
   float normal_dot = bvh->normals[index].data[1];
@@ -31,17 +28,33 @@ is_floor(bvh_t* bvh, uint32_t index)
 }
 
 uint32_t 
-is_ceiling(bvh_t* bvh, uint32_t index)
+is_ceiling(bvh_t *bvh, uint32_t index)
 {
   float cosine_target = cosf(TO_RADIANS(FLOOR_ANGLE_DEGREES));
   float normal_dot = bvh->normals[index].data[1];
   return normal_dot < -cosine_target;
 }
 
+debug_color_t
+get_debug_color(bvh_t *bvh, uint32_t index)
+{
+  return is_floor(bvh, index) ? green : (is_ceiling(bvh, index) ? white : blue);
+}
+
+collision_flags_t
+get_collision_flag(bvh_t *bvh, uint32_t index)
+{
+  collision_flags_t flag = COLLIDED_NONE;
+  flag = is_floor(bvh, index) ? COLLIDED_FLOOR_FLAG : flag;
+  flag = is_ceiling(bvh, index) ? COLLIDED_CEILING_FLAG : flag;
+  flag = (flag == COLLIDED_NONE) ? COLLIDED_WALLS_FLAG : flag;
+  return flag;
+}
+
 void
 populate_capsule_aabb(
-  bvh_aabb_t* aabb, 
-  const capsule_t* capsule, 
+  bvh_aabb_t *aabb, 
+  const capsule_t *capsule, 
   const float multiplier)
 {
   aabb->min_max[0] = capsule->center;
@@ -62,9 +75,9 @@ populate_capsule_aabb(
 
 void
 populate_moving_capsule_aabb(
-  bvh_aabb_t* aabb, 
-  const capsule_t* capsule, 
-  const vector3f* displacement, 
+  bvh_aabb_t *aabb, 
+  const capsule_t *capsule, 
+  const vector3f *displacement, 
   const float multiplier)
 {
   bvh_aabb_t start_end[2];
@@ -77,22 +90,22 @@ populate_moving_capsule_aabb(
 
 int32_t
 is_in_valid_space(
-  bvh_t* bvh,
-  capsule_t* capsule)
+  bvh_t *bvh,
+  capsule_t *capsule)
 {
   vector3f penetration;
   point3f sphere_center;
-  uint32_t array[256];
+  uint32_t query[256];
   uint32_t used = 0;
   bvh_aabb_t bounds;
   capsule_face_classification_t classification;
   float length_sqrd;
 
   populate_capsule_aabb(&bounds, capsule, 1.025f);
-  query_intersection_fixed_256(bvh, &bounds, array, &used);
+  query_intersection_fixed_256(bvh, &bounds, query, &used);
 
   for (uint32_t used_index = 0; used_index < used; ++used_index) {
-    bvh_node_t *node = bvh->nodes + array[used_index];
+    bvh_node_t *node = bvh->nodes + query[used_index];
     for (
       uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
       i < last; ++i) {
@@ -122,22 +135,22 @@ is_in_valid_space(
 
 void
 ensure_in_valid_space(
-  bvh_t* bvh,
-  capsule_t* capsule)
+  bvh_t *bvh,
+  capsule_t *capsule)
 {
   vector3f penetration;
   point3f sphere_center;
-  uint32_t array[256];
+  uint32_t query[256];
   uint32_t used = 0;
   bvh_aabb_t bounds;
   capsule_face_classification_t classification;
   float length_sqrd;
 
   populate_capsule_aabb(&bounds, capsule, 1.025f);
-  query_intersection_fixed_256(bvh, &bounds, array, &used);
+  query_intersection_fixed_256(bvh, &bounds, query, &used);
 
   for (uint32_t used_index = 0; used_index < used; ++used_index) {
-    bvh_node_t* node = bvh->nodes + array[used_index];
+    bvh_node_t* node = bvh->nodes + query[used_index];
     for (
       uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
       i < last; ++i) {
@@ -160,14 +173,23 @@ ensure_in_valid_space(
   }
 }
 
+inline
 int32_t
 intersects_post_displacement(
   capsule_t capsule,
   const vector3f displacement,
-  const face_t* face,
-  const vector3f* normal,
-  const uint32_t iterations,
-  const float limit_distance);
+  const face_t *face,
+  const vector3f *normal)
+{
+  vector3f penetration;
+  point3f sphere_center;
+  capsule_face_classification_t classification;
+
+  add_set_v3f(&capsule.center, &displacement);
+  classification = classify_capsule_face(
+    &capsule, face, normal, 0, &penetration, &sphere_center);
+  return classification != CAPSULE_FACE_NO_COLLISION;
+}
 
 uint32_t
 get_time_of_impact(
@@ -178,118 +200,75 @@ get_time_of_impact(
   const uint32_t iterations,
   const float limit_distance)
 {
-  uint32_t array[256];
-  uint32_t used = 0;
-  uint32_t collision_info_used = 0;
+  uint32_t query[256];
+  uint32_t query_hits = 0;
+  uint32_t hits = 0;
   bvh_aabb_t bounds;
-  intersection_info_t info = { 1.f, COLLIDED_NONE, (uint32_t)-1 };
+  intersection_info_t *first = collision_info;
 
-  // initialize the first element.
-  collision_info[0] = info;
+  // initialize the first element, this represents the minimum toi if any.
+  first->time = 1.f;
+  first->flags = COLLIDED_NONE;
+  first->bvh_face_index = (uint32_t)-1;
 
   populate_moving_capsule_aabb(&bounds, capsule, &displacement, 1.025f);
-  query_intersection_fixed_256(bvh, &bounds, array, &used);
+  query_intersection_fixed_256(bvh, &bounds, query, &query_hits);
 
-  if (used && g_debug_flags.draw_collision_query) {
-    for (uint32_t used_index = 0; used_index < used; ++used_index) {
-      bvh_node_t* node = bvh->nodes + array[used_index];
-      for (
-        uint32_t i = node->left_first, 
-        last = node->left_first + node->tri_count; 
-        i < last; ++i) {
+  if (query_hits && g_debug_flags.draw_collision_query) {
+    uint32_t index = 0;
 
-        {
-          debug_color_t color = 
-            is_floor(bvh, i) ? green : (is_ceiling(bvh, i) ? white : blue);
-          int32_t thickness = is_floor(bvh, i) ? 3 : 2;
-          add_debug_face_to_frame(
-            bvh->faces + i, bvh->normals + i, color, thickness);
-        }
+    for (; index < query_hits; ++index) {
+      bvh_node_t* node = bvh->nodes + query[index];
+      uint32_t i = node->left_first;
+      uint32_t last = node->left_first + node->tri_count;
+      for (; i < last; ++i) {
+        debug_color_t color = get_debug_color(bvh, i);
+        int32_t width = is_floor(bvh, i) ? 3 : 2;
+        add_debug_face_to_frame(bvh->faces + i, bvh->normals + i, color, width);
       }
     }
   }
 
-  if (used) {
+  if (query_hits) {
     float time;
+    uint32_t index = 0;
 
-    for (uint32_t used_index = 0; used_index < used; ++used_index) {
-      bvh_node_t* node = bvh->nodes + array[used_index];
-      for (
-        uint32_t i = node->left_first, 
-        last = node->left_first + node->tri_count; 
-        i < last; ++i) {
+    for (; index < query_hits; ++index) {
+      bvh_node_t* node = bvh->nodes + query[index];
+      uint32_t i = node->left_first;
+      uint32_t last = node->left_first + node->tri_count;
+      
+      for (; i < last; ++i) {
+        face_t *face = bvh->faces + i;
+        vector3f *normal = bvh->normals + i;
 
         if (!bounds_intersect(&bounds, bvh->bounds + i))
           continue;
 
-        // Ignore any face that does not intersect post displacement, that is a
-        // problem for continuous collision detection.
-        if (
-          !intersects_post_displacement(
-            *capsule,
-            displacement,
-            bvh->faces + i,
-            bvh->normals + i,
-            iterations,
-            limit_distance))
-          continue;      
+        // ignore any face that does not intersect post displacement, that is a
+        // problem for continuous collision detection (tunneling).
+        if (!intersects_post_displacement(*capsule, displacement, face, normal))
+          continue;
 
         time = find_capsule_face_intersection_time(
           *capsule,
-          bvh->faces + i,
-          bvh->normals + i,
+          face,
+          normal,
           displacement,
           iterations,
           limit_distance);
 
-        if (
-          time < collision_info[0].time || 
-          IS_SAME_MP(time, collision_info[0].time)) {
-          collision_info_used = 
-            time < collision_info[0].time ? 0 : collision_info_used;
-            
-          collision_info[collision_info_used].time = time;
-          collision_info[collision_info_used].flags = COLLIDED_NONE;
-
-          collision_info[collision_info_used].flags = 
-            is_floor(bvh, i) ? 
-            COLLIDED_FLOOR_FLAG : collision_info[collision_info_used].flags;
-
-          collision_info[collision_info_used].flags = 
-            is_ceiling(bvh, i) ? 
-            COLLIDED_CEILING_FLAG : collision_info[collision_info_used].flags;
-
-          collision_info[collision_info_used].flags = 
-            collision_info[collision_info_used].flags == COLLIDED_NONE ? 
-            COLLIDED_WALLS_FLAG : collision_info[collision_info_used].flags;
-
-          collision_info[collision_info_used].bvh_face_index = i;
-          collision_info_used++;
-          assert(collision_info_used < 256);
+        if (time < first->time || IS_SAME_MP(time, first->time)) {
+          hits = time < first->time ? 0 : hits;
+          collision_info[hits].time = time;
+          collision_info[hits].flags = get_collision_flag(bvh, i);
+          collision_info[hits].bvh_face_index = i;
+          hits++;
+          assert(hits < 256);
         }
       }
     }
   }
 
-  return collision_info_used;
-}
-
-static
-int32_t
-intersects_post_displacement(
-  capsule_t capsule,
-  const vector3f displacement,
-  const face_t* face,
-  const vector3f* normal,
-  const uint32_t iterations,
-  const float limit_distance)
-{
-  vector3f penetration;
-  point3f sphere_center;
-  capsule_face_classification_t classification;
-
-  add_set_v3f(&capsule.center, &displacement);
-  classification = classify_capsule_face(
-    &capsule, face, normal, 0, &penetration, &sphere_center);
-  return classification != CAPSULE_FACE_NO_COLLISION;
+  return hits;
 }

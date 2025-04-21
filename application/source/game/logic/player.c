@@ -230,7 +230,9 @@ can_snap_vertically(
       face = get_extended_face(&face, capsule.radius * 2);
 
       {
-         // the capsule must have cleared the above floor.
+         // the capsule must have cleared the extended face. since we are 
+         // dealing with a capsule face, there might be no collision even if we
+         // haven't cleared the floor face.
          vector3f penetration;
          point3f sphere_center;
          capsule_face_classification_t classify = 
@@ -278,8 +280,7 @@ update_vertical_velocity(float delta_time)
 
     if (g_debug_flags.draw_status) {
       uint32_t i = info.bvh_face_index;
-      debug_color_t color = 
-        is_floor(bvh, i) ? green : (is_ceiling(bvh, i)? white : blue);
+      debug_color_t color = get_debug_color(bvh, i);
       float distance = copy_y - out_y;
       char text[512];
       memset(text, 0, sizeof(text));

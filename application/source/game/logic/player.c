@@ -365,6 +365,15 @@ handle_collision_detection(const vector3f displacement)
           sprintf(text, "STEPUP %f", value);
           add_debug_text_to_frame(text, red, 400.f, 320.f);
         }
+
+        if (g_debug_flags.draw_step_up) {
+          uint32_t i = info.bvh_face_index;
+          face_t *face = bvh->faces + i;
+          vector3f *normal = bvh->normals + i;
+          debug_color_t color = get_debug_color(bvh, i);
+          int32_t width = is_floor(bvh, i) ? 3 : 2;
+          add_debug_face_to_frame(face, normal, color, width);
+        }
       } else {
         vector3f subtract;
         float dot;

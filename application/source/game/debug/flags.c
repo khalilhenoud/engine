@@ -18,6 +18,7 @@
 #define KEY_DRAW_IGNORED_FACES    '6'
 #define KEY_DISABLE_DEPTH         '7'
 #define KEY_MOVEMENT_LOCK         '8'
+#define KEY_DRAW_STEP_UP_FACE     'P'
 
 
 debug_flags_t g_debug_flags;
@@ -45,6 +46,9 @@ push_debug_flags_to_text_frame(void)
   add_debug_text_to_frame(
     "[8] LOCK DIRECTIONAL MOTION", 
     g_debug_flags.use_locked_motion ? red : white, 0.f, (y+=20.f));
+  add_debug_text_to_frame(
+    "[P] DRAW STEP UP FACE", 
+    g_debug_flags.draw_step_up ? red : white, 0.f, (y+=20.f));
 }
 
 void
@@ -67,6 +71,9 @@ update_debug_flags(void)
 
   if (is_key_triggered(KEY_DISABLE_DEPTH))
     g_debug_flags.disable_depth_debug = !g_debug_flags.disable_depth_debug;
+
+  if (is_key_triggered(KEY_DRAW_STEP_UP_FACE))
+    g_debug_flags.draw_step_up = !g_debug_flags.draw_step_up;
 
   push_debug_flags_to_text_frame();
 }

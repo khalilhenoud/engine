@@ -204,6 +204,7 @@ get_time_of_impact(
   uint32_t query_hits = 0;
   uint32_t hits = 0;
   bvh_aabb_t bounds;
+  vector3f unit = normalize_v3f(&displacement);
   intersection_info_t *first = collision_info;
 
   // initialize the first element, this represents the minimum toi if any.
@@ -250,6 +251,8 @@ get_time_of_impact(
         if (!intersects_post_displacement(*capsule, displacement, face, normal))
           continue;
 
+        // NOTE: we do not ignore faces that we are to the back of, the bucket
+        // processing handles that.
         time = find_capsule_face_intersection_time(
           *capsule,
           face,

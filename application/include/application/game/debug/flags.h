@@ -26,6 +26,7 @@ struct debug_flags_t {
   uint32_t draw_collision_query : 1;
   uint32_t draw_collided_face : 1;
   uint32_t draw_status : 1;
+  uint32_t draw_step_up : 1;
 } debug_flags_t;
 
 extern debug_flags_t g_debug_flags;

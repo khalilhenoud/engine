@@ -344,6 +344,14 @@ handle_collision_detection(const vector3f displacement)
         &l_flags);
       flags |= l_flags;
 
+      // NOTE: Consider separating the handling of the xz and y velocity 
+      // components of the velocity. that would make more sense.
+
+      // NOTE: Energy consumption:
+      // mult_set_v3f(velocity, 1 - toi);
+      // *= fmax(sin(acos(dot(normal, normalize(velocity)))), 0.f);
+
+      // NOTE: deal with this PRONTO.
       // for this next step we move the capsule by an extra 1/4 radius along 
       // velocity and check if we can snap upwards
       copy = *capsule;
@@ -353,6 +361,8 @@ handle_collision_detection(const vector3f displacement)
         add_set_v3f(&copy.center, &unit);
       }
 
+      // NOTE: if toi is 0, basically there is no movement and the direction 
+      // does not change this will be stuck forever here.
       if (
         (l_flags & COLLIDED_WALLS_FLAG) && 
         can_snap_vertically(copy, &info, &out_y)) {

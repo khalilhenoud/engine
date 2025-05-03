@@ -359,8 +359,7 @@ handle_collision_detection(const vector3f displacement)
       add_set_v3f(&capsule->center, &to_apply);
       energy *= (1.f - toi);
 
-      // This should be moved, the only reason we have it here is because we 
-      // require l_flags.
+      // This should be moved, the reason it is here is because we need l_flags
       normal = get_averaged_normal(
         bvh, 
         s_player.on_solid_floor, 

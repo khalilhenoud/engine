@@ -206,10 +206,6 @@ can_snap_vertically(
   
   {
     capsule.center.data[1] += capsule.radius;
-    // early out if the sweep starts in collision.
-    if (!is_in_valid_space(bvh, &capsule))
-      return 0;
-    
     collisions.count = get_time_of_impact(
       bvh, 
       &capsule, 
@@ -251,8 +247,13 @@ can_snap_vertically(
         ITERATIONS,
         LIMIT_DISTANCE);
 
+      // the capsule has to end in valid space, why does this do that.
+      capsule.center.data[1] += displacement.data[1] * t;
+      if (!is_in_valid_space(bvh, &capsule))
+        return 0;
+
       info->time = t;
-      *out_y = capsule.center.data[1] + displacement.data[1] * info->time;
+      *out_y = capsule.center.data[1];
       return 1;
     }
   }
@@ -346,6 +347,8 @@ handle_collision_detection(const vector3f displacement)
 
       // NOTE: Consider separating the handling of the xz and y velocity 
       // components of the velocity. that would make more sense.
+      // notice how your drop speed is reduced when you are pressing in the 
+      // direction of a vertical wall.
 
       // NOTE: Energy consumption:
       // mult_set_v3f(velocity, 1 - toi);
@@ -363,6 +366,9 @@ handle_collision_detection(const vector3f displacement)
 
       // NOTE: if toi is 0, basically there is no movement and the direction 
       // does not change this will be stuck forever here.
+      // IMPORTANT: This is a major problem in the movement system, if you 
+      // engage flight mode and try the rims in the small crevace in the first
+      // room and try and move down, you will get a lot of vibration.
       if (
         (l_flags & COLLIDED_WALLS_FLAG) && 
         can_snap_vertically(copy, &info, &out_y)) {

@@ -294,6 +294,29 @@ update_vertical_velocity(float delta_time)
 }
 
 static
+void
+step_up_debug_data(float delta, intersection_info_t *info)
+{
+  bvh_t *bvh = s_player.bvh;
+
+  if (g_debug_flags.draw_status) {
+    char text[512];
+    memset(text, 0, sizeof(text));
+    sprintf(text, "STEPUP %f", delta);
+    add_debug_text_to_frame(text, red, 400.f, 320.f);
+  }
+
+  if (g_debug_flags.draw_step_up) {
+    uint32_t i = info->bvh_face_index;
+    face_t *face = bvh->faces + i;
+    vector3f *normal = bvh->normals + i;
+    debug_color_t color = get_debug_color(bvh, i);
+    int32_t width = is_floor(bvh, i) ? 3 : 2;
+    add_debug_face_to_frame(face, normal, color, width);
+  }
+}
+
+static
 collision_flags_t
 handle_collision_detection(const vector3f displacement)
 {
@@ -303,7 +326,7 @@ handle_collision_detection(const vector3f displacement)
   intersection_data_t collisions;
   vector3f orientation = normalize_v3f(&displacement);
   vector3f velocity = displacement;
-  float energy_left = length_v3f(&velocity);
+  float energy = length_v3f(&velocity);
   uint32_t steps = 3;
 
   while (steps-- && !IS_ZERO_LP(length_squared_v3f(&velocity))) {
@@ -329,15 +352,16 @@ handle_collision_detection(const vector3f displacement)
       float out_y;
       collision_flags_t l_flags = COLLIDED_NONE;
       intersection_info_t info;
+      vector3f normal, unit = normalize_v3f(&velocity);
       capsule_t copy;
 
       vector3f to_apply = mult_v3f(&velocity, toi);
       add_set_v3f(&capsule->center, &to_apply);
-      energy_left = fmax(energy_left - length_v3f(&to_apply), 0.f);
+      energy *= (1.f - toi);
 
       // This should be moved, the only reason we have it here is because we 
       // require l_flags.
-      vector3f normal = get_averaged_normal(
+      normal = get_averaged_normal(
         bvh, 
         s_player.on_solid_floor, 
         collisions.hits, 
@@ -345,46 +369,18 @@ handle_collision_detection(const vector3f displacement)
         &l_flags);
       flags |= l_flags;
 
-      // NOTE: Consider separating the handling of the xz and y velocity 
-      // components of the velocity. that would make more sense.
-      // notice how your drop speed is reduced when you are pressing in the 
-      // direction of a vertical wall.
-
-      // NOTE: Energy consumption:
-      // mult_set_v3f(velocity, 1 - toi);
-      // *= fmax(sin(acos(dot(normal, normalize(velocity)))), 0.f);
-
-      // for this next step we move the capsule by an extra 1/4 radius along 
-      // velocity and check if we can snap upwards
+      // move the capsule along velocity and check if we can snap upwards
       copy = *capsule;
-      {
-        vector3f unit = normalize_v3f(&velocity);
-        mult_set_v3f(&unit, s_player.snap_shift);
-        add_set_v3f(&copy.center, &unit);
-      }
+      mult_set_v3f(&unit, s_player.snap_shift);
+      add_set_v3f(&copy.center, &unit);
 
       if (
         (l_flags & COLLIDED_WALLS_FLAG) && 
         !is_in_valid_space(bvh, &copy) && 
         can_snap_vertically(copy, &info, &out_y)) {
-        float value = capsule->center.data[1] - out_y;
+        
+        step_up_debug_data(capsule->center.data[1] - out_y, &info);
         capsule->center.data[1] = out_y;
-
-        if (g_debug_flags.draw_status) {
-          char text[512];
-          memset(text, 0, sizeof(text));
-          sprintf(text, "STEPUP %f", value);
-          add_debug_text_to_frame(text, red, 400.f, 320.f);
-        }
-
-        if (g_debug_flags.draw_step_up) {
-          uint32_t i = info.bvh_face_index;
-          face_t *face = bvh->faces + i;
-          vector3f *normal = bvh->normals + i;
-          debug_color_t color = get_debug_color(bvh, i);
-          int32_t width = is_floor(bvh, i) ? 3 : 2;
-          add_debug_face_to_frame(face, normal, color, width);
-        }
       } else {
         vector3f subtract;
         float dot;
@@ -392,10 +388,15 @@ handle_collision_detection(const vector3f displacement)
         dot = dot_product_v3f(&velocity, &normal);
         subtract = mult_v3f(&normal, dot);
         diff_set_v3f(&velocity, &subtract);
-
+  
+#if 0
+        energy *= fmax(sin(acos(dot_product_v3f(&normal, &velocity))), 0.f);
+        mult_set_v3f(&velocity, energy);
+#else
         // loss is proportional to the deviation from the initial direction
-        energy_left *= fmax(dot_product_v3f(&orientation, &velocity), 0.f);
-        mult_set_v3f(&velocity, energy_left);
+        energy *= fmax(dot_product_v3f(&orientation, &velocity), 0.f);
+        mult_set_v3f(&velocity, energy);
+#endif
       }
     }
   }

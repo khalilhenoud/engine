@@ -354,7 +354,6 @@ handle_collision_detection(const vector3f displacement)
       // mult_set_v3f(velocity, 1 - toi);
       // *= fmax(sin(acos(dot(normal, normalize(velocity)))), 0.f);
 
-      // NOTE: deal with this PRONTO.
       // for this next step we move the capsule by an extra 1/4 radius along 
       // velocity and check if we can snap upwards
       copy = *capsule;
@@ -364,13 +363,9 @@ handle_collision_detection(const vector3f displacement)
         add_set_v3f(&copy.center, &unit);
       }
 
-      // NOTE: if toi is 0, basically there is no movement and the direction 
-      // does not change this will be stuck forever here.
-      // IMPORTANT: This is a major problem in the movement system, if you 
-      // engage flight mode and try the rims in the small crevace in the first
-      // room and try and move down, you will get a lot of vibration.
       if (
         (l_flags & COLLIDED_WALLS_FLAG) && 
+        !is_in_valid_space(bvh, &copy) && 
         can_snap_vertically(copy, &info, &out_y)) {
         float value = capsule->center.data[1] - out_y;
         capsule->center.data[1] = out_y;

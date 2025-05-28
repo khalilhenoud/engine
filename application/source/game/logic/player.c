@@ -329,7 +329,7 @@ handle_collision_detection(const vector3f displacement)
   float energy = length_v3f(&velocity);
   uint32_t steps = 3;
 
-  while (steps-- && !IS_ZERO_LP(length_squared_v3f(&velocity))) {
+  while (steps-- && !IS_ZERO_LP(energy)) {
     collisions.count = get_time_of_impact(
       bvh, 
       capsule, 
@@ -387,15 +387,9 @@ handle_collision_detection(const vector3f displacement)
         dot = dot_product_v3f(&velocity, &normal);
         subtract = mult_v3f(&normal, dot);
         diff_set_v3f(&velocity, &subtract);
-  
-#if 0
-        energy *= fmax(sin(acos(dot_product_v3f(&normal, &velocity))), 0.f);
+        
+        energy *= fmax(sin(acos(dot_product_v3f(&normal, &orientation))), 0.f);
         mult_set_v3f(&velocity, energy);
-#else
-        // loss is proportional to the deviation from the initial direction
-        energy *= fmax(dot_product_v3f(&orientation, &velocity), 0.f);
-        mult_set_v3f(&velocity, energy);
-#endif
       }
     }
   }

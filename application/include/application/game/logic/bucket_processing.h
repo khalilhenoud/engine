@@ -32,6 +32,16 @@ get_averaged_normal(
   uint32_t info_used,
   collision_flags_t *flags);
 
+uint32_t
+get_averaged_normal_filtered(
+  bvh_t *const bvh,
+  vector3f *averaged,
+  intersection_info_t collision_info[256],
+  const uint32_t info_used,
+  const uint32_t on_solid_floor,
+  const collision_flags_t flags,
+  const uint32_t adjust_non_walkable);
+
 /**
  * Processes the collision information into buckets, basically in groups. 
  * This is important for not over-representing face normals in collision 

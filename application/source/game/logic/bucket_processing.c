@@ -12,6 +12,7 @@
 #include <math/c/face.h>
 #include <math/c/capsule.h>
 #include <entity/c/spatial/bvh.h>
+#include <application/game/logic/collision_utils.h>
 #include <application/game/logic/bucket_processing.h>
 #include <application/game/debug/color.h>
 #include <application/game/debug/face.h>
@@ -287,10 +288,10 @@ uint32_t
 sort_in_buckets(
   bvh_t *const bvh,
   intersection_info_t collision_info[256], 
-  uint32_t info_used,
+  const uint32_t info_used,
   uint32_t buckets[256])
 {
-  const uint32_t info_used_initial = info_used;
+  uint32_t copy_info_used = info_used;
   intersection_info_t sorted[256];
   uint32_t sorted_index = 0;
   uint32_t bucket_count = 0;
@@ -299,16 +300,16 @@ sort_in_buckets(
   int64_t i, to_swap;
   planes_classification_t classify;
 
-  // back to front, makes no difference. info_used > 0 for the loop to proceed.
-  while (info_used--) {
-    faces[0] = bvh->faces + collision_info[info_used].bvh_face_index; 
-    normals[0] = bvh->normals + collision_info[info_used].bvh_face_index;
+  // back to front, makes no difference. cond > 0 for the loop to proceed.
+  while (copy_info_used--) {
+    faces[0] = bvh->faces + collision_info[copy_info_used].bvh_face_index; 
+    normals[0] = bvh->normals + collision_info[copy_info_used].bvh_face_index;
     
     // copy into the first sorted index, initial its number of faces.
-    sorted[sorted_index++] = collision_info[info_used];
+    sorted[sorted_index++] = collision_info[copy_info_used];
     buckets[bucket_count++] = 1;
 
-    i = to_swap = (int64_t)info_used - 1;
+    i = to_swap = (int64_t)copy_info_used - 1;
     for (; i >= 0; --i) {
       faces[1] = bvh->faces + collision_info[i].bvh_face_index;
       normals[1] = bvh->normals + collision_info[i].bvh_face_index;
@@ -328,12 +329,12 @@ sort_in_buckets(
         }
 
         to_swap--;
-        info_used--;
+        copy_info_used--;
       }
     }
   }
 
-  assert(sorted_index == info_used_initial);
+  assert(sorted_index == info_used);
   
   // copy the sorted data back, alternatively reverse the 'buckets' array since 
   // 'collision_info' is sorted in reverse order to 'sorted'.
@@ -405,6 +406,72 @@ get_averaged_normal(
 
   normalize_set_v3f(&averaged);
   return averaged;
+}
+
+/**
+ * Get the average normal for the bucket matching the flags type. This will be
+ * adjusted if we are averaging non-walkable surfaces and the option is
+ * specified.
+ * collision_info will be sorted in buckets, hence why it isn't const.
+ * returns 1 if any face was considered, otherwise 0.
+ */
+uint32_t
+get_averaged_normal_filtered(
+  bvh_t *const bvh,
+  vector3f *averaged,
+  intersection_info_t collision_info[256],
+  const uint32_t info_used,
+  const uint32_t on_solid_floor,
+  const collision_flags_t flags,
+  const uint32_t adjust_non_walkable)
+{
+  uint32_t buckets[256];
+  uint32_t bucket_count = 0;
+  uint32_t total_added = 0;
+
+  assert(flags != 0 && flags != COLLIDED_NONE);
+  vector3f_set_1f(averaged, 0.f);
+
+  // we sort the faces to avoid considering colinear faces more than once
+  bucket_count = sort_in_buckets(bvh, collision_info, info_used, buckets);
+
+  for (uint32_t i = 0, index = 0; i < bucket_count; index += buckets[i], ++i) {
+    if ((collision_info[index].flags & flags) == 0)
+      continue;
+
+    add_set_v3f(averaged, bvh->normals + collision_info[index].bvh_face_index);
+    ++total_added;
+
+     if (g_debug_flags.draw_collided_face) {
+       for (uint32_t k = index; k < (index + buckets[i]); ++k) {
+         add_debug_face_to_frame(
+          bvh->faces + collision_info[k].bvh_face_index,
+          bvh->normals + collision_info[k].bvh_face_index, 
+          get_debug_color(bvh, k), 
+          2);
+       }
+     }
+  }
+
+  // if nothing was added.
+  if (!total_added)
+    return 0;
+
+  normalize_set_v3f(averaged);
+
+  // Adjust the averaged wall/ceiling normal, to behave like a vertical wall 
+  // when the player is rooted. This produces better sliding motion in these 
+  // cases. 
+  if (on_solid_floor && adjust_non_walkable && !(flags & COLLIDED_FLOOR_FLAG)) {
+    vector3f y_up, perp;
+    vector3f_set_3f(&y_up, 0.f, 1.f, 0.f);
+    perp = cross_product_v3f(&y_up, averaged);
+    normalize_set_v3f(&perp);
+    *averaged = cross_product_v3f(&perp, &y_up);
+    normalize_set_v3f(averaged);
+  }
+
+  return 1;
 }
 
 /**

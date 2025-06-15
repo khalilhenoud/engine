@@ -453,11 +453,11 @@ get_averaged_normal_filtered(
      }
   }
 
-  // if nothing was added.
   if (!total_added)
     return 0;
 
-  normalize_set_v3f(averaged);
+  // cheap way to normalize.
+  mult_set_v3f(averaged, 1.f / total_added);
 
   // Adjust the averaged wall/ceiling normal, to behave like a vertical wall 
   // when the player is rooted. This produces better sliding motion in these 

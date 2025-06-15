@@ -383,10 +383,22 @@ handle_collision_detection(const vector3f displacement)
       } else {
         vector3f subtract;
         float dot;
-        normalize_set_v3f(&velocity);
-        dot = dot_product_v3f(&velocity, &normal);
+        float length_v = length_v3f(&velocity);
+        vector3f velocity_n = normalize_v3f(&velocity);
+        dot = dot_product_v3f(&velocity_n, &normal) * length_v;
         subtract = mult_v3f(&normal, dot);
         diff_set_v3f(&velocity, &subtract);
+        if (IS_ZERO_LP(length_squared_v3f(&velocity)))
+          break;
+        normalize_set_v3f(&velocity);
+
+        // NOTE: for the collision of the behavior at the end of the first 
+        // corridor in e1m1 the behavior we are seeing is completely normal as 
+        // the collision normal creates an inclined plane where the velocity 
+        // projection is not guaranteed to lose its z component (negative in
+        // this case). What we are looking in that plane is the projection that
+        // is both perpendicular to the normal and to the y vector at the same 
+        // time. Check how this makes sense to be incldued in our system.
   
 #if 0
         energy *= fmax(sin(acos(dot_product_v3f(&normal, &velocity))), 0.f);

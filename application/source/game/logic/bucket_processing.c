@@ -11,20 +11,26 @@
 #include <assert.h>
 #include <math/c/face.h>
 #include <math/c/capsule.h>
-#include <entity/c/mesh/color.h>
 #include <entity/c/spatial/bvh.h>
-#include <renderer/renderer_opengl.h>
-#include <renderer/pipeline.h>
 #include <application/game/logic/bucket_processing.h>
+#include <application/game/debug/color.h>
 #include <application/game/debug/face.h>
 #include <application/game/debug/flags.h>
 
 
-// return 0 if not split, 1 if split.
+/**
+ * To remove a bucket (that is a part of a pair), all of the faces that belong
+ * to the bucket must reside exclusively on a single side of the remaining set.
+ * If both buckets currently being considered meet this criteria, we remove both
+ * of them, otherwise we remove the one that isn't split. 
+ * This function classify the bucket in question against the rest of the set (
+ * minus its pair).
+ * return 0 if not split, 1 if split.
+ */
 static
 int32_t
 classify_buckets(
-  bvh_t* bvh, 
+  bvh_t *const bvh, 
   intersection_info_t collision_info[256], 
   uint32_t info_used, 
   uint32_t buckets[256], 
@@ -34,38 +40,36 @@ classify_buckets(
   uint32_t bucket_index,
   uint32_t excluded_index)
 {
-  face_t* face0,* face1;
-  vector3f* normal0;
-  uint32_t index0, index1;
+  face_t *face;
+  vector3f *normal;
   point_halfspace_classification_t classify[3];
   uint32_t faces_in_front, faces_to_back;
 
   assert(bucket_count);
   
   for (uint32_t i = 0; i < bucket_count; ++i) {
-    // these are the buckets that form colinear opposite walls
+    // skip the bucket pair we are currently considering
     if (i == bucket_index || i == excluded_index)
       continue;
 
-    // again limit this to similar specs
+    // again limit to similar specs
     if ((collision_info[bucket_offset[i]].flags & flag) == 0)
       continue;
 
-    // this is the plane, test the original bucket faces to check if they lie on 
-    // both sides of the plane. 
-    index0 = collision_info[bucket_offset[i]].bvh_face_index;
-    face0 = bvh->faces + index0;
-    normal0 = bvh->normals + index0;
+    // test the bucket faces against this plane to determine if they are split
+    face = bvh->faces + collision_info[bucket_offset[i]].bvh_face_index;
+    normal = bvh->normals + collision_info[bucket_offset[i]].bvh_face_index;
     faces_in_front = faces_to_back = 0;
 
     for (uint32_t j = 0; j < buckets[bucket_index]; ++j) {
       uint32_t points_in_front = 0, points_to_back = 0;
-      index1 = collision_info[bucket_offset[bucket_index] + j].bvh_face_index;
-      face1 = bvh->faces + index1;
+      uint32_t face_offset = bucket_offset[bucket_index] + j;
+      uint32_t bvh_index = collision_info[face_offset].bvh_face_index;
+      face_t *target = bvh->faces + bvh_index;
 
-      classify[0] = classify_point_halfspace(face0, normal0, face1->points + 0);
-      classify[1] = classify_point_halfspace(face0, normal0, face1->points + 1);
-      classify[2] = classify_point_halfspace(face0, normal0, face1->points + 2);
+      classify[0] = classify_point_halfspace(face, normal, target->points + 0);
+      classify[1] = classify_point_halfspace(face, normal, target->points + 1);
+      classify[2] = classify_point_halfspace(face, normal, target->points + 2);
       
       points_in_front += (classify[0] == POINT_IN_POSITIVE_HALFSPACE) ? 1 : 0;
       points_in_front += (classify[1] == POINT_IN_POSITIVE_HALFSPACE) ? 1 : 0;
@@ -75,16 +79,15 @@ classify_buckets(
       points_to_back += (classify[1] == POINT_IN_NEGATIVE_HALFSPACE) ? 1 : 0;
       points_to_back += (classify[2] == POINT_IN_NEGATIVE_HALFSPACE) ? 1 : 0;
       
-      // early out, meaning we have found a face that intersects the clip plane.
+      // early out, the face is split by the plane
       if (points_in_front && points_to_back)
         return 1;
-      else if (points_to_back) 
+      else if (points_to_back)
         faces_to_back++;
       else
         faces_in_front++;
 
-      // early out if the classification contradicts the one-sidedness 
-      // established prior.
+      // early out, the one-sidedness rule is broken
       if (faces_in_front && faces_to_back)
         return 1;
     }
@@ -93,22 +96,22 @@ classify_buckets(
   return 0;
 }
 
-// NOTE: the function modifies buckets[], bucket_offset[].
-// TODO: make this more robust, it should also modify bucket_count and tag with
-// the appropriate access specfiers to indicate intent (const etc...)
+/**
+ * Remove the bucket and all faces associated with it. Returns the remaining 
+ * number of faces. collision_info, buckets and bucket_offset are all modified,
+ * as is bucket_count.
+ */
 static
 uint32_t
 remove_bucket(
-  bvh_t* const bvh,
+  bvh_t *const bvh,
   intersection_info_t collision_info[256], 
-  uint32_t info_used, 
+  const uint32_t info_used, 
   uint32_t buckets[256], 
   uint32_t bucket_offset[256], 
-  uint32_t bucket_count,
-  uint32_t bucket_index)
+  uint32_t *const bucket_count,
+  const uint32_t bucket_index)
 {
-  // remove all the faces belonging to the bucket, remove the bucket and rebuild
-  // the offset.
   uint32_t start_index = bucket_offset[bucket_index];
   uint32_t end_index = start_index + buckets[bucket_index];
   uint32_t counts_affected = buckets[bucket_index];
@@ -116,11 +119,12 @@ remove_bucket(
   intersection_info_t new_info[256];
   uint32_t new_buckets[256];
   uint32_t new_bucket_offset[256];
-  uint32_t new_bucket_count = bucket_count - 1;
+  const uint32_t old_bucket_count = *bucket_count;
+  const uint32_t new_bucket_count = old_bucket_count - 1;
 
-  assert(bucket_count);
+  assert(old_bucket_count);
 
-  for (uint32_t i = 0, index = 0; i < bucket_count; ++i) {
+  for (uint32_t i = 0, index = 0; i < old_bucket_count; ++i) {
     if (i == bucket_index)
       continue;
     new_buckets[index++] = buckets[i];
@@ -146,25 +150,33 @@ remove_bucket(
   memcpy(buckets, new_buckets, sizeof(new_buckets));
   memcpy(bucket_offset, new_bucket_offset, sizeof(new_bucket_offset));
   memcpy(collision_info, new_info, sizeof(new_info));
-
+  --*bucket_count;
   return info_used - counts_affected;
 }
 
+/**
+ * This function is responsible of trimming buckets that cancel each other out. 
+ * Since we are not using CSG to remove redundant faces, we need to do that at
+ * runtime. The collision detection system behaves more naturally when redundant
+ * faces are removed.
+ * Concident faces that cancel each other out, would either be a pair of wall 
+ * faces/buckets, or a floor and a ceiling pair. 
+ * Returns the remaining number of collision_info.
+ */
 static
-int32_t
+uint32_t
 process_buckets(
-  bvh_t* const bvh, 
-  intersection_info_t collision_info[256], 
-  uint32_t info_used, 
+  bvh_t *const bvh,
+  intersection_info_t collision_info[256],
+  uint32_t info_used,
   uint32_t buckets[256],
   uint32_t bucket_count)
 {
-  // processing is separated based on walls, floors, ceilings
   collision_flags_t flags[] = { 
     COLLIDED_WALLS_FLAG, 
     COLLIDED_FLOOR_FLAG | COLLIDED_CEILING_FLAG};
 
-  // transform to total offset, instead of count.
+  // build an offset buffer, a summation of the buckets face count buffer.
   uint32_t bucket_offset[256] = { 0 };
   for (uint32_t i = 0, index = 0; i < bucket_count; ++i) {
     bucket_offset[i] = index;
@@ -173,41 +185,40 @@ process_buckets(
 
   assert(bucket_count);
 
-  for (uint32_t flag_index = 0; flag_index < 2; ++flag_index) {
+  for (uint32_t findex = 0; findex < 2; ++findex) {
     planes_classification_t result;
     int32_t parters[] = { -1, -1 };
+    face_t *face[2];
+    vector3f *normal[2];
+    uint32_t index[2];
+    collision_flags_t flag = flags[findex];
     int32_t found = 1;
-    face_t* face0, * face1;
-    vector3f* normal0, * normal1;
-    uint32_t index0, index1;
-    collision_flags_t flag = flags[flag_index];
 
-    // while colinear opposite face buckets exist, continue.
+    // while colinear opposite face buckets exist, continue processing.
     while (found) {
       found = 0;
 
       for (uint32_t i = 0, count = bucket_count - 1; i < count; ++i) {
-        // only consider buckets that share the flag spec
+        // only consider buckets that match current flag spec
         if ((collision_info[bucket_offset[i]].flags & flag) == 0)
           continue;
         
-        index0 = collision_info[bucket_offset[i]].bvh_face_index;
-        face0 = bvh->faces + index0;
-        normal0 = bvh->normals + index0;
+        index[0] = collision_info[bucket_offset[i]].bvh_face_index;
+        face[0] = bvh->faces + index[0];
+        normal[0] = bvh->normals + index[0];
 
         for (uint32_t j = i + 1; j < bucket_count; ++j) {
-          // again limit it to the same spec
           if ((collision_info[bucket_offset[j]].flags & flag) == 0)
             continue;
 
-          index1 = collision_info[bucket_offset[j]].bvh_face_index;
-          face1 = bvh->faces + index1;
-          normal1 = bvh->normals + index1;
+          index[1] = collision_info[bucket_offset[j]].bvh_face_index;
+          face[1] = bvh->faces + index[1];
+          normal[1] = bvh->normals + index[1];
 
-          result = classify_planes(face0, normal0, face1, normal1);
+          result = classify_planes(face[0], normal[0], face[1], normal[1]);
           if (result == PLANES_COLINEAR_OPPOSITE_FACING) {
-            parters[0] = i;
-            parters[1] = j; 
+            parters[0] = (int32_t)i;
+            parters[1] = (int32_t)j; 
             found = 1;
             break;
           }
@@ -218,48 +229,46 @@ process_buckets(
       }
 
       if (found) {
-        // one or both of the parters buckets will be removed.
+        // one or both of the parters buckets will be removed
         if (classify_buckets(
           bvh, 
           collision_info, info_used, 
           buckets, bucket_offset, bucket_count, 
           flag, 
           parters[0], parters[1])) {
+
           // remove parters[1]
           info_used = remove_bucket(
             bvh,
             collision_info, info_used, 
-            buckets, bucket_offset, bucket_count, 
+            buckets, bucket_offset, &bucket_count, 
             parters[1]);
-          --bucket_count;
         } else if (classify_buckets(
           bvh, 
           collision_info, info_used, 
           buckets, bucket_offset, bucket_count, 
           flag, 
           parters[1], parters[0])) {
+
           // remove parters[0]
           info_used = remove_bucket(
             bvh,
             collision_info, info_used, 
-            buckets, bucket_offset, bucket_count, 
+            buckets, bucket_offset, &bucket_count, 
             parters[0]);
-          --bucket_count;
         } else {
           // remove parters[0, 1].
           info_used = remove_bucket(
             bvh,
             collision_info, info_used, 
-            buckets, bucket_offset, bucket_count, 
+            buckets, bucket_offset, &bucket_count, 
             parters[0]);
-          --bucket_count;
           --parters[1];
           info_used = remove_bucket(
             bvh,
             collision_info, info_used, 
-            buckets, bucket_offset, bucket_count, 
+            buckets, bucket_offset, &bucket_count, 
             parters[1]);
-          --bucket_count;
         }
       }
     }
@@ -268,51 +277,55 @@ process_buckets(
   return info_used;
 }
 
-// this will sort collision_info with colinear faces being consecutive, the
-// buckets array will contain the count per face colinearity. we return the
-// bucket type.
+/**
+ * This will sort 'collision_info' into buckets of consecutive colinear faces. 
+ * 'buckets' will contain the number of consecutive faces per bucket. We return
+ * the total number of buckets.
+ */
 static
 uint32_t
 sort_in_buckets(
-  bvh_t* const bvh,
+  bvh_t *const bvh,
   intersection_info_t collision_info[256], 
   uint32_t info_used,
   uint32_t buckets[256])
 {
-  uint32_t bucket_count = 0;
+  const uint32_t info_used_initial = info_used;
   intersection_info_t sorted[256];
   uint32_t sorted_index = 0;
-  uint32_t copy_info_used = info_used;
-  face_t* face_a, *face_b;
-  vector3f* normal_a, *normal_b;
+  uint32_t bucket_count = 0;
+  face_t *faces[2];
+  vector3f *normals[2];
   int64_t i, to_swap;
-  intersection_info_t copy;
   planes_classification_t classify;
 
+  // back to front, makes no difference. info_used > 0 for the loop to proceed.
   while (info_used--) {
-    face_a = bvh->faces + collision_info[info_used].bvh_face_index; 
-    normal_a = bvh->normals + collision_info[info_used].bvh_face_index;
+    faces[0] = bvh->faces + collision_info[info_used].bvh_face_index; 
+    normals[0] = bvh->normals + collision_info[info_used].bvh_face_index;
     
-    // copy into the first sorted index.
+    // copy into the first sorted index, initial its number of faces.
     sorted[sorted_index++] = collision_info[info_used];
     buckets[bucket_count++] = 1;
 
     i = to_swap = (int64_t)info_used - 1;
     for (; i >= 0; --i) {
-      face_b = bvh->faces + collision_info[i].bvh_face_index;
-      normal_b = bvh->normals + collision_info[i].bvh_face_index;
+      faces[1] = bvh->faces + collision_info[i].bvh_face_index;
+      normals[1] = bvh->normals + collision_info[i].bvh_face_index;
 
-      // if colinear copy into the first sorted index, swap it with to_swap 
-      // index and decrease info_used.
-      classify = classify_planes(face_a, normal_a, face_b, normal_b);
+      classify = classify_planes(faces[0], normals[0], faces[1], normals[1]);
       if (classify == PLANES_COLINEAR) {
+        // store it next to the reference face, increase the bucket face count.
         sorted[sorted_index++] = collision_info[i];
         buckets[bucket_count - 1]++;
 
-        // swap the colinear with the non-colinear.
-        copy = collision_info[to_swap];
-        collision_info[to_swap] = collision_info[i];
-        collision_info[i] = copy;
+        {
+          // swap the colinear with the non-colinear.
+          intersection_info_t copy;
+          copy = collision_info[to_swap];
+          collision_info[to_swap] = collision_info[i];
+          collision_info[i] = copy;
+        }
 
         to_swap--;
         info_used--;
@@ -320,21 +333,23 @@ sort_in_buckets(
     }
   }
 
-  assert(sorted_index == copy_info_used);
+  assert(sorted_index == info_used_initial);
   
-  // copy the sorted data back.
+  // copy the sorted data back, alternatively reverse the 'buckets' array since 
+  // 'collision_info' is sorted in reverse order to 'sorted'.
   memcpy(collision_info, sorted, sizeof(sorted));
-
   return bucket_count;
 }
 
+// TODO: modify this to make it work, the behavior should not be controlled by
+// this function in terms of faces collision among others.
 vector3f
 get_averaged_normal(
-  bvh_t* const bvh,
+  bvh_t *const bvh,
   const uint32_t on_solid_floor,
   intersection_info_t collision_info[256],
   uint32_t info_used,
-  collision_flags_t* flags)
+  collision_flags_t *flags)
 {
   uint32_t buckets[256];
   uint32_t bucket_count = 0;
@@ -342,7 +357,7 @@ get_averaged_normal(
   vector3f averaged, normal;
   vector3f_set_1f(&averaged, 0.f);
 
-  // we shouldn't consider colinear faces more than once, we need to sort this.
+  // we sort the faces to avoid considering colinear faces more than once
   bucket_count = sort_in_buckets(bvh, collision_info, info_used, buckets);
 
   for (uint32_t i = 0, index = 0, face_i, is_wall; i < bucket_count; ++i) {
@@ -392,17 +407,22 @@ get_averaged_normal(
   return averaged;
 }
 
+/**
+ * This function has no concept of buckets, it simply removes the back facing 
+ * polygons relative to velocity.
+ * returns the number of collision_info remaining.
+ */
 static
 uint32_t
 trim_backfacing(
-  bvh_t* const bvh,
-  const vector3f* velocity, 
+  bvh_t *const bvh,
+  const vector3f *velocity, 
   intersection_info_t collision_info[256],
-  uint32_t info_used)
+  const uint32_t info_used)
 {
   intersection_info_t new_collision_info[256];
   uint32_t count = 0;
-  vector3f* normal = NULL;
+  vector3f *normal = NULL;
 
   for (uint32_t i = 0, index = 0; i < info_used; ++i) {
     index = collision_info[i].bvh_face_index;
@@ -413,26 +433,30 @@ trim_backfacing(
       new_collision_info[count++] = collision_info[i];
   }
 
-  // copy the new info into the old one and return the updated info_used
   memcpy(collision_info, new_collision_info, sizeof(new_collision_info));
   return count;
 }
 
-// Note: this function does modify collision_info.
-int32_t 
+/**
+ * Sorts the collision information into buckets where each buckets corresponds 
+ * to a number of colinear faces. Then we remove redundant buckets, redundant 
+ * buckets are those that have a negating pair (colinear but normals oppose) and
+ * could be subject to removal under certain conditions.
+ * returns the number of faces left, sorted consecutively.
+ */
+uint32_t
 process_collision_info(
-  bvh_t* const bvh, 
-  const vector3f* velocity, 
+  bvh_t *const bvh, 
+  const vector3f *velocity, 
   intersection_info_t collision_info[256], 
-  int32_t info_used)
+  uint32_t info_used)
 {
-  // sort and process the buckets in a way the collision info used.
   if (info_used) {
     uint32_t buckets[256];
-    uint32_t bucket_count = 0;
-    bucket_count = sort_in_buckets(bvh, collision_info, info_used, buckets);
-    info_used = process_buckets(
-      bvh, collision_info, info_used, buckets, bucket_count);
+    uint32_t bucket_count = 
+      sort_in_buckets(bvh, collision_info, info_used, buckets);
+    info_used = 
+      process_buckets(bvh, collision_info, info_used, buckets, bucket_count);
   }
 
   return trim_backfacing(bvh, velocity, collision_info, info_used);

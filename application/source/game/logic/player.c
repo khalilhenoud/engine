@@ -58,6 +58,7 @@ struct {
   uint32_t on_solid_floor;
   camera_t *camera;
   bvh_t *bvh;
+  float energy_cutoff;
 } player_t;
 
 static
@@ -295,7 +296,7 @@ update_vertical_velocity(float delta_time)
 
 static
 void
-step_up_debug_data(float delta, intersection_info_t *info)
+step_up_debug_data(float delta, const intersection_info_t *info)
 {
   bvh_t *bvh = s_player.bvh;
 
@@ -316,6 +317,95 @@ step_up_debug_data(float delta, intersection_info_t *info)
   }
 }
 
+static 
+uint32_t
+has_any_walls(
+  bvh_t *const bvh,
+  const intersection_info_t collision_info[256],
+  const uint32_t info_used)
+{
+  uint32_t index;
+  for (uint32_t i = 0; i < info_used; ++i) {
+    index = collision_info[i].bvh_face_index;
+    if (!is_floor(bvh, index) && !is_ceiling(bvh, index))
+      return 1;
+  }
+
+  return 0;
+}
+
+static
+void
+display_debug_normal(
+  const vector3f *normal, 
+  debug_color_t color, 
+  float x, 
+  float y)
+{
+  char text[512];
+  memset(text, 0, sizeof(text));
+  sprintf(text, "NORMAL %.3f %.3f %.3f", 
+  normal->data[0], normal->data[1], normal->data[2]);
+  add_debug_text_to_frame(text, color, x, y);
+}
+
+static
+uint32_t
+can_step_up(
+  bvh_t *const bvh, 
+  const intersection_data_t *collisions,
+  capsule_t copy, 
+  vector3f unit, 
+  intersection_info_t *info, 
+  float *out_y)
+{
+  uint32_t any_wall = has_any_walls(bvh, collisions->hits, collisions->count);
+  mult_set_v3f(&unit, s_player.snap_shift);
+  add_set_v3f(&copy.center, &unit);
+
+  if (
+    any_wall &&
+    !is_in_valid_space(bvh, &copy) && 
+    can_snap_vertically(copy, info, out_y))
+    return 1;
+  
+  return 0;
+}
+
+
+// returns the remaining energy after the projection
+static
+float
+project_velocity(
+  const vector3f *orientation,
+  const vector3f *normal,
+  const float energy,
+  vector3f *velocity)
+{
+  vector3f subtract;
+  float dot;
+  float applied = energy;
+
+  assert(!IS_ZERO_LP(length_squared_v3f(velocity)));
+  normalize_set_v3f(velocity);
+  dot = dot_product_v3f(velocity, normal);
+  subtract = mult_v3f(normal, dot);
+  diff_set_v3f(velocity, &subtract);
+  if (IS_ZERO_LP(length_squared_v3f(velocity)))
+    return 0.f;
+  normalize_set_v3f(velocity);
+
+#if 0
+  applied *= fmax(sin(acos(dot_product_v3f(&normal, &velocity))), 0.f);
+  mult_set_v3f(&velocity, applied);
+#else
+  // loss is proportional to the deviation from the initial direction
+  applied *= fmax(dot_product_v3f(orientation, velocity), 0.f);
+  mult_set_v3f(velocity, applied);
+#endif
+  return applied;
+}
+
 static
 collision_flags_t
 handle_collision_detection(const vector3f displacement)
@@ -327,7 +417,8 @@ handle_collision_detection(const vector3f displacement)
   vector3f orientation = normalize_v3f(&displacement);
   vector3f velocity = displacement;
   float energy = length_v3f(&velocity);
-  uint32_t steps = 3;
+  const uint32_t base_steps = 3;
+  uint32_t steps = base_steps;
 
   while (steps-- && !IS_ZERO_LP(length_squared_v3f(&velocity))) {
     collisions.count = get_time_of_impact(
@@ -341,73 +432,57 @@ handle_collision_detection(const vector3f displacement)
     collisions.count = process_collision_info(
       bvh, &velocity, collisions.hits, collisions.count);
 
-    // early out if there is no collision
     if (!collisions.count) {
       add_set_v3f(&capsule->center, &velocity);
       return flags;
-    } 
+    }
 
     {
+      float length = length_v3f(&velocity);
+      vector3f unit = mult_v3f(&velocity, 1.f/length);
       float toi = collisions.hits[0].time;
-      float out_y;
-      collision_flags_t l_flags = COLLIDED_NONE;
-      intersection_info_t info;
-      vector3f normal, unit = normalize_v3f(&velocity);
-      capsule_t copy;
+      float toi_mul = fmax(toi * length - s_player.energy_cutoff, 0.f);
+      vector3f to_apply = mult_v3f(&unit, toi_mul);
 
-      vector3f to_apply = mult_v3f(&velocity, toi);
       add_set_v3f(&capsule->center, &to_apply);
       energy *= (1.f - toi);
 
-      // This should be moved, the reason it is here is because we need l_flags
-      normal = get_averaged_normal(
-        bvh, 
-        s_player.on_solid_floor, 
-        collisions.hits, 
-        collisions.count, 
-        &l_flags);
-      flags |= l_flags;
+      {
+        float out_y;
+        intersection_info_t info;
+        if (can_step_up(bvh, &collisions, *capsule, unit, &info, &out_y)) {
+          step_up_debug_data(capsule->center.data[1] - out_y, &info);
+          capsule->center.data[1] = out_y;
+          continue;
+        }
+      }
+      
+      {
+        vector3f normal;
+        collision_flags_t l_flags = COLLIDED_NONE;
+        collision_flags_t flags_array[] = { 
+          COLLIDED_FLOOR_FLAG, COLLIDED_WALLS_FLAG | COLLIDED_CEILING_FLAG };
+        uint32_t cflags_array[] = { 0, 1 };
+        debug_color_t color_array[] = { green, red };
+        const float base = 330.f + (base_steps - steps) * 20.f;
 
-      // move the capsule along velocity and check if we can snap upwards
-      copy = *capsule;
-      mult_set_v3f(&unit, s_player.snap_shift);
-      add_set_v3f(&copy.center, &unit);
+        for (uint32_t i = 0; i < 2; ++i) {
+          l_flags = get_averaged_normal_filtered(
+            bvh, 
+            &normal, 
+            collisions.hits, 
+            collisions.count, 
+            s_player.on_solid_floor, flags_array[i], cflags_array[i]);
 
-      if (
-        (l_flags & COLLIDED_WALLS_FLAG) && 
-        !is_in_valid_space(bvh, &copy) && 
-        can_snap_vertically(copy, &info, &out_y)) {
-        
-        step_up_debug_data(capsule->center.data[1] - out_y, &info);
-        capsule->center.data[1] = out_y;
-      } else {
-        vector3f subtract;
-        float dot;
-        float length_v = length_v3f(&velocity);
-        vector3f velocity_n = normalize_v3f(&velocity);
-        dot = dot_product_v3f(&velocity_n, &normal) * length_v;
-        subtract = mult_v3f(&normal, dot);
-        diff_set_v3f(&velocity, &subtract);
-        if (IS_ZERO_LP(length_squared_v3f(&velocity)))
-          break;
-        normalize_set_v3f(&velocity);
+          if (l_flags != COLLIDED_NONE) {
+            flags |= l_flags;
+            energy = project_velocity(&orientation, &normal, energy, &velocity);
+            if (energy < s_player.energy_cutoff)
+              return flags;
 
-        // NOTE: for the collision of the behavior at the end of the first 
-        // corridor in e1m1 the behavior we are seeing is completely normal as 
-        // the collision normal creates an inclined plane where the velocity 
-        // projection is not guaranteed to lose its z component (negative in
-        // this case). What we are looking in that plane is the projection that
-        // is both perpendicular to the normal and to the y vector at the same 
-        // time. Check how this makes sense to be incldued in our system.
-  
-#if 0
-        energy *= fmax(sin(acos(dot_product_v3f(&normal, &velocity))), 0.f);
-        mult_set_v3f(&velocity, energy);
-#else
-        // loss is proportional to the deviation from the initial direction
-        energy *= fmax(dot_product_v3f(&orientation, &velocity), 0.f);
-        mult_set_v3f(&velocity, energy);
-#endif
+            display_debug_normal(&normal, color_array[i], 0.f, base + i * 20.f);
+          }
+        }
       }
     }
   }
@@ -445,6 +520,7 @@ player_init(
   s_player.on_solid_floor = 0;
   s_player.camera = camera;
   s_player.bvh = bvh;
+  s_player.energy_cutoff = 0.25f;
 
   if (!is_in_valid_space(bvh, &s_player.capsule)) 
     ensure_in_valid_space(bvh, &s_player.capsule);

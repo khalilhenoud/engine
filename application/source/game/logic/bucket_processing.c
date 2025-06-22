@@ -342,80 +342,14 @@ sort_in_buckets(
   return bucket_count;
 }
 
-// TODO: modify this to make it work, the behavior should not be controlled by
-// this function in terms of faces collision among others.
-vector3f
-get_averaged_normal(
-  bvh_t *const bvh,
-  const uint32_t on_solid_floor,
-  intersection_info_t collision_info[256],
-  uint32_t info_used,
-  collision_flags_t *flags)
-{
-  uint32_t buckets[256];
-  uint32_t bucket_count = 0;
-
-  vector3f averaged, normal;
-  vector3f_set_1f(&averaged, 0.f);
-
-  // we sort the faces to avoid considering colinear faces more than once
-  bucket_count = sort_in_buckets(bvh, collision_info, info_used, buckets);
-
-  for (uint32_t i = 0, index = 0, face_i, is_wall; i < bucket_count; ++i) {
-    is_wall = 0;
-    face_i = collision_info[index].bvh_face_index;
-    normal = bvh->normals[face_i];
-
-    if (is_floor(bvh, face_i))
-      *flags |= COLLIDED_FLOOR_FLAG;
-    else if (is_ceiling(bvh, face_i))
-      *flags |= COLLIDED_CEILING_FLAG;
-    else {
-      *flags |= COLLIDED_WALLS_FLAG;
-      is_wall = 1;
-    }
-
-    // adjust the normal, even if sloped, walls cannot contribute to vertical
-    // acceleration.
-    if (is_wall && on_solid_floor) {
-      vector3f y_up, perp;
-      vector3f_set_3f(&y_up, 0.f, 1.f, 0.f);
-      perp = cross_product_v3f(&y_up, &normal);
-      normalize_set_v3f(&perp);
-      normal = cross_product_v3f(&perp, &y_up);
-      normalize_set_v3f(&normal);
-    }
-
-    add_set_v3f(&averaged, &normal);
-
-     if (g_debug_flags.draw_collided_face) {
-       for (uint32_t k = index; k < (index + buckets[i]); ++k) {
-         uint32_t d_face_i = collision_info[k].bvh_face_index;
-         debug_color_t color =
-           is_floor(bvh, d_face_i) ? green :
-           (is_ceiling(bvh, d_face_i) ? white : blue);
-         add_debug_face_to_frame(
-          bvh->faces + d_face_i,
-          bvh->normals + d_face_i, 
-          color, 2);
-       }
-     }
-
-    index += buckets[i];
-  }
-
-  normalize_set_v3f(&averaged);
-  return averaged;
-}
-
 /**
  * Get the average normal for the bucket matching the flags type. This will be
  * adjusted if we are averaging non-walkable surfaces and the option is
  * specified.
  * collision_info will be sorted in buckets, hence why it isn't const.
- * returns 1 if any face was considered, otherwise 0.
+ * returns the aggregate flags of the faces we processed, else COLLIDED_NONE
  */
-uint32_t
+collision_flags_t
 get_averaged_normal_filtered(
   bvh_t *const bvh,
   vector3f *averaged,
@@ -425,9 +359,9 @@ get_averaged_normal_filtered(
   const collision_flags_t flags,
   const uint32_t adjust_non_walkable)
 {
+  collision_flags_t return_flags = COLLIDED_NONE;
   uint32_t buckets[256];
   uint32_t bucket_count = 0;
-  uint32_t total_added = 0;
 
   assert(flags != 0 && flags != COLLIDED_NONE);
   vector3f_set_1f(averaged, 0.f);
@@ -440,7 +374,7 @@ get_averaged_normal_filtered(
       continue;
 
     add_set_v3f(averaged, bvh->normals + collision_info[index].bvh_face_index);
-    ++total_added;
+    return_flags |= collision_info[index].flags;
 
      if (g_debug_flags.draw_collided_face) {
        for (uint32_t k = index; k < (index + buckets[i]); ++k) {
@@ -453,11 +387,10 @@ get_averaged_normal_filtered(
      }
   }
 
-  if (!total_added)
-    return 0;
+  if (IS_ZERO_LP(length_squared_v3f(averaged)))
+    return return_flags;
 
-  // cheap way to normalize.
-  mult_set_v3f(averaged, 1.f / total_added);
+  normalize_set_v3f(averaged);
 
   // Adjust the averaged wall/ceiling normal, to behave like a vertical wall 
   // when the player is rooted. This produces better sliding motion in these 
@@ -471,7 +404,7 @@ get_averaged_normal_filtered(
     normalize_set_v3f(averaged);
   }
 
-  return 1;
+  return return_flags;
 }
 
 /**

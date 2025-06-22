@@ -24,15 +24,7 @@ typedef struct bvh_t bvh_t;
 typedef struct bvh_aabb_t bvh_aabb_t;
 typedef struct capsule_t capsule_t;
 
-vector3f
-get_averaged_normal(
-  bvh_t *const bvh,
-  const uint32_t on_solid_floor,
-  intersection_info_t collision_info[256],
-  uint32_t info_used,
-  collision_flags_t *flags);
-
-uint32_t
+collision_flags_t
 get_averaged_normal_filtered(
   bvh_t *const bvh,
   vector3f *averaged,

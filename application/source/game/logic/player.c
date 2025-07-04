@@ -359,6 +359,7 @@ can_step_up(
   intersection_info_t *info, 
   float *out_y)
 {
+  capsule_t original = copy;
   uint32_t any_wall = has_any_walls(bvh, collisions->hits, collisions->count);
   mult_set_v3f(&unit, s_player.snap_shift);
   add_set_v3f(&copy.center, &unit);
@@ -366,8 +367,11 @@ can_step_up(
   if (
     any_wall &&
     !is_in_valid_space(bvh, &copy) && 
-    can_snap_vertically(copy, info, out_y))
-    return 1;
+    can_snap_vertically(copy, info, out_y)) {
+    original.center.data[1] = *out_y;
+    if (is_in_valid_space(bvh, &original))
+      return 1;
+  }
   
   return 0;
 }

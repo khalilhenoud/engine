@@ -26,6 +26,7 @@ typedef struct capsule_t capsule_t;
 
 collision_flags_t
 get_averaged_normal_filtered(
+  const vector3f *orientation,
   bvh_t *const bvh,
   vector3f *averaged,
   intersection_info_t collision_info[256],

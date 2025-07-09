@@ -376,7 +376,6 @@ can_step_up(
   return 0;
 }
 
-
 // returns the remaining energy after the projection
 static
 float
@@ -426,11 +425,11 @@ handle_collision_detection(const vector3f displacement)
 
   while (steps-- && !IS_ZERO_LP(length_squared_v3f(&velocity))) {
     collisions.count = get_time_of_impact(
-      bvh, 
-      capsule, 
+      bvh,
+      capsule,
       velocity,
-      collisions.hits,  
-      ITERATIONS, 
+      collisions.hits, 
+      ITERATIONS,
       LIMIT_DISTANCE);
 
     collisions.count = process_collision_info(
@@ -444,6 +443,7 @@ handle_collision_detection(const vector3f displacement)
     {
       float length = length_v3f(&velocity);
       vector3f unit = mult_v3f(&velocity, 1.f/length);
+      vector3f unit_copy = unit;
       float toi = collisions.hits[0].time;
       float toi_mul = fmax(toi * length - s_player.energy_cutoff, 0.f);
       vector3f to_apply = mult_v3f(&unit, toi_mul);
@@ -472,6 +472,7 @@ handle_collision_detection(const vector3f displacement)
 
         for (uint32_t i = 0; i < 2; ++i) {
           l_flags = get_averaged_normal_filtered(
+            &unit_copy,
             bvh, 
             &normal, 
             collisions.hits, 
@@ -502,6 +503,12 @@ player_init(
   camera_t *camera,
   bvh_t *bvh)
 {
+#if 1
+  player_start.data[0] = 288.099518f; 
+  player_start.data[1] = -267.995880;
+  player_start.data[2] = -1273.22510; 
+#endif
+
   vector3f at = player_start; at.data[2] -= 1.f;
   vector3f up = {0.f, 1.f, 0.f};
   camera_init(camera, player_start, at, up);

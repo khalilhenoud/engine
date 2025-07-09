@@ -351,6 +351,7 @@ sort_in_buckets(
  */
 collision_flags_t
 get_averaged_normal_filtered(
+  const vector3f *orientation,
   bvh_t *const bvh,
   vector3f *averaged,
   intersection_info_t collision_info[256],
@@ -381,12 +382,12 @@ get_averaged_normal_filtered(
          add_debug_face_to_frame(
           bvh->faces + collision_info[k].bvh_face_index,
           bvh->normals + collision_info[k].bvh_face_index, 
-          get_debug_color(bvh, k), 
+          get_debug_color(bvh, collision_info[k].bvh_face_index), 
           2);
        }
      }
   }
-
+  
   if (IS_ZERO_LP(length_squared_v3f(averaged)))
     return return_flags;
 
@@ -396,8 +397,18 @@ get_averaged_normal_filtered(
   // when the player is rooted. This produces better sliding motion in these 
   // cases. 
   if (on_solid_floor && adjust_non_walkable && !(flags & COLLIDED_FLOOR_FLAG)) {
+    float dot;
     vector3f y_up, perp;
     vector3f_set_3f(&y_up, 0.f, 1.f, 0.f);
+
+    // make sure we test if they are colinear.
+    dot = dot_product_v3f(&y_up, averaged);
+    if (IS_SAME_LP(fabs(dot), 1.f)) {
+      *averaged = cross_product_v3f(averaged, orientation);
+      normalize_set_v3f(averaged);
+      return return_flags;
+    }
+
     perp = cross_product_v3f(&y_up, averaged);
     normalize_set_v3f(&perp);
     *averaged = cross_product_v3f(&perp, &y_up);

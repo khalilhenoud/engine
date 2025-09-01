@@ -420,7 +420,7 @@ handle_collision_detection(const vector3f displacement)
   vector3f orientation = normalize_v3f(&displacement);
   vector3f velocity = displacement;
   float energy = length_v3f(&velocity);
-  const uint32_t base_steps = 3;
+  const uint32_t base_steps = 5;
   uint32_t steps = base_steps;
 
   while (steps-- && !IS_ZERO_LP(length_squared_v3f(&velocity))) {
@@ -437,6 +437,10 @@ handle_collision_detection(const vector3f displacement)
 
     if (!collisions.count) {
       add_set_v3f(&capsule->center, &velocity);
+
+      if (!is_in_valid_space(s_player.bvh, &s_player.capsule))
+        add_debug_text_to_frame("NOT IN VALID SPACE", red, 200.f, 20.f);
+
       return flags;
     }
 
@@ -492,6 +496,9 @@ handle_collision_detection(const vector3f displacement)
     }
   }
 
+  if (!is_in_valid_space(s_player.bvh, &s_player.capsule))
+    add_debug_text_to_frame("NOT IN VALID SPACE", red, 200.f, 20.f);
+
   return flags;
 }
 
@@ -504,9 +511,9 @@ player_init(
   bvh_t *bvh)
 {
 #if 1
-  player_start.data[0] = 288.099518f; 
-  player_start.data[1] = -267.995880;
-  player_start.data[2] = -1273.22510; 
+  player_start.data[0] = 1333.98950f; 
+  player_start.data[1] = -403.995117f;
+  player_start.data[2] = -1637.12292f; 
 #endif
 
   vector3f at = player_start; at.data[2] -= 1.f;
@@ -553,6 +560,9 @@ player_update(float delta_time)
 
   displacement = get_world_relative_velocity(delta_time);
   flags = handle_collision_detection(displacement);
+
+  if (!is_in_valid_space(s_player.bvh, &s_player.capsule))
+    add_debug_text_to_frame("NOT IN VALID SPACE", red, 200.f, 20.f);
 
   // set the camera position to follow the capsule
   s_player.camera->position = s_player.capsule.center;

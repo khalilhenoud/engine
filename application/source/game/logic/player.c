@@ -423,6 +423,17 @@ handle_collision_detection(const vector3f displacement)
   const uint32_t base_steps = 5;
   uint32_t steps = base_steps;
 
+#if 0
+  uint32_t face_indices[] = {6536};
+  uint32_t face_indices_count = sizeof(face_indices)/sizeof(face_indices[0]);
+  for (uint32_t i = 0; i < face_indices_count; ++i) {
+    add_debug_face_to_frame(
+    bvh->faces + face_indices[i],
+    bvh->normals + face_indices[i], 
+    yellow, 2);
+  }
+#endif
+
   while (steps-- && !IS_ZERO_LP(length_squared_v3f(&velocity))) {
     collisions.count = get_time_of_impact(
       bvh,
@@ -436,10 +447,33 @@ handle_collision_detection(const vector3f displacement)
       bvh, &velocity, collisions.hits, collisions.count);
 
     if (!collisions.count) {
+      point3f previous = capsule->center;
       add_set_v3f(&capsule->center, &velocity);
 
       if (!is_in_valid_space(s_player.bvh, &s_player.capsule))
+      {
+        // this is occuring because we are removing the back face, we should 
+        // replace removing the backface with using the tangent plane for 
+        // collision reaction.
+        // for now we are simply resetting the position.
+        s_player.capsule.center = previous;
+#if 0
+        collisions.count = get_time_of_impact(
+          bvh,
+          capsule,
+          velocity,
+          collisions.hits, 
+          ITERATIONS,
+          LIMIT_DISTANCE);
+
+        collisions.count = process_collision_info(
+          bvh, &velocity, collisions.hits, collisions.count);
+
+        add_set_v3f(&capsule->center, &velocity);
+#endif
+
         add_debug_text_to_frame("NOT IN VALID SPACE", red, 200.f, 20.f);
+      }
 
       return flags;
     }
@@ -510,7 +544,7 @@ player_init(
   camera_t *camera,
   bvh_t *bvh)
 {
-#if 1
+#if 0
   player_start.data[0] = 1333.98950f; 
   player_start.data[1] = -403.995117f;
   player_start.data[2] = -1637.12292f; 

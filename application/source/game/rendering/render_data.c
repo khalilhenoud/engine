@@ -391,7 +391,7 @@ load_scene_light_data(
       target->attenuation_quadratic = source->attenuation_quadratic;
       target->inner_cone = source->inner_cone;
       target->outer_cone = source->outer_cone;
-      target->type = source->type;
+      target->type = (renderer_light_type_t)source->type;
       memcpy(target->diffuse.data, source->diffuse.data, size_color);
       memcpy(target->specular.data, source->specular.data, size_color);
       memcpy(target->ambient.data, source->ambient.data, size_color);

@@ -27,16 +27,6 @@
 #include <entity/c/level/level.h>
 #include <entity/c/spatial/bvh.h>
 
-#define DEBUG_MESHES 0
-#if DEBUG_MESHES
-#include <stdlib.h>
-#include <library/allocator/allocator.h>
-#include <library/string/cstring.h>
-#include <entity/c/mesh/mesh.h>
-#include <entity/c/mesh/mesh_utils.h>
-#include <entity/c/scene/node.h>
-#endif
-
 #define TILDE   0xC0
 #define KEY_EXIT_LEVEL           '0'
 
@@ -61,73 +51,6 @@ load_level(
   sprintf(room, "rooms\\%s", context.level);
   scene = load_scene(context.data_set, room, context.level, allocator);
 
-#if DEBUG_MESHES
-  {
-    mesh_t *unit_capsule = create_unit_capsule(32, 12.f/16.f, allocator);
-    uint32_t index = scene->mesh_repo.count;
-    ++scene->mesh_repo.count;
-    scene->mesh_repo.meshes = (mesh_t *)allocator->mem_realloc(
-      scene->mesh_repo.meshes, sizeof(mesh_t) * scene->mesh_repo.count);
-    assert(scene->mesh_repo.meshes);
-    mesh_t *curr = scene->mesh_repo.meshes + index;
-    *curr = *unit_capsule;
-
-    // cleanup the previously created mesh
-    unit_capsule->indices = NULL;
-    unit_capsule->indices_count = 0;
-    unit_capsule->materials.used = 0;
-    unit_capsule->normals = NULL;
-    unit_capsule->uvs = NULL;
-    unit_capsule->vertices = NULL;
-    unit_capsule->vertices_count = 0;
-    allocator->mem_free(unit_capsule);
-
-    uint32_t nindex = scene->node_repo.count;
-    ++scene->node_repo.count;
-    scene->node_repo.nodes = (node_t *)allocator->mem_realloc(
-      scene->node_repo.nodes, sizeof(node_t) * scene->node_repo.count);
-    assert(scene->node_repo.nodes);
-    node_t *node = scene->node_repo.nodes + nindex;
-    node->meshes.count = 1;
-    node->meshes.indices = allocator->mem_alloc(sizeof(uint32_t));
-    node->meshes.indices[0] = index;
-    // transform
-    matrix4f m1, m2, m3, tmp;
-    matrix4f_scale(&m1, 32.f, 32.f, 32.f);
-    matrix4f_translation(&m2, 565.480103f, 44.0000153f, -684.309448f);
-    // scene->node_repo.nodes[0]
-    m3 = inverse_m4f(&scene->node_repo.nodes[0].transform);
-    tmp = mult_m4f(&m2, &m1);
-    node->transform = mult_m4f(&m3, &tmp);
-    // important
-    node->nodes.count = 0;
-    node->name = cstring_create("tmp1", allocator);
-    
-    // set to use the scene.
-    uint32_t idx = scene->node_repo.nodes[0].nodes.count; 
-    scene->node_repo.nodes[0].nodes.count++;
-    if (idx) {
-      scene->node_repo.nodes[0].nodes.indices = 
-        (uint32_t *)allocator->mem_realloc(
-          scene->node_repo.nodes[0].nodes.indices, 
-          sizeof(uint32_t) * scene->node_repo.nodes[0].nodes.count);
-    } else {
-      scene->node_repo.nodes[0].nodes.indices = 
-      (uint32_t *)allocator->mem_alloc(
-        sizeof(uint32_t) * scene->node_repo.nodes[0].nodes.count);
-    }
-    scene->node_repo.nodes[0].nodes.indices[idx] = nindex;
-
-    /* VERIFY
-    This does not collides.
-    {565.480103, 44.0000153, -684.309448}
-
-    This collides
-    {559.823242, 44.0000153, -689.966309}
-    */
-  }
-#endif
-  
   scene_render_data = load_scene_render_data(scene, allocator);
   prep_packaged_render_data(
     context.data_set, room, scene_render_data, allocator);
@@ -138,7 +61,7 @@ load_level(
   font = scene_render_data->font_data.fonts;
   font_image_id = scene_render_data->font_data.texture_ids[0];
 
-  bvh = scene->bvh_repo.bvhs + 0;
+  bvh = cvector_as(&scene->bvh_repo, 0, bvh_t);
 
   exit_level = 0;
   disable_input = 0;

@@ -235,7 +235,7 @@ load_scene_mesh_data(
   assert(scene && mesh_data && allocator);
 
   // We do match the arrays size between meshes and textures.
-  mesh_data->count = scene->mesh_repo.count;
+  mesh_data->count = scene->mesh_repo.size;
 
   // mesh render data.
   mesh_data->mesh_render_data = 
@@ -259,8 +259,8 @@ load_scene_mesh_data(
     0, 
     sizeof(uint32_t) * mesh_data->count);
 
-  for (uint32_t i = 0; i < scene->mesh_repo.count; ++i) {
-    mesh_t* mesh = scene->mesh_repo.meshes + i;
+  for (uint32_t i = 0; i < scene->mesh_repo.size; ++i) {
+    mesh_t* mesh = cvector_as(&scene->mesh_repo, i, mesh_t);
     mesh_render_data_t* r_data = mesh_data->mesh_render_data + i;
     
     uint32_t array_size = sizeof(float) * 3 * mesh->vertices_count;
@@ -289,8 +289,8 @@ load_scene_mesh_data(
     memcpy(r_data->specular.data, r_data->ambient.data, array_size);
 
     if (mesh->materials.used) {
-      material_t* mat = 
-        scene->material_repo.materials + mesh->materials.indices[0];
+      material_t* mat = cvector_as(
+        &scene->material_repo, mesh->materials.indices[0], material_t);
       // the types are compatible float_4, so copying is safe.
       size_t size = sizeof(r_data->ambient.data);
       memcpy(r_data->ambient.data, mat->ambient.data, size);
@@ -298,8 +298,8 @@ load_scene_mesh_data(
       memcpy(r_data->specular.data, mat->specular.data, size);
 
       if (mat->textures.used) {
-        texture_t* texture = 
-          scene->texture_repo.textures + mat->textures.data->index;
+        texture_t* texture = cvector_as(
+          &scene->texture_repo, mat->textures.data->index, texture_t);
         mesh_data->texture_runtimes[i].texture.path = 
           allocate_string(texture->path->str, allocator);
       }
@@ -317,28 +317,28 @@ load_scene_font_data(
   assert(scene && font_data && allocator);
 
   // font render data.
-  font_data->count = scene->font_repo.count;
+  font_data->count = scene->font_repo.size;
   font_data->fonts = 
     (font_runtime_t*)allocator->mem_cont_alloc(
-      scene->font_repo.count, sizeof(font_runtime_t));
+      scene->font_repo.size, sizeof(font_runtime_t));
   font_data->texture_runtimes = 
     (texture_runtime_t*)allocator->mem_cont_alloc(
-      scene->font_repo.count, 
+      scene->font_repo.size, 
       sizeof(texture_runtime_t));
   
   // the texture ids.
   font_data->texture_ids = 
     (uint32_t*)allocator->mem_cont_alloc(
-      scene->font_repo.count, sizeof(uint32_t));
+      scene->font_repo.size, sizeof(uint32_t));
   memset(
     font_data->texture_ids, 
     0, 
-    sizeof(uint32_t) * scene->font_repo.count);
+    sizeof(uint32_t) * scene->font_repo.size);
 
-  for (uint32_t i = 0; i < scene->font_repo.count; ++i) {
+  for (uint32_t i = 0; i < scene->font_repo.size; ++i) {
     font_runtime_t* target = font_data->fonts + i;
     texture_runtime_t* target_image = font_data->texture_runtimes + i;
-    font_t* source = scene->font_repo.fonts + i;
+    font_t* source = cvector_as(&scene->font_repo, i, font_t);
 
     target->font.data_file = 
       allocate_string(source->data_file->str, allocator);
@@ -375,7 +375,7 @@ load_scene_light_data(
   assert(scene && light_data && allocator);
 
   {
-    light_data->count = scene->light_repo.count;
+    light_data->count = scene->light_repo.size;
     light_data->lights = 
       (renderer_light_t*)allocator->mem_cont_alloc(
         light_data->count, sizeof(renderer_light_t));
@@ -384,7 +384,7 @@ load_scene_light_data(
       renderer_light_t* target = light_data->lights + i;
       size_t size_color = sizeof(target->diffuse.data);
       size_t size_vector = sizeof(target->position.data);
-      light_t* source = scene->light_repo.lights + i;
+      light_t* source = cvector_as(&scene->light_repo, i, light_t);
 
       target->attenuation_constant = source->attenuation_constant;
       target->attenuation_linear = source->attenuation_linear;
@@ -415,14 +415,14 @@ load_scene_camera_data(
   assert(scene && camera_data && allocator);
 
   {
-    camera_data->count = scene->camera_repo.count;
+    camera_data->count = scene->camera_repo.size;
     camera_data->cameras = 
       (camera_t*)allocator->mem_cont_alloc(
-        scene->camera_repo.count, sizeof(camera_t));
+        scene->camera_repo.size, sizeof(camera_t));
 
     for (uint32_t i = 0; i < camera_data->count; ++i) {
       camera_t* target = camera_data->cameras + i;
-      camera_t* source = scene->camera_repo.cameras + i;
+      camera_t* source = cvector_as(&scene->camera_repo, i, camera_t);
 
       target->position = source->position;
       target->lookat_direction = source->lookat_direction;
@@ -441,14 +441,13 @@ load_scene_node_data(
   assert(scene && node_data && allocator);
 
   {
-    node_data->count = scene->node_repo.count;
+    node_data->count = scene->node_repo.size;
     node_data->nodes = 
-      (node_t*)allocator->mem_cont_alloc(
-        scene->node_repo.count, sizeof(node_t));
+      (node_t*)allocator->mem_cont_alloc(scene->node_repo.size, sizeof(node_t));
 
     for (uint32_t i = 0; i < node_data->count; ++i) {
       node_t* target = node_data->nodes + i;
-      node_t* source = scene->node_repo.nodes + i;
+      node_t* source = cvector_as(&scene->node_repo, i, node_t);
 
       // copy the name and the matrix.
       target->name = allocate_string(source->name->str, allocator);

@@ -23,7 +23,7 @@ uint32_t
 is_floor(bvh_t *bvh, uint32_t index)
 {
   float cosine_target = cosf(TO_RADIANS(FLOOR_ANGLE_DEGREES));
-  float normal_dot = bvh->normals[index].data[1];
+  float normal_dot = (cvector_as(&bvh->normals, index, vector3f))->data[1];
   return normal_dot > cosine_target;
 }
 
@@ -31,7 +31,7 @@ uint32_t
 is_ceiling(bvh_t *bvh, uint32_t index)
 {
   float cosine_target = cosf(TO_RADIANS(FLOOR_ANGLE_DEGREES));
-  float normal_dot = bvh->normals[index].data[1];
+  float normal_dot = (cvector_as(&bvh->normals, index, vector3f))->data[1];
   return normal_dot < -cosine_target;
 }
 
@@ -105,18 +105,18 @@ is_in_valid_space(
   query_intersection_fixed_256(bvh, &bounds, query, &used);
 
   for (uint32_t used_index = 0; used_index < used; ++used_index) {
-    bvh_node_t *node = bvh->nodes + query[used_index];
+    bvh_node_t *node = cvector_as(&bvh->nodes, query[used_index], bvh_node_t);
     for (
       uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
       i < last; ++i) {
-      if (!bounds_intersect(&bounds, bvh->bounds + i))
+      if (!bounds_intersect(&bounds, cvector_as(&bvh->bounds, i, bvh_aabb_t)))
         continue;
 
       classification =
         classify_capsule_face(
           capsule,
-          bvh->faces + i,
-          bvh->normals + i,
+          cvector_as(&bvh->faces, i, face_t),
+          cvector_as(&bvh->normals, i, vector3f),
           0,
           &penetration,
           &sphere_center);
@@ -150,19 +150,19 @@ ensure_in_valid_space(
   query_intersection_fixed_256(bvh, &bounds, query, &used);
 
   for (uint32_t used_index = 0; used_index < used; ++used_index) {
-    bvh_node_t* node = bvh->nodes + query[used_index];
+    bvh_node_t *node = cvector_as(&bvh->nodes, query[used_index], bvh_node_t);
     for (
       uint32_t i = node->left_first, last = node->left_first + node->tri_count; 
       i < last; ++i) {
 
-      if (!bounds_intersect(&bounds, bvh->bounds + i))
+      if (!bounds_intersect(&bounds, cvector_as(&bvh->bounds, i, bvh_aabb_t)))
         continue;
 
       classification =
         classify_capsule_face(
           capsule,
-          bvh->faces + i,
-          bvh->normals + i,
+          cvector_as(&bvh->faces, i, face_t),
+          cvector_as(&bvh->normals, i, vector3f),
           0,
           &penetration,
           &sphere_center);
@@ -219,13 +219,16 @@ get_time_of_impact(
     uint32_t index = 0;
 
     for (; index < query_hits; ++index) {
-      bvh_node_t* node = bvh->nodes + query[index];
+      bvh_node_t *node = cvector_as(&bvh->nodes, query[index], bvh_node_t);
       uint32_t i = node->left_first;
       uint32_t last = node->left_first + node->tri_count;
       for (; i < last; ++i) {
         debug_color_t color = get_debug_color(bvh, i);
         int32_t width = is_floor(bvh, i) ? 3 : 2;
-        add_debug_face_to_frame(bvh->faces + i, bvh->normals + i, color, width);
+        add_debug_face_to_frame(
+          cvector_as(&bvh->faces, i, face_t), 
+          cvector_as(&bvh->normals, i, vector3f), 
+          color, width);
       }
     }
   }
@@ -235,15 +238,15 @@ get_time_of_impact(
     uint32_t index = 0;
 
     for (; index < query_hits; ++index) {
-      bvh_node_t* node = bvh->nodes + query[index];
+      bvh_node_t *node = cvector_as(&bvh->nodes, query[index], bvh_node_t);
       uint32_t i = node->left_first;
       uint32_t last = node->left_first + node->tri_count;
       
       for (; i < last; ++i) {
-        face_t *face = bvh->faces + i;
-        vector3f *normal = bvh->normals + i;
+        face_t *face = cvector_as(&bvh->faces, i, face_t);
+        vector3f *normal = cvector_as(&bvh->normals, i, vector3f);
 
-        if (!bounds_intersect(&bounds, bvh->bounds + i))
+        if (!bounds_intersect(&bounds, cvector_as(&bvh->bounds, i, bvh_aabb_t)))
           continue;
 
         // ignore any face that does not intersect post displacement, that is a

@@ -58,15 +58,17 @@ classify_buckets(
       continue;
 
     // test the bucket faces against this plane to determine if they are split
-    face = bvh->faces + collision_info[bucket_offset[i]].bvh_face_index;
-    normal = bvh->normals + collision_info[bucket_offset[i]].bvh_face_index;
+    face = cvector_as(
+      &bvh->faces, collision_info[bucket_offset[i]].bvh_face_index, face_t);
+    normal = cvector_as(
+      &bvh->normals, collision_info[bucket_offset[i]].bvh_face_index, vector3f);
     faces_in_front = faces_to_back = 0;
 
     for (uint32_t j = 0; j < buckets[bucket_index]; ++j) {
       uint32_t points_in_front = 0, points_to_back = 0;
       uint32_t face_offset = bucket_offset[bucket_index] + j;
       uint32_t bvh_index = collision_info[face_offset].bvh_face_index;
-      face_t *target = bvh->faces + bvh_index;
+      face_t *target = cvector_as(&bvh->faces, bvh_index, face_t);
 
       classify[0] = classify_point_halfspace(face, normal, target->points + 0);
       classify[1] = classify_point_halfspace(face, normal, target->points + 1);
@@ -140,8 +142,8 @@ remove_bucket(
     if (i >= start_index && i < end_index) {
       if (g_debug_flags.draw_ignored_faces)
         add_debug_face_to_frame(
-          bvh->faces + collision_info[i].bvh_face_index, 
-          bvh->normals + collision_info[i].bvh_face_index, 
+          cvector_as(&bvh->faces, collision_info[i].bvh_face_index, face_t), 
+          cvector_as(&bvh->normals, collision_info[i].bvh_face_index, vector3f), 
           yellow, 2);
       continue;
     }
@@ -205,16 +207,16 @@ process_buckets(
           continue;
         
         index[0] = collision_info[bucket_offset[i]].bvh_face_index;
-        face[0] = bvh->faces + index[0];
-        normal[0] = bvh->normals + index[0];
+        face[0] = cvector_as(&bvh->faces, index[0], face_t);
+        normal[0] = cvector_as(&bvh->normals, index[0], vector3f);
 
         for (uint32_t j = i + 1; j < bucket_count; ++j) {
           if ((collision_info[bucket_offset[j]].flags & flag) == 0)
             continue;
 
           index[1] = collision_info[bucket_offset[j]].bvh_face_index;
-          face[1] = bvh->faces + index[1];
-          normal[1] = bvh->normals + index[1];
+          face[1] = cvector_as(&bvh->faces, index[1], face_t);
+          normal[1] = cvector_as(&bvh->normals, index[1], vector3f);
 
           result = classify_planes(face[0], normal[0], face[1], normal[1]);
           if (result == PLANES_COLINEAR_OPPOSITE_FACING) {
@@ -302,8 +304,10 @@ sort_in_buckets(
 
   // back to front, makes no difference. cond > 0 for the loop to proceed.
   while (copy_info_used--) {
-    faces[0] = bvh->faces + collision_info[copy_info_used].bvh_face_index; 
-    normals[0] = bvh->normals + collision_info[copy_info_used].bvh_face_index;
+    faces[0] = cvector_as(
+      &bvh->faces, collision_info[copy_info_used].bvh_face_index, face_t); 
+    normals[0] = cvector_as(
+      &bvh->normals, collision_info[copy_info_used].bvh_face_index, vector3f);
     
     // copy into the first sorted index, initial its number of faces.
     sorted[sorted_index++] = collision_info[copy_info_used];
@@ -311,8 +315,10 @@ sort_in_buckets(
 
     i = to_swap = (int64_t)copy_info_used - 1;
     for (; i >= 0; --i) {
-      faces[1] = bvh->faces + collision_info[i].bvh_face_index;
-      normals[1] = bvh->normals + collision_info[i].bvh_face_index;
+      faces[1] = cvector_as(
+        &bvh->faces, collision_info[i].bvh_face_index, face_t);
+      normals[1] = cvector_as(
+        &bvh->normals, collision_info[i].bvh_face_index, vector3f);
 
       classify = classify_planes(faces[0], normals[0], faces[1], normals[1]);
       if (classify == PLANES_COLINEAR) {
@@ -374,14 +380,15 @@ get_averaged_normal_filtered(
     if ((collision_info[index].flags & flags) == 0)
       continue;
 
-    add_set_v3f(averaged, bvh->normals + collision_info[index].bvh_face_index);
+    add_set_v3f(averaged, cvector_as(
+      &bvh->normals, collision_info[index].bvh_face_index, vector3f));
     return_flags |= collision_info[index].flags;
 
      if (g_debug_flags.draw_collided_face) {
        for (uint32_t k = index; k < (index + buckets[i]); ++k) {
          add_debug_face_to_frame(
-          bvh->faces + collision_info[k].bvh_face_index,
-          bvh->normals + collision_info[k].bvh_face_index, 
+          cvector_as(&bvh->faces, collision_info[k].bvh_face_index, face_t),
+          cvector_as(&bvh->normals, collision_info[k].bvh_face_index, vector3f), 
           get_debug_color(bvh, collision_info[k].bvh_face_index), 
           2);
        }
@@ -437,7 +444,7 @@ trim_backfacing(
 
   for (uint32_t i = 0, index = 0; i < info_used; ++i) {
     index = collision_info[i].bvh_face_index;
-    normal = bvh->normals + index;
+    normal = cvector_as(&bvh->normals, index, vector3f);
     if (dot_product_v3f(velocity, normal) > EPSILON_FLOAT_LOW_PRECISION)
       continue;
     else

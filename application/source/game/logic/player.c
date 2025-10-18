@@ -222,8 +222,9 @@ can_snap_vertically(
     // after the sweep if we collided with any floor face.
     if (info->flags == COLLIDED_FLOOR_FLAG) {
       float t;
-      vector3f *normal = bvh->normals + info->bvh_face_index;
-      face_t face = bvh->faces[info->bvh_face_index];
+      vector3f *normal = cvector_as(
+        &bvh->normals, info->bvh_face_index, vector3f);
+      face_t face = *cvector_as(&bvh->faces, info->bvh_face_index, face_t);
       face = get_extended_face(&face, capsule.radius * 2);
 
       {
@@ -288,7 +289,10 @@ update_vertical_velocity(float delta_time)
       memset(text, 0, sizeof(text));
       sprintf(text, "SNAPPING %f", distance);
       add_debug_text_to_frame(text, green, 400.f, 300.f);
-      add_debug_face_to_frame(bvh->faces + i, bvh->normals + i, color, 1);
+      add_debug_face_to_frame(
+        cvector_as(&bvh->faces, i, face_t), 
+        cvector_as(&bvh->normals, i, vector3f), 
+        color, 1);
     }
   } else
     s_player.on_solid_floor = 0;
@@ -309,8 +313,8 @@ step_up_debug_data(float delta, const intersection_info_t *info)
 
   if (g_debug_flags.draw_step_up) {
     uint32_t i = info->bvh_face_index;
-    face_t *face = bvh->faces + i;
-    vector3f *normal = bvh->normals + i;
+    face_t *face = cvector_as(&bvh->faces, i, face_t);
+    vector3f *normal = cvector_as(&bvh->normals, i, vector3f);
     debug_color_t color = get_debug_color(bvh, i);
     int32_t width = is_floor(bvh, i) ? 3 : 2;
     add_debug_face_to_frame(face, normal, color, width);

@@ -31,24 +31,6 @@
 
 
 static
-cstring_t *
-allocate_string(const char *ptr, const allocator_t *allocator)
-{
-  cstring_t *string = allocator->mem_alloc(sizeof(cstring_t));
-  cstring_def(string);
-  cstring_setup(string, ptr, allocator);
-  return string;
-}
-
-static
-void
-free_string(cstring_t *string, const allocator_t *allocator)
-{
-  cstring_cleanup(string, NULL);
-  allocator->mem_free(string);
-}
-
-static
 void
 free_mesh_render_data_internal(
   mesh_render_data_t* render_data, 
@@ -199,7 +181,7 @@ free_packaged_node_data_internal(
   {
     for (uint32_t i = 0; i < node_data->count; ++i) {
       node_t* current = node_data->nodes + i;
-      free_string(current->name, allocator);
+      cstring_cleanup2(&current->name);
       allocator->mem_free(current->nodes.indices);
       allocator->mem_free(current->meshes.indices);
     }
@@ -278,7 +260,7 @@ load_scene_mesh_data(
     memcpy(r_data->indices, mesh->indices, array_size);
 
     // Set the default texture and material colors to grey.
-    mesh_data->texture_runtimes[i].texture.path = NULL;
+    cstring_def(&mesh_data->texture_runtimes[i].texture.path);
     // set a default ambient color.
     r_data->ambient.data[0] = 
     r_data->ambient.data[1] = r_data->ambient.data[2] = 0.5f;
@@ -300,8 +282,10 @@ load_scene_mesh_data(
       if (mat->textures.used) {
         texture_t* texture = cvector_as(
           &scene->texture_repo, mat->textures.data->index, texture_t);
-        mesh_data->texture_runtimes[i].texture.path = 
-          allocate_string(texture->path->str, allocator);
+        cstring_def(&mesh_data->texture_runtimes[i].texture.path);
+        cstring_setup(
+          &mesh_data->texture_runtimes[i].texture.path, 
+          texture->path.str, allocator);
       }
     }
   }
@@ -338,16 +322,17 @@ load_scene_font_data(
   for (uint32_t i = 0; i < scene->font_repo.size; ++i) {
     font_runtime_t* target = font_data->fonts + i;
     texture_runtime_t* target_image = font_data->texture_runtimes + i;
-    font_t* source = cvector_as(&scene->font_repo, i, font_t);
+    font_t *source = cvector_as(&scene->font_repo, i, font_t);
 
-    target->font.data_file = 
-      allocate_string(source->data_file->str, allocator);
-    target->font.image_file = 
-      allocate_string(source->image_file->str, allocator);
+    cstring_def(&target->font.data_file);
+    cstring_setup(&target->font.data_file, source->data_file.str, allocator);
+    cstring_def(&target->font.image_file);
+    cstring_setup(&target->font.image_file, source->image_file.str, allocator);
 
     // Set the texture runtime of the font, still unloaded.
-    target_image->texture.path = 
-      allocate_string(source->image_file->str, allocator);
+    cstring_def(&target_image->texture.path);
+    cstring_setup(
+      &target_image->texture.path, source->image_file.str, allocator);
   }
 }
 
@@ -446,11 +431,12 @@ load_scene_node_data(
       (node_t*)allocator->mem_cont_alloc(scene->node_repo.size, sizeof(node_t));
 
     for (uint32_t i = 0; i < node_data->count; ++i) {
-      node_t* target = node_data->nodes + i;
-      node_t* source = cvector_as(&scene->node_repo, i, node_t);
+      node_t *target = node_data->nodes + i;
+      node_t *source = cvector_as(&scene->node_repo, i, node_t);
 
       // copy the name and the matrix.
-      target->name = allocate_string(source->name->str, allocator);
+      cstring_def(&target->name);
+      cstring_setup(&target->name, source->name.str, allocator);
       memcpy(
         target->transform.data, 
         source->transform.data, 
@@ -553,7 +539,8 @@ load_mesh_renderer_data(
     memcpy(r_data->indices, mesh->indices, array_size);
 
     // Set the default texture and material colors to grey.
-    mesh_data->texture_runtimes[0].texture.path = NULL;
+    cstring_def(&mesh_data->texture_runtimes[0].texture.path);
+    cstring_setup(&mesh_data->texture_runtimes[0].texture.path, "", allocator);
     // set a default ambient color.
     r_data->ambient.data[0] = color.data[0];
     r_data->ambient.data[1] = color.data[1];
@@ -584,10 +571,10 @@ prep_packaged_render_data(
   // load the images and upload them to the gpu.
   for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
     texture_runtime_t* runtime = render_data->mesh_data.texture_runtimes + i;
-    if (runtime->texture.path && runtime->texture.path->length) {
+    if (runtime->texture.path.str && runtime->texture.path.length) {
       load_image_buffer(texture_path, runtime, allocator);
       render_data->mesh_data.texture_ids[i] = upload_to_gpu(
-        runtime->texture.path->str,
+        runtime->texture.path.str,
         runtime->buffer,
         runtime->width,
         runtime->height,
@@ -605,10 +592,10 @@ prep_packaged_render_data(
     // TODO: Ultimately we need a system for this, we need to be able to handle
     // deduplication.
     texture_runtime_t* runtime = render_data->font_data.texture_runtimes + i;
-    if (runtime->texture.path && runtime->texture.path->length) {
+    if (runtime->texture.path.str && runtime->texture.path.length) {
       load_image_buffer(data_set, runtime, allocator);
       render_data->font_data.texture_ids[i] = upload_to_gpu(
-        runtime->texture.path->str,
+        runtime->texture.path.str,
         runtime->buffer,
         runtime->width,
         runtime->height,

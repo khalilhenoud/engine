@@ -36,7 +36,7 @@ load_image_buffer(
     {
       fixed_str_t path;
       memset(path.data, 0, sizeof(path.data));
-      sprintf(path.data, "%s%s", data_set, image->texture.path->str);
+      sprintf(path.data, "%s%s", data_set, image->texture.path.str);
 
       {
         loader_png_data_t* data = load_png(path.data, allocator);

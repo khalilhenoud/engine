@@ -245,19 +245,19 @@ load_scene_mesh_data(
     mesh_t* mesh = cvector_as(&scene->mesh_repo, i, mesh_t);
     mesh_render_data_t* r_data = mesh_data->mesh_render_data + i;
     
-    uint32_t array_size = sizeof(float) * 3 * mesh->vertices_count;
-    r_data->vertex_count = mesh->vertices_count;
+    uint32_t array_size = sizeof(float) * mesh->vertices.size;
+    r_data->vertex_count = (mesh->vertices.size)/3;
     r_data->vertices = allocator->mem_alloc(array_size);
-    memcpy(r_data->vertices, mesh->vertices, array_size);
+    memcpy(r_data->vertices, mesh->vertices.data, array_size);
     r_data->normals = allocator->mem_alloc(array_size);
-    memcpy(r_data->normals, mesh->normals, array_size);
+    memcpy(r_data->normals, mesh->normals.data, array_size);
     r_data->uv_coords = allocator->mem_alloc(array_size);
-    memcpy(r_data->uv_coords, mesh->uvs, array_size);
+    memcpy(r_data->uv_coords, mesh->uvs.data, array_size);
 
-    array_size = sizeof(uint32_t) * mesh->indices_count;
-    r_data->indices_count = mesh->indices_count;
+    array_size = sizeof(uint32_t) * mesh->indices.size;
+    r_data->indices_count = mesh->indices.size;
     r_data->indices = allocator->mem_alloc(array_size);
-    memcpy(r_data->indices, mesh->indices, array_size);
+    memcpy(r_data->indices, mesh->indices.data, array_size);
 
     // Set the default texture and material colors to grey.
     cstring_def(&mesh_data->texture_runtimes[i].texture.path);
@@ -524,19 +524,19 @@ load_mesh_renderer_data(
   {
     mesh_render_data_t* r_data = mesh_data->mesh_render_data;
     
-    uint32_t array_size = sizeof(float) * 3 * mesh->vertices_count;
-    r_data->vertex_count = mesh->vertices_count;
+    uint32_t array_size = sizeof(float) * mesh->vertices.size;
+    r_data->vertex_count = (mesh->vertices.size)/3;
     r_data->vertices = allocator->mem_alloc(array_size);
-    memcpy(r_data->vertices, mesh->vertices, array_size);
+    memcpy(r_data->vertices, mesh->vertices.data, array_size);
     r_data->normals = allocator->mem_alloc(array_size);
-    memcpy(r_data->normals, mesh->normals, array_size);
+    memcpy(r_data->normals, mesh->normals.data, array_size);
     r_data->uv_coords = allocator->mem_alloc(array_size);
-    memcpy(r_data->uv_coords, mesh->uvs, array_size);
+    memcpy(r_data->uv_coords, mesh->uvs.data, array_size);
 
-    array_size = sizeof(uint32_t) * mesh->indices_count;
-    r_data->indices_count = mesh->indices_count;
+    array_size = sizeof(uint32_t) * mesh->indices.size;
+    r_data->indices_count = mesh->indices.size;
     r_data->indices = allocator->mem_alloc(array_size);
-    memcpy(r_data->indices, mesh->indices, array_size);
+    memcpy(r_data->indices, mesh->indices.data, array_size);
 
     // Set the default texture and material colors to grey.
     cstring_def(&mesh_data->texture_runtimes[0].texture.path);

@@ -282,7 +282,6 @@ load_scene_mesh_data(
       if (mat->textures.used) {
         texture_t* texture = cvector_as(
           &scene->texture_repo, mat->textures.data->index, texture_t);
-        cstring_def(&mesh_data->texture_runtimes[i].texture.path);
         cstring_setup(
           &mesh_data->texture_runtimes[i].texture.path, 
           texture->path.str, allocator);
@@ -324,13 +323,10 @@ load_scene_font_data(
     texture_runtime_t* target_image = font_data->texture_runtimes + i;
     font_t *source = cvector_as(&scene->font_repo, i, font_t);
 
-    cstring_def(&target->font.data_file);
     cstring_setup(&target->font.data_file, source->data_file.str, allocator);
-    cstring_def(&target->font.image_file);
     cstring_setup(&target->font.image_file, source->image_file.str, allocator);
 
     // Set the texture runtime of the font, still unloaded.
-    cstring_def(&target_image->texture.path);
     cstring_setup(
       &target_image->texture.path, source->image_file.str, allocator);
   }
@@ -435,7 +431,6 @@ load_scene_node_data(
       node_t *source = cvector_as(&scene->node_repo, i, node_t);
 
       // copy the name and the matrix.
-      cstring_def(&target->name);
       cstring_setup(&target->name, source->name.str, allocator);
       memcpy(
         target->transform.data, 
@@ -537,7 +532,6 @@ load_mesh_renderer_data(
     memcpy(r_data->indices, mesh->indices.data, array_size);
 
     // Set the default texture and material colors to grey.
-    cstring_def(&mesh_data->texture_runtimes[0].texture.path);
     cstring_setup(&mesh_data->texture_runtimes[0].texture.path, "", allocator);
     // set a default ambient color.
     r_data->ambient.data[0] = color.data[0];

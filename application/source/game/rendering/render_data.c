@@ -182,8 +182,8 @@ free_packaged_node_data_internal(
     for (uint32_t i = 0; i < node_data->count; ++i) {
       node_t* current = node_data->nodes + i;
       cstring_cleanup2(&current->name);
-      allocator->mem_free(current->nodes.indices);
-      allocator->mem_free(current->meshes.indices);
+      cvector_cleanup2(&current->nodes);
+      cvector_cleanup2(&current->meshes);
     }
 
     allocator->mem_free(node_data->nodes);
@@ -443,22 +443,20 @@ load_scene_node_data(
         sizeof(target->transform.data));
 
       // copy the children node indices.
-      target->nodes.count = source->nodes.count;
-      target->nodes.indices = (uint32_t*)allocator->mem_cont_alloc(
-        target->nodes.count, sizeof(uint32_t));
+      cvector_setup(&target->nodes, get_type_data(uint32_t), 0, allocator);
+      cvector_resize(&target->nodes, source->nodes.size);
       memcpy(
-        target->nodes.indices, 
-        source->nodes.indices, 
-        sizeof(uint32_t) * target->nodes.count);
+        target->nodes.data, 
+        source->nodes.data, 
+        sizeof(uint32_t) * target->nodes.size);
 
       // copy the mesh payload indices.
-      target->meshes.count = source->meshes.count;
-      target->meshes.indices = (uint32_t*)allocator->mem_cont_alloc(
-        target->meshes.count, sizeof(uint32_t));
+      cvector_setup(&target->meshes, get_type_data(uint32_t), 0, allocator);
+      cvector_resize(&target->meshes, source->meshes.size);
       memcpy(
-        target->meshes.indices, 
-        source->meshes.indices, 
-        sizeof(uint32_t) * target->meshes.count);
+        target->meshes.data, 
+        source->meshes.data, 
+        sizeof(uint32_t) * target->meshes.size);
     }
   }
 }
@@ -575,7 +573,7 @@ prep_packaged_render_data(
       load_image_buffer(texture_path, runtime, allocator);
       render_data->mesh_data.texture_ids[i] = upload_to_gpu(
         runtime->texture.path.str,
-        runtime->buffer,
+        runtime->buffer.data,
         runtime->width,
         runtime->height,
         (renderer_image_format_t)runtime->format);
@@ -596,7 +594,7 @@ prep_packaged_render_data(
       load_image_buffer(data_set, runtime, allocator);
       render_data->font_data.texture_ids[i] = upload_to_gpu(
         runtime->texture.path.str,
-        runtime->buffer,
+        runtime->buffer.data,
         runtime->width,
         runtime->height,
         (renderer_image_format_t)runtime->format);
@@ -641,8 +639,8 @@ render_packaged_scene_data_node(
 
   {
     // draw the meshes belonging to this node.
-    for (uint32_t i = 0; i < node->meshes.count; ++i) {
-      uint32_t mesh_index = node->meshes.indices[i];
+    for (uint32_t i = 0; i < node->meshes.size; ++i) {
+      uint32_t mesh_index = *cvector_as(&node->meshes, i, uint32_t);
       draw_meshes(
         render_data->mesh_data.mesh_render_data + mesh_index,
         render_data->mesh_data.texture_ids + mesh_index,
@@ -651,8 +649,8 @@ render_packaged_scene_data_node(
     }
 
     // recurively call the child nodes.
-    for (uint32_t i = 0; i < node->nodes.count; ++i) {
-      uint32_t node_index = node->nodes.indices[i];
+    for (uint32_t i = 0; i < node->nodes.size; ++i) {
+      uint32_t node_index = *cvector_as(&node->nodes, i, uint32_t);
       render_packaged_scene_data_node(
         render_data, 
         pipeline, 

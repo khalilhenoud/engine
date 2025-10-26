@@ -43,7 +43,7 @@ load_image_buffer(
         assert(data);
 
         allocate_runtime_buffer(image, data->total_buffer_size, allocator);
-        memcpy(image->buffer, data->buffer, data->total_buffer_size);
+        memcpy(image->buffer.data, data->buffer, data->total_buffer_size);
         
         // the types are compatible.
         image->format = (image_format_t)data->format;

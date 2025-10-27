@@ -65,8 +65,9 @@ load_room_select(
     context.data_set, room, scene_render_data, allocator);
 
   // need to load the images required by the scene.
-  font = scene_render_data->font_data.fonts;
-  font_image_id = scene_render_data->font_data.texture_ids[0];
+  font = cvector_as(&scene_render_data->font_data.fonts, 0, font_runtime_t);
+  font_image_id = *cvector_as(
+    &scene_render_data->font_data.texture_ids, 0, uint32_t);
 
   load_rooms(context.data_set);
   exit_room_select = -1;

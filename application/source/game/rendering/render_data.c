@@ -47,79 +47,68 @@ free_mesh_render_data_internal(
 static
 void
 free_mesh_render_data_array(
-  mesh_render_data_t* meshes_data, 
-  uint32_t count, 
+  cvector_t *meshes_data,
   const allocator_t* allocator)
 {
-  assert(meshes_data && count && allocator);
-  
-  {
-    for (uint32_t i = 0; i < count; ++i)
-      free_mesh_render_data_internal(meshes_data + i, allocator);
-    
-    allocator->mem_free(meshes_data);
-  }
+  assert(meshes_data && allocator);
+
+  for (uint32_t i = 0; i < meshes_data->size; ++i)
+    free_mesh_render_data_internal(
+      cvector_as(meshes_data, i, mesh_render_data_t), allocator);
+  cvector_cleanup2(meshes_data);
 }
 
 static
 void
 free_font_runtime_array(
-  font_runtime_t* runtime, 
-  uint32_t count, 
-  const allocator_t* allocator)
+  cvector_t *font_runtime, 
+  const allocator_t *allocator)
 {
-  assert(runtime && count && allocator);
+  assert(font_runtime && allocator);
 
-  {
-    for (uint32_t i = 0; i < count; ++i)
-      free_font_runtime_internal(runtime + i, allocator);
-
-    allocator->mem_free(runtime);
-  }
+  for (uint32_t i = 0; i < font_runtime->size; ++i)
+    free_font_runtime_internal(
+      cvector_as(font_runtime, i, font_runtime_t), allocator);
+  cvector_cleanup2(font_runtime);
 }
 
 static
 void
 free_texture_runtime_array(
-  texture_runtime_t* runtime, 
-  uint32_t count, 
+  cvector_t *texture_runtime,
   const allocator_t* allocator)
 {
-  assert(runtime && count && allocator);
+  assert(texture_runtime && allocator);
 
-  {
-    for (uint32_t i = 0; i < count; ++i)
-      free_texture_runtime_internal(runtime + i, allocator);
-
-    allocator->mem_free(runtime);
-  }
+  for (uint32_t i = 0; i < texture_runtime->size; ++i)
+    free_texture_runtime_internal(
+      cvector_as(texture_runtime, i, texture_runtime_t), allocator);
+  cvector_cleanup2(texture_runtime);
 }
 
 static
 void
 free_packaged_mesh_data_internal(
-  packaged_mesh_data_t* mesh_data, 
-  const allocator_t* allocator)
+  packaged_mesh_data_t *mesh_data, 
+  const allocator_t *allocator)
 {
   assert(mesh_data && allocator);
 
   free_mesh_render_data_array(
-    mesh_data->mesh_render_data, 
-    mesh_data->count, 
+    &mesh_data->mesh_render_data, 
     allocator);
 
   free_texture_runtime_array(
-    mesh_data->texture_runtimes, 
-    mesh_data->count, 
+    &mesh_data->texture_runtimes,
     allocator);
 
-  allocator->mem_free(mesh_data->texture_ids);  
+  cvector_cleanup2(&mesh_data->texture_ids);
 }
 
 void
 free_mesh_render_data(
-  packaged_mesh_data_t* mesh_data, 
-  const allocator_t* allocator)
+  packaged_mesh_data_t *mesh_data, 
+  const allocator_t *allocator)
 {
   assert(mesh_data && allocator);
 
@@ -130,120 +119,104 @@ free_mesh_render_data(
 static
 void
 free_packaged_font_data_internal(
-  packaged_font_data_t* font_data,
-  const allocator_t* allocator)
+  packaged_font_data_t *font_data,
+  const allocator_t *allocator)
 {
   assert(font_data && allocator);
   
   free_font_runtime_array(
-    font_data->fonts, 
-    font_data->count, 
+    &font_data->fonts,
     allocator);
   
   free_texture_runtime_array(
-    font_data->texture_runtimes, 
-    font_data->count, 
+    &font_data->texture_runtimes, 
     allocator);
 
-  allocator->mem_free(font_data->texture_ids);
+  cvector_cleanup2(&font_data->texture_ids);
 }
 
 static
 void
 free_packaged_camera_data_internal(
-  packaged_camera_data_t* camera_data,
-  const allocator_t* allocator)
+  cvector_t *camera_data,
+  const allocator_t *allocator)
 {
   assert(camera_data && allocator);
-
-  allocator->mem_free(camera_data->cameras);
+  cvector_cleanup2(camera_data);
 }
 
 static
 void
 free_packaged_light_data_internal(
-  packaged_light_data_t* light_data, 
-  const allocator_t* allocator)
+  cvector_t *light_data, 
+  const allocator_t *allocator)
 {
   assert(light_data && allocator);
-
-  allocator->mem_free(light_data->lights);
+  cvector_cleanup2(light_data);
 }
 
 static
 void
 free_packaged_node_data_internal(
-  packaged_node_data_t* node_data, 
-  const allocator_t* allocator)
+  cvector_t *node_data, 
+  const allocator_t *allocator)
 {
   assert(node_data && allocator);
-
-  {
-    for (uint32_t i = 0; i < node_data->count; ++i) {
-      node_t* current = node_data->nodes + i;
-      cstring_cleanup2(&current->name);
-      cvector_cleanup2(&current->nodes);
-      cvector_cleanup2(&current->meshes);
-    }
-
-    allocator->mem_free(node_data->nodes);
-  }
+  cvector_cleanup2(node_data);
 }
 
 void
 free_render_data(
-  packaged_scene_render_data_t* render_data, 
-  const allocator_t* allocator)
+  packaged_scene_render_data_t *render_data, 
+  const allocator_t *allocator)
 {
   assert(render_data && allocator);
   
-  {
-    free_packaged_node_data_internal(&render_data->node_data, allocator);
-    free_packaged_mesh_data_internal(&render_data->mesh_data, allocator);
-    free_packaged_light_data_internal(&render_data->light_data, allocator);
-    free_packaged_font_data_internal(&render_data->font_data, allocator);
-    free_packaged_camera_data_internal(&render_data->camera_data, allocator);  
-    allocator->mem_free(render_data);
-  }
+  free_packaged_node_data_internal(&render_data->node_data, allocator);
+  free_packaged_mesh_data_internal(&render_data->mesh_data, allocator);
+  free_packaged_light_data_internal(&render_data->light_data, allocator);
+  free_packaged_font_data_internal(&render_data->font_data, allocator);
+  free_packaged_camera_data_internal(&render_data->camera_data, allocator);  
+  allocator->mem_free(render_data);
 }
 
 static
 void
 load_scene_mesh_data(
-  scene_t* scene, 
-  packaged_mesh_data_t* mesh_data, 
-  const allocator_t* allocator)
+  scene_t *scene, 
+  packaged_mesh_data_t *mesh_data, 
+  const allocator_t *allocator)
 {
   assert(scene && mesh_data && allocator);
 
   // We do match the arrays size between meshes and textures.
-  mesh_data->count = scene->mesh_repo.size;
+  cvector_setup(
+    &mesh_data->mesh_render_data, 
+    get_type_data(mesh_render_data_t), 
+    0, allocator);
+  cvector_resize(&mesh_data->mesh_render_data, scene->mesh_repo.size);
 
-  // mesh render data.
-  mesh_data->mesh_render_data = 
-    allocator->mem_cont_alloc(
-      mesh_data->count, 
-      sizeof(mesh_render_data_t));
+  cvector_setup(
+    &mesh_data->texture_runtimes, 
+    get_type_data(texture_runtime_t), 
+    0, allocator);
+  cvector_resize(&mesh_data->texture_runtimes, scene->mesh_repo.size);
 
-  // texture render data.
-  mesh_data->texture_runtimes = 
-    allocator->mem_cont_alloc(
-      mesh_data->count, 
-      sizeof(texture_runtime_t));
-
-  // fill these when you load the texture runtimes.
-  mesh_data->texture_ids = 
-    allocator->mem_cont_alloc(
-      mesh_data->count, 
-      sizeof(uint32_t));
+  cvector_setup(
+    &mesh_data->texture_ids, 
+    get_type_data(uint32_t), 
+    0, allocator);
+  cvector_resize(&mesh_data->texture_ids, scene->mesh_repo.size);
   memset(
-    mesh_data->texture_ids, 
+    mesh_data->texture_ids.data,
     0, 
-    sizeof(uint32_t) * mesh_data->count);
+    sizeof(uint32_t) * scene->mesh_repo.size);
 
   for (uint32_t i = 0; i < scene->mesh_repo.size; ++i) {
+    texture_runtime_t *t_runtime = NULL;
     mesh_t* mesh = cvector_as(&scene->mesh_repo, i, mesh_t);
-    mesh_render_data_t* r_data = mesh_data->mesh_render_data + i;
+    mesh_render_data_t* r_data = cvector_as(
+      &mesh_data->mesh_render_data, i, mesh_render_data_t);
     
     uint32_t array_size = sizeof(float) * mesh->vertices.size;
     r_data->vertex_count = (mesh->vertices.size)/3;
@@ -260,7 +233,8 @@ load_scene_mesh_data(
     memcpy(r_data->indices, mesh->indices.data, array_size);
 
     // Set the default texture and material colors to grey.
-    cstring_def(&mesh_data->texture_runtimes[i].texture.path);
+    t_runtime = cvector_as(&mesh_data->texture_runtimes, i, texture_runtime_t);
+    cstring_def(&t_runtime->texture.path);
     // set a default ambient color.
     r_data->ambient.data[0] = 
     r_data->ambient.data[1] = r_data->ambient.data[2] = 0.5f;
@@ -271,7 +245,7 @@ load_scene_mesh_data(
     memcpy(r_data->specular.data, r_data->ambient.data, array_size);
 
     if (mesh->materials.used) {
-      material_t* mat = cvector_as(
+      material_t *mat = cvector_as(
         &scene->material_repo, mesh->materials.indices[0], material_t);
       // the types are compatible float_4, so copying is safe.
       size_t size = sizeof(r_data->ambient.data);
@@ -283,7 +257,7 @@ load_scene_mesh_data(
         texture_t* texture = cvector_as(
           &scene->texture_repo, mat->textures.data->index, texture_t);
         cstring_setup(
-          &mesh_data->texture_runtimes[i].texture.path, 
+          &t_runtime->texture.path, 
           texture->path.str, allocator);
       }
     }
@@ -293,35 +267,34 @@ load_scene_mesh_data(
 static
 void
 load_scene_font_data(
-  scene_t* scene, 
-  packaged_font_data_t* font_data, 
-  const allocator_t* allocator)
+  scene_t *scene, 
+  packaged_font_data_t *font_data, 
+  const allocator_t *allocator)
 {
   assert(scene && font_data && allocator);
 
   // font render data.
-  font_data->count = scene->font_repo.size;
-  font_data->fonts = 
-    (font_runtime_t*)allocator->mem_cont_alloc(
-      scene->font_repo.size, sizeof(font_runtime_t));
-  font_data->texture_runtimes = 
-    (texture_runtime_t*)allocator->mem_cont_alloc(
-      scene->font_repo.size, 
-      sizeof(texture_runtime_t));
+  // font_data->count = scene->font_repo.size;
+  cvector_setup(&font_data->fonts, get_type_data(font_runtime_t), 0, allocator);
+  cvector_resize(&font_data->fonts, scene->font_repo.size);
+
+  cvector_setup(
+    &font_data->texture_runtimes, 
+    get_type_data(texture_runtime_t), 0, allocator);
+  cvector_resize(&font_data->texture_runtimes, scene->font_repo.size);
   
-  // the texture ids.
-  font_data->texture_ids = 
-    (uint32_t*)allocator->mem_cont_alloc(
-      scene->font_repo.size, sizeof(uint32_t));
+  cvector_setup(&font_data->texture_ids, get_type_data(uint32_t), 0, allocator);
+  cvector_resize(&font_data->texture_ids, scene->font_repo.size);
   memset(
-    font_data->texture_ids, 
+    font_data->texture_ids.data, 
     0, 
     sizeof(uint32_t) * scene->font_repo.size);
 
   for (uint32_t i = 0; i < scene->font_repo.size; ++i) {
-    font_runtime_t* target = font_data->fonts + i;
-    texture_runtime_t* target_image = font_data->texture_runtimes + i;
+    font_runtime_t *target = cvector_as(&font_data->fonts, i, font_runtime_t);
     font_t *source = cvector_as(&scene->font_repo, i, font_t);
+    texture_runtime_t *target_image = cvector_as(
+      &font_data->texture_runtimes, i, texture_runtime_t);
 
     cstring_setup(&target->font.data_file, source->data_file.str, allocator);
     cstring_setup(&target->font.image_file, source->image_file.str, allocator);
@@ -349,23 +322,21 @@ normalize_color(color_t* color)
 static
 void
 load_scene_light_data(
-  scene_t* scene, 
-  packaged_light_data_t* light_data, 
-  const allocator_t* allocator)
+  scene_t *scene, 
+  cvector_t *light_data, 
+  const allocator_t *allocator)
 {
   assert(scene && light_data && allocator);
 
   {
-    light_data->count = scene->light_repo.size;
-    light_data->lights = 
-      (renderer_light_t*)allocator->mem_cont_alloc(
-        light_data->count, sizeof(renderer_light_t));
+    cvector_setup(light_data, get_type_data(renderer_light_t), 0, allocator);
+    cvector_resize(light_data, scene->light_repo.size);
 
-    for (uint32_t i = 0; i < light_data->count; ++i) {
-      renderer_light_t* target = light_data->lights + i;
+    for (uint32_t i = 0; i < light_data->size; ++i) {
+      renderer_light_t *target = cvector_as(light_data, i, renderer_light_t);
+      light_t *source = cvector_as(&scene->light_repo, i, light_t);
       size_t size_color = sizeof(target->diffuse.data);
       size_t size_vector = sizeof(target->position.data);
-      light_t* source = cvector_as(&scene->light_repo, i, light_t);
 
       target->attenuation_constant = source->attenuation_constant;
       target->attenuation_linear = source->attenuation_linear;
@@ -389,21 +360,19 @@ load_scene_light_data(
 static
 void
 load_scene_camera_data(
-  scene_t* scene, 
-  packaged_camera_data_t* camera_data, 
-  const allocator_t* allocator)
+  scene_t *scene, 
+  cvector_t *camera_data, 
+  const allocator_t *allocator)
 {
   assert(scene && camera_data && allocator);
 
   {
-    camera_data->count = scene->camera_repo.size;
-    camera_data->cameras = 
-      (camera_t*)allocator->mem_cont_alloc(
-        scene->camera_repo.size, sizeof(camera_t));
+    cvector_setup(camera_data, get_type_data(camera_t), 0, allocator);
+    cvector_resize(camera_data, scene->camera_repo.size);
 
-    for (uint32_t i = 0; i < camera_data->count; ++i) {
-      camera_t* target = camera_data->cameras + i;
-      camera_t* source = cvector_as(&scene->camera_repo, i, camera_t);
+    for (uint32_t i = 0; i < camera_data->size; ++i) {
+      camera_t *target = cvector_as(camera_data, i, camera_t);
+      camera_t *source = cvector_as(&scene->camera_repo, i, camera_t);
 
       target->position = source->position;
       target->lookat_direction = source->lookat_direction;
@@ -415,19 +384,18 @@ load_scene_camera_data(
 static
 void
 load_scene_node_data(
-  scene_t* scene, 
-  packaged_node_data_t* node_data, 
-  const allocator_t* allocator)
+  scene_t *scene, 
+  cvector_t *node_data, 
+  const allocator_t *allocator)
 {
   assert(scene && node_data && allocator);
 
   {
-    node_data->count = scene->node_repo.size;
-    node_data->nodes = 
-      (node_t*)allocator->mem_cont_alloc(scene->node_repo.size, sizeof(node_t));
+    cvector_setup(node_data, get_type_data(node_t), 0, allocator);
+    cvector_resize(node_data, scene->node_repo.size);
 
-    for (uint32_t i = 0; i < node_data->count; ++i) {
-      node_t *target = node_data->nodes + i;
+    for (uint32_t i = 0; i < node_data->size; ++i) {
+      node_t *target = cvector_as(node_data, i, node_t);
       node_t *source = cvector_as(&scene->node_repo, i, node_t);
 
       // copy the name and the matrix.
@@ -441,7 +409,7 @@ load_scene_node_data(
       cvector_setup(&target->nodes, get_type_data(uint32_t), 0, allocator);
       cvector_resize(&target->nodes, source->nodes.size);
       memcpy(
-        target->nodes.data, 
+        target->nodes.data,
         source->nodes.data, 
         sizeof(uint32_t) * target->nodes.size);
 
@@ -457,65 +425,66 @@ load_scene_node_data(
 }
 
 // TODO: Right now this is limited to a single texture. Improve this.
-packaged_scene_render_data_t* 
+packaged_scene_render_data_t * 
 load_scene_render_data(
-  scene_t* scene, 
-  const allocator_t* allocator)
+  scene_t *scene, 
+  const allocator_t *allocator)
 {
   assert(scene && allocator);
 
   {
-    packaged_scene_render_data_t* render_data = 
+    packaged_scene_render_data_t *render_data = 
       allocator->mem_alloc(sizeof(packaged_scene_render_data_t));
     memset(render_data, 0, sizeof(packaged_scene_render_data_t));
 
     load_scene_node_data(scene, &render_data->node_data, allocator);
     load_scene_mesh_data(scene, &render_data->mesh_data, allocator);
-    load_scene_light_data(scene, &render_data->light_data, allocator);
     load_scene_font_data(scene, &render_data->font_data, allocator);
+    load_scene_light_data(scene, &render_data->light_data, allocator);
     load_scene_camera_data(scene, &render_data->camera_data, allocator);
     
     return render_data;
   }
 }
 
-packaged_mesh_data_t*
+packaged_mesh_data_t *
 load_mesh_renderer_data(
-  mesh_t* mesh, 
+  mesh_t *mesh, 
   const color_rgba_t color, 
-  const allocator_t* allocator)
+  const allocator_t *allocator)
 {
   assert(mesh && allocator);
 
-  packaged_mesh_data_t* mesh_data = 
+  packaged_mesh_data_t *mesh_data = 
     allocator->mem_alloc(sizeof(packaged_mesh_data_t));
 
-  mesh_data->count = 1;
+  cvector_setup(
+    &mesh_data->mesh_render_data, 
+    get_type_data(mesh_render_data_t), 
+    0, allocator);
+  cvector_resize(&mesh_data->mesh_render_data, 1);
 
-  // mesh render data.
-  mesh_data->mesh_render_data = 
-    allocator->mem_cont_alloc(
-      mesh_data->count, 
-      sizeof(mesh_render_data_t));
+  cvector_setup(
+    &mesh_data->texture_runtimes, 
+    get_type_data(texture_runtime_t), 
+    0, allocator);
+  cvector_resize(&mesh_data->texture_runtimes, 1);
 
-  // texture render data.
-  mesh_data->texture_runtimes = 
-    allocator->mem_cont_alloc(
-      mesh_data->count, 
-      sizeof(texture_runtime_t));
-
-  // fill these when you load the texture runtimes.
-  mesh_data->texture_ids = 
-    allocator->mem_cont_alloc(
-      mesh_data->count, 
-      sizeof(uint32_t));
+  cvector_setup(
+    &mesh_data->texture_ids, 
+    get_type_data(uint32_t), 
+    0, allocator);
+  cvector_resize(&mesh_data->texture_ids, 1);
   memset(
-    mesh_data->texture_ids, 
+    mesh_data->texture_ids.data,
     0, 
-    sizeof(uint32_t) * mesh_data->count);
+    sizeof(uint32_t));
 
   {
-    mesh_render_data_t* r_data = mesh_data->mesh_render_data;
+    mesh_render_data_t *r_data = cvector_as(
+      &mesh_data->mesh_render_data, 0, mesh_render_data_t);
+    texture_runtime_t *t_runtime = cvector_as(
+      &mesh_data->texture_runtimes, 0, texture_runtime_t);
     
     uint32_t array_size = sizeof(float) * mesh->vertices.size;
     r_data->vertex_count = (mesh->vertices.size)/3;
@@ -532,7 +501,7 @@ load_mesh_renderer_data(
     memcpy(r_data->indices, mesh->indices.data, array_size);
 
     // Set the default texture and material colors to grey.
-    cstring_setup(&mesh_data->texture_runtimes[0].texture.path, "", allocator);
+    cstring_setup(&t_runtime->texture.path, "", allocator);
     // set a default ambient color.
     r_data->ambient.data[0] = color.data[0];
     r_data->ambient.data[1] = color.data[1];
@@ -551,70 +520,78 @@ load_mesh_renderer_data(
 // to the gpu. it does the same thing for the font texture.
 void
 prep_packaged_render_data(
-  const char* data_set,
-  const char* folder,
-  packaged_scene_render_data_t* render_data, 
-  const allocator_t* allocator)
+  const char *data_set,
+  const char *folder,
+  packaged_scene_render_data_t *render_data, 
+  const allocator_t *allocator)
 {
   char texture_path[1024] = { 0 };
   snprintf(
     texture_path, sizeof(texture_path), "%s\\%s\\textures\\", data_set, folder);
 
   // load the images and upload them to the gpu.
-  for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
-    texture_runtime_t* runtime = render_data->mesh_data.texture_runtimes + i;
+  for (uint32_t i = 0; i < render_data->mesh_data.mesh_render_data.size; ++i) {
+    texture_runtime_t *runtime = cvector_as(
+      &render_data->mesh_data.texture_runtimes, i, texture_runtime_t);
     if (runtime->texture.path.str && runtime->texture.path.length) {
       load_image_buffer(texture_path, runtime, allocator);
-      render_data->mesh_data.texture_ids[i] = upload_to_gpu(
-        runtime->texture.path.str,
-        runtime->buffer.data,
-        runtime->width,
-        runtime->height,
-        (renderer_image_format_t)runtime->format);
+      *cvector_as(&render_data->mesh_data.texture_ids, i, uint32_t) = 
+        upload_to_gpu(
+          runtime->texture.path.str,
+          runtime->buffer.data,
+          runtime->width,
+          runtime->height,
+          (renderer_image_format_t)runtime->format);
     }
   }
 
   // do the same for the fonts.
-  for (uint32_t i = 0; i < render_data->font_data.count; ++i) {
+  for (uint32_t i = 0; i < render_data->font_data.fonts.size; ++i) {
+    font_runtime_t *font_runtime = cvector_as(
+      &render_data->font_data.fonts, i, font_runtime_t);
     load_font_inplace(
       data_set, 
-      &render_data->font_data.fonts[i].font,
-      &render_data->font_data.fonts[i], 
+      &font_runtime->font,
+      font_runtime, 
       allocator);
     // TODO: Ultimately we need a system for this, we need to be able to handle
     // deduplication.
-    texture_runtime_t* runtime = render_data->font_data.texture_runtimes + i;
+    texture_runtime_t* runtime = cvector_as(
+      &render_data->font_data.texture_runtimes, i, texture_runtime_t);
     if (runtime->texture.path.str && runtime->texture.path.length) {
       load_image_buffer(data_set, runtime, allocator);
-      render_data->font_data.texture_ids[i] = upload_to_gpu(
-        runtime->texture.path.str,
-        runtime->buffer.data,
-        runtime->width,
-        runtime->height,
-        (renderer_image_format_t)runtime->format);
+      *cvector_as(&render_data->font_data.texture_ids, i, uint32_t) = 
+        upload_to_gpu(
+          runtime->texture.path.str,
+          runtime->buffer.data,
+          runtime->width,
+          runtime->height,
+          (renderer_image_format_t)runtime->format);
     }
   }
 
-  for (uint32_t i = 0; i < render_data->light_data.count; ++i)
+  for (uint32_t i = 0; i < render_data->light_data.size; ++i)
     enable_light(i);
 }
 
 void
 cleanup_packaged_render_data(
-  packaged_scene_render_data_t* render_data, 
-  const allocator_t* allocator)
+  packaged_scene_render_data_t *render_data, 
+  const allocator_t *allocator)
 {
-  for (uint32_t i = 0; i < render_data->mesh_data.count; ++i) {
-    if (render_data->mesh_data.texture_ids[i])
-      evict_from_gpu(render_data->mesh_data.texture_ids[i]);
+  for (uint32_t i = 0; i < render_data->mesh_data.mesh_render_data.size; ++i) {
+    uint32_t id = *cvector_as(&render_data->mesh_data.texture_ids, i, uint32_t);
+    if (id)
+      evict_from_gpu(id);
   }
 
-  for (uint32_t i = 0; i < render_data->font_data.count; ++i) {
-    if (render_data->font_data.texture_ids[i])
-      evict_from_gpu(render_data->font_data.texture_ids[i]);
+  for (uint32_t i = 0; i < render_data->font_data.fonts.size; ++i) {
+    uint32_t id = *cvector_as(&render_data->font_data.texture_ids, i, uint32_t);
+    if (id)
+      evict_from_gpu(id);
   }
 
-  for (uint32_t i = 0; i < render_data->light_data.count; ++i)
+  for (uint32_t i = 0; i < render_data->light_data.size; ++i)
     disable_light(i);
 
   free_render_data(render_data, allocator);
@@ -623,9 +600,9 @@ cleanup_packaged_render_data(
 static
 void
 render_packaged_scene_data_node(
-  packaged_scene_render_data_t* render_data,
-  pipeline_t* pipeline,
-  node_t* node)
+  packaged_scene_render_data_t *render_data,
+  pipeline_t *pipeline,
+  node_t *node)
 {
   // render the meshes before recursively calling itself.
   push_matrix(pipeline);
@@ -636,8 +613,14 @@ render_packaged_scene_data_node(
     for (uint32_t i = 0; i < node->meshes.size; ++i) {
       uint32_t mesh_index = *cvector_as(&node->meshes, i, uint32_t);
       draw_meshes(
-        render_data->mesh_data.mesh_render_data + mesh_index,
-        render_data->mesh_data.texture_ids + mesh_index,
+        cvector_as(
+          &render_data->mesh_data.mesh_render_data, 
+          mesh_index, 
+          mesh_render_data_t),
+        cvector_as(
+          &render_data->mesh_data.texture_ids, 
+          mesh_index, 
+          uint32_t),
         1,
         pipeline);
     }
@@ -648,7 +631,7 @@ render_packaged_scene_data_node(
       render_packaged_scene_data_node(
         render_data, 
         pipeline, 
-        render_data->node_data.nodes + node_index);
+        cvector_as(&render_data->node_data, node_index, node_t));
     }
   }
 
@@ -658,9 +641,9 @@ render_packaged_scene_data_node(
 static
 void
 set_packaged_light_properties(
-  camera_t* camera,
-  packaged_scene_render_data_t* render_data, 
-  pipeline_t* pipeline)
+  camera_t *camera,
+  packaged_scene_render_data_t *render_data, 
+  pipeline_t *pipeline)
 {
 #if 0
   for (uint32_t i = 0; i < render_data->light_data.count; ++i) {
@@ -709,13 +692,13 @@ set_packaged_light_properties(
 
 void
 render_packaged_scene_data(
-  packaged_scene_render_data_t* render_data,
-  pipeline_t* pipeline,
-  camera_t* camera)
+  packaged_scene_render_data_t *render_data,
+  pipeline_t *pipeline,
+  camera_t *camera)
 {
   assert(render_data && pipeline && camera);
   assert(
-    render_data->node_data.count > 0 && 
+    render_data->node_data.size > 0 && 
     "at least the root node must exist!");
 
   {
@@ -732,6 +715,6 @@ render_packaged_scene_data(
     render_packaged_scene_data_node(
       render_data, 
       pipeline, 
-      render_data->node_data.nodes + 0);
+      cvector_as(&render_data->node_data, 0, node_t));
   }
 }

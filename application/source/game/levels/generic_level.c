@@ -56,10 +56,11 @@ load_level(
     context.data_set, room, scene_render_data, allocator);
 
   // guaranteed to exist, same with the font.
-  camera = scene_render_data->camera_data.cameras;
+  camera = cvector_as(&scene_render_data->camera_data, 0, camera_t);
 
-  font = scene_render_data->font_data.fonts;
-  font_image_id = scene_render_data->font_data.texture_ids[0];
+  font = cvector_as(&scene_render_data->font_data.fonts, 0, font_runtime_t);
+  font_image_id = *cvector_as(
+    &scene_render_data->font_data.texture_ids, 0, uint32_t);
 
   bvh = cvector_as(&scene->bvh_repo, 0, bvh_t);
 

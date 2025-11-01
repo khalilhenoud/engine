@@ -13,3 +13,6 @@
 [submodule "external/renderer"]
 	path = external/renderer
 	url = https://github.com/khalilhenoud/renderer.git
+[submodule "external/collision"]
+	path = external/collision
+	url = https://github.com/khalilhenoud/collision.git

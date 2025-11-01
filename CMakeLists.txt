@@ -53,6 +53,7 @@ endif()
 
 add_subdirectory(external/library library)
 add_subdirectory(external/math math)
+add_subdirectory(external/collision collision)
 add_subdirectory(external/entity entity)
 add_subdirectory(external/loaders/loaders loaders)
 add_subdirectory(external/renderer/renderer renderer)

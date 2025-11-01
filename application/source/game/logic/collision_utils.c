@@ -9,7 +9,7 @@
  * 
  */
 #include <assert.h>
-#include <math/c/face.h>
+#include <collision/face.h>
 #include <math/c/capsule.h>
 #include <entity/c/spatial/bvh.h>
 #include <application/game/logic/collision_utils.h>

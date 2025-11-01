@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <math.h>
+#include <collision/face.h>
 #include <math/c/vector3f.h>
 #include <math/c/matrix4f.h>
 #include <entity/c/scene/camera.h>
@@ -21,7 +22,6 @@
 #include <application/game/logic/bucket_processing.h>
 #include <application/game/logic/camera.h>
 #include <math/c/capsule.h>
-#include <math/c/face.h>
 #include <entity/c/spatial/bvh.h>
 #include <application/game/debug/face.h>
 #include <application/game/debug/text.h>

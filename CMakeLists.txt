@@ -31,6 +31,10 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/math/CMakeLists.txt")
 	message(FATAL_ERROR "The math submdule was not downloaded!")
 endif()
 
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/collision/CMakeLists.txt")
+	message(FATAL_ERROR "The collision submdule was not downloaded!")
+endif()
+
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/library/CMakeLists.txt")
 	message(FATAL_ERROR "The library submdule was not downloaded!")
 endif()

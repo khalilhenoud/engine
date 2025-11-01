@@ -6,6 +6,13 @@ git rm external/serializer
 then commit.
 @see https://stackoverflow.com/questions/1260748/how-do-i-remove-a-submodule
 
+Add a Submodule
+===============
+git submodule add <repository-url> <submodule-path>
+If the git directory was previously used but discarded and you want to 
+re-activate it, use:
+git submodule add --force <repository-url> <submodule-path>
+
 Update Submodules
 ================
 ?? Not sure if it is --remote or --recursive or both.

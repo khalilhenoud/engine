@@ -13,6 +13,14 @@ If the git directory was previously used but discarded and you want to
 re-activate it, use:
 git submodule add --force <repository-url> <submodule-path>
 
+To populate a fresh repo
+========================
+git init
+git remote add origin https://github.com/khalilhenoud/discretize.git
+git add *
+git commit -m "initial commit"
+git push origin main
+
 Update Submodules
 ================
 ?? Not sure if it is --remote or --recursive or both.

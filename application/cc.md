@@ -17,7 +17,7 @@ To populate a fresh repo
 ========================
 git init
 git remote add origin https://github.com/khalilhenoud/discretize.git
-git add *
+git add -all
 git commit -m "initial commit"
 git push origin main
 

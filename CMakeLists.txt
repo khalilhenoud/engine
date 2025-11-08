@@ -27,6 +27,10 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
 endif()
 
 # CHECK ALL THE SUBMODULES
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/windowing/CMakeLists.txt")
+	message(FATAL_ERROR "The windowing submdule was not downloaded!")
+endif()
+
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/math/CMakeLists.txt")
 	message(FATAL_ERROR "The math submdule was not downloaded!")
 endif()
@@ -51,6 +55,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/renderer/CMakeLists.txt")
 	message(FATAL_ERROR "The renderer submdule was not downloaded!")
 endif()
 
+add_subdirectory(external/windowing windowing)
 add_subdirectory(external/library library)
 add_subdirectory(external/math math)
 add_subdirectory(external/collision collision)

@@ -9,143 +9,63 @@
  * 
  */
 #include <windows.h>
-#include <timeapi.h>
 #include <string>
 #include <memory>
+#include <cassert>
 #include <application/application.h>
 #include <application/platform/input_platform.h>
+#include <library/misc/precision_timers.h>
 #include <renderer/platform/opengl_platform.h>
+#include <windowing/windowing.h>
 
 
-HWND		g_hWnd;
-HDC			g_hWindowDC;
+std::unique_ptr<application> s_app = nullptr;
 
-void 
-ComputeWindowPosition(
-  int32_t &x, 
-  int32_t &y, 
-  int32_t width, 
-  int32_t height,
-  int32_t screen_width,
-  int32_t screen_height)
+void update(void)
 {
-  x = y = 0;
-	if (screen_width <= width || screen_width <= height)
-    return;
-
-	x = (screen_width - width)/2;
-	y = (screen_height - height)/2;
+  s_app->update();
+  opengl_swapbuffer();
 }
 
-LRESULT 
-CALLBACK 
-WndProc(
-  HWND g_hWnd, 
-  UINT message, 
-  WPARAM wParam, 
-  LPARAM lParam)
+int
+main(int argc, char *argv[])
 {
-	switch (message) {
-    case WM_DESTROY:
-		PostQuitMessage(0);
-		break;
-	default:
-		return DefWindowProc(g_hWnd, message, wParam, lParam);
-	}
+  // TODO: add config to control the client area size and the window style.
+  int32_t screen_width = get_screen_width();
+  int32_t screen_height = get_screen_height();
+  int32_t client_width = (int32_t)(screen_width * 75.f / 100.f);
+  int32_t client_height = (int32_t)(client_width / 16.f * 9.f);
+  window_data_t data = create_window(
+    "win_class_custom", 
+    "engine", 
+    client_width, 
+    client_height);
 
-	return 0;
-}
+  set_periodic_timers_resolution(1);
 
-void
-last_call(void)
-{
-	opengl_swapbuffer();
-}
-
-int 
-APIENTRY 
-WinMain(
-  HINSTANCE hInstance, 
-  HINSTANCE hPrevInstance, 
-  PSTR lpCmdLine, 
-  int nCmdShow)
-{
-	WNDCLASSEX wcex = { 0 };
-	wcex.cbSize = sizeof(WNDCLASSEX);
-	wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-	wcex.lpfnWndProc = (WNDPROC)WndProc;
-	wcex.cbClsExtra = 0;
-	wcex.cbWndExtra = 0;
-	wcex.hInstance = hInstance;
-	wcex.hIcon = 0;
-	wcex.hCursor = LoadCursor(0, IDC_ARROW);
-	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-	wcex.lpszMenuName = 0;
-	wcex.lpszClassName = "OGL";
-	wcex.hIconSm = 0;
-	RegisterClassEx(&wcex);
-
-	int32_t screenWidth = GetSystemMetrics(SM_CXFULLSCREEN);
-  int32_t screenHeight = GetSystemMetrics(SM_CYFULLSCREEN);
-  int32_t client_width = (int32_t)(screenWidth/1.3);
-  int32_t client_height = client_width / 16.f * 9.f;
-	RECT r = { 0, 0, client_width, client_height };
-  AdjustWindowRect(&r, WS_CAPTION, FALSE);
-	int32_t x, y;
-	ComputeWindowPosition(x, y, client_width, client_height, screenWidth, screenHeight);
-  g_hWnd = CreateWindow(
-    "OGL", "", 
-    WS_CAPTION, 
-    x, y, r.right - r.left, r.bottom - r.top, 0, 0, hInstance, 0);
-
-	ShowWindow(g_hWnd, nCmdShow);
-	UpdateWindow(g_hWnd);
-
-	input_parameters_t input_params{ &g_hWnd };
+  input_parameters_t input_params{ (HWND*)&data.handle };
 	input_set_client(&input_params);
 
-  // TODO: make this a part of the library api.
-  // set the timers precision of the app in general.
-  timeBeginPeriod(1);
-
-	g_hWindowDC = GetDC(g_hWnd);
-  opengl_parameters_t params{&g_hWindowDC};
+  opengl_parameters_t params{ (HDC*)&data.device_context };
   opengl_initialize(&params);
 
   // remove emtpy spaces from the command lines.
-  std::string cmd_args = lpCmdLine;
+  assert(argc >= 2);
+  std::string cmd_args = argv[1];
   cmd_args.erase(
     std::remove_if(cmd_args.begin(), cmd_args.end(), std::isspace), 
     cmd_args.end());
 
-	auto app = std::make_unique<application>(
+	s_app = std::make_unique<application>(
     client_width, client_height, cmd_args.c_str());
-  
-  char array[100] = { 0 };
-	MSG msg;
-	while (true) {
-		while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
-			if (msg.message == WM_QUIT)
-				goto End;
-			else
-				DispatchMessage(&msg);
-		}
 
-    if (GetAsyncKeyState(VK_ESCAPE)) {
-      PostQuitMessage(0);
-      continue;
-    }
+  uint64_t result = handle_message_loop_blocking(update);
 
-    app->update();
-    opengl_swapbuffer();
-	}
-
-End:
-	app.reset();
+  s_app.reset();
   opengl_cleanup();
-	ReleaseDC(g_hWnd, g_hWindowDC);
+  destroy_window(&data);
 
-  timeEndPeriod(1);
+  end_periodic_timers_resolution(1);
 
-	return (int)msg.wParam;
+  return result;
 }

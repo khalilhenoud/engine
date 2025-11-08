@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # add the executable
-add_executable(${PROJECT_NAME} WIN32
+add_executable(${PROJECT_NAME}
       ./source/game/rendering/load_font.c
       ./source/game/rendering/load_image.c
       ./source/game/rendering/render_data.c
@@ -27,15 +27,15 @@ add_executable(${PROJECT_NAME} WIN32
 			./source/main.cpp
       ./source/input.c
       ./source/platform/input_platform_win32.c)
-			
+
 target_link_libraries(${PROJECT_NAME}
 						PUBLIC library
 						PUBLIC math
             PUBLIC collision
+            PRIVATE windowing
 						PRIVATE entity
 						PRIVATE loaders
-						PRIVATE renderer
-						PRIVATE winmm)
+						PRIVATE renderer)
 
 target_include_directories(${PROJECT_NAME} PUBLIC 
 							"${PROJECT_BINARY_DIR}"

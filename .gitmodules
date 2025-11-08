@@ -16,3 +16,6 @@
 [submodule "external/collision"]
 	path = external/collision
 	url = https://github.com/khalilhenoud/collision.git
+[submodule "external/windowing"]
+	path = external/windowing
+	url = https://github.com/khalilhenoud/windowing.git

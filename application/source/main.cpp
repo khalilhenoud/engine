@@ -13,7 +13,7 @@
 #include <memory>
 #include <cassert>
 #include <application/application.h>
-#include <application/platform/input_platform.h>
+#include <application/game/input/platform/input_platform.h>
 #include <library/misc/precision_timers.h>
 #include <renderer/platform/opengl_platform.h>
 #include <windowing/windowing.h>
@@ -49,7 +49,7 @@ main(int argc, char *argv[])
   opengl_parameters_t params{ (HDC*)&data.device_context };
   opengl_initialize(&params);
 
-  // remove emtpy spaces from the command lines.
+  // remove empty spaces from the command lines.
   assert(argc >= 2);
   std::string cmd_args = argv[1];
   cmd_args.erase(

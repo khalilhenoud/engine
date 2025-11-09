@@ -16,7 +16,7 @@
 #include <math/c/matrix4f.h>
 #include <entity/c/scene/camera.h>
 #include <renderer/renderer_opengl.h>
-#include <application/input.h>
+#include <application/game/input/input.h>
 #include <application/game/logic/player.h>
 #include <application/game/logic/collision_utils.h>
 #include <application/game/logic/bucket_processing.h>

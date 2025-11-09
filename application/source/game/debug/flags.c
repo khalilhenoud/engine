@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2025
  * 
  */
-#include <application/input.h>
+#include <application/game/input/input.h>
 #include <application/game/debug/flags.h>
 #include <application/game/debug/text.h>
 

@@ -9,7 +9,7 @@
  * 
  */
 #include <assert.h>
-#include <application/input.h>
+#include <application/game/input/input.h>
 #include <application/game/debug/flags.h>
 #include <application/game/logic/player.h>
 #include <application/game/levels/load_scene.h>

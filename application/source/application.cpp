@@ -8,63 +8,14 @@
  * @copyright Copyright (c) 2023
  * 
  */
-#include <algorithm>
-#include <vector>
-
-#include <library/allocator/allocator.h>
-#include <renderer/renderer_opengl.h>
 #include <application/application.h>
-
-#include <entity/c/level/level.h>
 #include <application/game/levels/generic_level.h>
 #include <application/game/levels/room_select.h>
+#include <application/game/memory_tracking/memory_tracking.h>
+#include <entity/c/level/level.h>
+#include <library/allocator/allocator.h>
+#include <renderer/renderer_opengl.h>
 
-
-////////////////////////////////////////////////////////////////////////////////
-std::vector<uintptr_t> allocated;
-
-void* allocate(size_t size)
-{
-  void* block = malloc(size);
-  assert(block);
-  allocated.push_back(uintptr_t(block));
-  return block;
-}
-
-void* container_allocate(size_t count, size_t elem_size)
-{
-  void* block = calloc(count, elem_size);
-  assert(block);
-  allocated.push_back(uintptr_t(block));
-  return block;
-}
-
-void* reallocate(void* block, size_t size)
-{
-  void* tmp = realloc(block, size);
-  assert(tmp);
-
-  uintptr_t item = (uintptr_t)block;
-  auto iter = std::find(allocated.begin(), allocated.end(), item);
-  assert(iter != allocated.end());
-  allocated.erase(iter);
-  
-  block = tmp;
-  allocated.push_back(uintptr_t(block));
-
-  return block;
-}
-
-void free_block(void* block)
-{
-  allocated.erase(
-    std::remove_if(
-      allocated.begin(), 
-      allocated.end(), 
-      [=](uintptr_t elem) { return (uintptr_t)block == elem; }), 
-    allocated.end());
-  free(block);
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 extern "C" {
@@ -93,7 +44,7 @@ cleanup_level()
 {
   level.unload(&allocator);
   renderer_cleanup();
-  assert(allocated.size() == 0 && "Memory leak detected!");
+  ensure_no_leaks();
   in_level_select = !in_level_select;
 }
 
@@ -109,7 +60,7 @@ level_context_t get_context()
   return context;
 }
 
-// TODO: This is why we need a factory pattern construction system.
+// TODO: This is why we need a factory pattern construction system
 static
 void
 construct_level()
@@ -127,11 +78,7 @@ application::application(
 {
   renderer_initialize();
 
-  allocator.mem_alloc = allocate;
-  allocator.mem_cont_alloc = container_allocate;
-  allocator.mem_free = free_block;
-  allocator.mem_alloc_alligned = nullptr;
-  allocator.mem_realloc = reallocate;
+  track_allocator_memory(&allocator);
 
   viewport_width = width;
   viewport_height = height;

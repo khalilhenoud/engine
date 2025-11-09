@@ -9,7 +9,7 @@
  * 
  */
 #include <assert.h>
-#include <application/input.h>
+#include <application/game/input/input.h>
 #include <renderer/pipeline.h>
 #include <renderer/renderer_opengl.h>
 #include <entity/c/runtime/font.h>

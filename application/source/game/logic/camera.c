@@ -9,7 +9,7 @@
  * 
  */
 #include <assert.h>
-#include <application/input.h>
+#include <application/game/input/input.h>
 #include <application/game/logic/camera.h>
 #include <application/game/debug/flags.h>
 #include <entity/c/scene/camera.h>

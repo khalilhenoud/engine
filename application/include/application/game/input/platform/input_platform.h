@@ -18,7 +18,7 @@ extern "C" {
 #include <stdint.h>
 #if defined(WIN32) || defined(WIN64)
 #include <windows.h>
-#include <application/platform/win32/input_parameters.h>
+#include <application/game/input/platform/win32/input_parameters.h>
 #else
 // TODO: Implement static assert for C using negative indices array.
 #endif

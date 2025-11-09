@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # add the executable
 add_executable(${PROJECT_NAME}
+      ./source/game/memory_tracking/memory_tracking.cpp
       ./source/game/rendering/load_font.c
       ./source/game/rendering/load_image.c
       ./source/game/rendering/render_data.c
@@ -23,10 +24,11 @@ add_executable(${PROJECT_NAME}
       ./source/game/levels/generic_level.c
       ./source/game/levels/room_select.c
       ./source/game/levels/load_scene.c
+      ./source/game/input/platform/input_platform_win32.c
+      ./source/game/input/input.c
+      ./source/game.c
 			./source/application.cpp
-			./source/main.cpp
-      ./source/input.c
-      ./source/platform/input_platform_win32.c)
+			./source/main.cpp)
 
 target_link_libraries(${PROJECT_NAME}
 						PUBLIC library

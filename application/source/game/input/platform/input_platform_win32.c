@@ -9,7 +9,7 @@
  * 
  */
 #include <assert.h>
-#include <application/platform/input_platform.h>
+#include <application/game/input/platform/input_platform.h>
 
 
 static

@@ -1,14 +1,14 @@
 /**
- * @file application.cpp
+ * @file game.c
  * @author khalilhenoud@gmail.com
  * @brief 
  * @version 0.1
- * @date 2023-01-20
+ * @date 2025-11-08
  * 
- * @copyright Copyright (c) 2023
+ * @copyright Copyright (c) 2025
  * 
  */
-#include <application/application.h>
+#include <application/game/game.h>
 #include <application/game/levels/generic_level.h>
 #include <application/game/levels/room_select.h>
 #include <application/game/memory_tracking/memory_tracking.h>
@@ -17,8 +17,6 @@
 #include <renderer/renderer_opengl.h>
 
 
-////////////////////////////////////////////////////////////////////////////////
-extern "C" {
 char to_load[256];
 
 void
@@ -27,9 +25,7 @@ set_level_to_load(const char* source)
   memset(to_load, 0, sizeof(to_load));
   memcpy(to_load, source, strlen(source));
 }
-}
 
-////////////////////////////////////////////////////////////////////////////////
 level_t level;
 allocator_t allocator;
 
@@ -37,16 +33,6 @@ static uint32_t in_level_select;
 static int32_t viewport_width;
 static int32_t viewport_height;
 static const char* data_set;
-
-static
-void
-cleanup_level()
-{
-  level.unload(&allocator);
-  renderer_cleanup();
-  ensure_no_leaks();
-  in_level_select = !in_level_select;
-}
 
 static
 level_context_t get_context()
@@ -71,10 +57,11 @@ construct_level()
     construct_generic_level(&level);
 } 
 
-application::application(
+void 
+game_init(
   int32_t width,
   int32_t height,
-  const char* dataset)
+  const char *dataset)
 {
   renderer_initialize();
 
@@ -89,18 +76,22 @@ application::application(
   level.load(get_context(), &allocator);
 }
 
-application::~application()
+void
+game_cleanup()
 {
-  cleanup_level();
+  level.unload(&allocator);
+  renderer_cleanup();
+  ensure_no_leaks();
+  in_level_select = !in_level_select;
 }
 
-void 
-application::update()
+void
+game_update()
 {
   level.update(&allocator);
 
   if (level.should_unload()) {
-    cleanup_level();
+    game_cleanup();
     construct_level();
     level.load(get_context(), &allocator);
   }

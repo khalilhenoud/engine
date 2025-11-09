@@ -26,8 +26,7 @@ add_executable(${PROJECT_NAME}
       ./source/game/levels/load_scene.c
       ./source/game/input/platform/input_platform_win32.c
       ./source/game/input/input.c
-      ./source/game.c
-			./source/application.cpp
+      ./source/game/game.c
 			./source/main.cpp)
 
 target_link_libraries(${PROJECT_NAME}

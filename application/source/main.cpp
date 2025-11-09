@@ -12,18 +12,16 @@
 #include <string>
 #include <memory>
 #include <cassert>
-#include <application/application.h>
+#include <application/game/game.h>
 #include <application/game/input/platform/input_platform.h>
 #include <library/misc/precision_timers.h>
 #include <renderer/platform/opengl_platform.h>
 #include <windowing/windowing.h>
 
 
-std::unique_ptr<application> s_app = nullptr;
-
 void update(void)
 {
-  s_app->update();
+  game_update();
   opengl_swapbuffer();
 }
 
@@ -56,12 +54,11 @@ main(int argc, char *argv[])
     std::remove_if(cmd_args.begin(), cmd_args.end(), std::isspace), 
     cmd_args.end());
 
-	s_app = std::make_unique<application>(
-    client_width, client_height, cmd_args.c_str());
+  game_init(client_width, client_height, cmd_args.c_str());
 
   uint64_t result = handle_message_loop_blocking(update);
 
-  s_app.reset();
+  game_cleanup();
   opengl_cleanup();
   destroy_window(&data);
 

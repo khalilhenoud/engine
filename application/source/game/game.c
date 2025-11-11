@@ -8,13 +8,18 @@
  * @copyright Copyright (c) 2025
  * 
  */
+#include <windows.h>
+#include <library/allocator/allocator.h>
+#include <library/misc/precision_timers.h>
 #include <application/game/game.h>
 #include <application/game/levels/generic_level.h>
 #include <application/game/levels/room_select.h>
 #include <application/game/memory_tracking/memory_tracking.h>
+#include <application/game/input/platform/input_platform.h>
 #include <entity/c/level/level.h>
-#include <library/allocator/allocator.h>
 #include <renderer/renderer_opengl.h>
+#include <renderer/platform/opengl_platform.h>
+#include <windowing/windowing.h>
 
 
 char to_load[256];
@@ -28,6 +33,7 @@ set_level_to_load(const char* source)
 
 level_t level;
 allocator_t allocator;
+window_data_t window_data;
 
 static uint32_t in_level_select;
 static int32_t viewport_width;
@@ -63,9 +69,24 @@ game_init(
   int32_t height,
   const char *dataset)
 {
-  renderer_initialize();
+  input_parameters_t input_params;
+  opengl_parameters_t opengl_params;
 
+  window_data = create_window(
+    "custom_window", 
+    "game", 
+    width, 
+    height);
+
+  set_periodic_timers_resolution(1);
   track_allocator_memory(&allocator);
+
+  input_params.window_handle = (HWND*)&window_data.handle;
+  input_set_client(&input_params);
+
+  opengl_params.device_context = (HDC*)&window_data.device_context;
+  opengl_initialize(&opengl_params);
+  renderer_initialize();
 
   viewport_width = width;
   viewport_height = height;
@@ -76,8 +97,9 @@ game_init(
   level.load(get_context(), &allocator);
 }
 
+static
 void
-game_cleanup()
+level_cleanup_internal()
 {
   level.unload(&allocator);
   renderer_cleanup();
@@ -86,13 +108,32 @@ game_cleanup()
 }
 
 void
-game_update()
+game_cleanup()
+{
+  level_cleanup_internal();
+
+  opengl_cleanup();
+  destroy_window(&window_data);
+  end_periodic_timers_resolution(1);
+}
+
+static
+void
+game_update_internal(void)
 {
   level.update(&allocator);
 
   if (level.should_unload()) {
-    game_cleanup();
+    level_cleanup_internal();
     construct_level();
     level.load(get_context(), &allocator);
   }
+
+  opengl_swapbuffer();
+}
+
+uint64_t
+game_update()
+{
+  return handle_message_loop_blocking(game_update_internal);
 }

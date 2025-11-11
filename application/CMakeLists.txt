@@ -27,7 +27,7 @@ add_executable(${PROJECT_NAME}
       ./source/game/input/platform/input_platform_win32.c
       ./source/game/input/input.c
       ./source/game/game.c
-			./source/main.cpp)
+			./source/main.c)
 
 target_link_libraries(${PROJECT_NAME}
 						PUBLIC library

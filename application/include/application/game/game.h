@@ -27,7 +27,7 @@ game_init(
 void
 game_cleanup();
 
-void
+uint64_t
 game_update();
 
 #ifdef __cplusplus

@@ -22,6 +22,15 @@
 #include <windowing/windowing.h>
 
 
+static uint32_t in_level_select;
+static int32_t viewport_width;
+static int32_t viewport_height;
+static const char* data_set;
+
+level_t level;
+allocator_t allocator;
+window_data_t window_data;
+
 char to_load[256];
 
 void
@@ -31,17 +40,9 @@ set_level_to_load(const char* source)
   memcpy(to_load, source, strlen(source));
 }
 
-level_t level;
-allocator_t allocator;
-window_data_t window_data;
-
-static uint32_t in_level_select;
-static int32_t viewport_width;
-static int32_t viewport_height;
-static const char* data_set;
-
 static
-level_context_t get_context()
+level_context_t 
+get_context()
 {
   level_context_t context;
   context.data_set = data_set;
@@ -61,13 +62,54 @@ construct_level()
     construct_level_selector(&level);
   else
     construct_generic_level(&level);
-} 
+}
+
+static
+void
+level_init(
+  int32_t _width,
+  int32_t _height,
+  const char *_data_dir)
+{
+  viewport_width = _width;
+  viewport_height = _height;
+  data_set = _data_dir;
+  in_level_select = 1;
+
+  construct_level();
+  level.load(get_context(), &allocator);
+}
+
+static
+void
+level_cleanup()
+{
+  level.unload(&allocator);
+  renderer_cleanup();
+  ensure_no_leaks();
+  in_level_select = !in_level_select;
+}
+
+static
+void
+level_update(void)
+{
+  level.update(&allocator);
+
+  if (level.should_unload()) {
+    level_cleanup();
+    construct_level();
+    level.load(get_context(), &allocator);
+  }
+
+  opengl_swapbuffer();
+}
 
 void 
 game_init(
-  int32_t width,
-  int32_t height,
-  const char *dataset)
+  int32_t _width,
+  int32_t _height,
+  const char *_data_dir)
 {
   input_parameters_t input_params;
   opengl_parameters_t opengl_params;
@@ -75,8 +117,8 @@ game_init(
   window_data = create_window(
     "custom_window", 
     "game", 
-    width, 
-    height);
+    _width, 
+    _height);
 
   set_periodic_timers_resolution(1);
   track_allocator_memory(&allocator);
@@ -88,23 +130,7 @@ game_init(
   opengl_initialize(&opengl_params);
   renderer_initialize();
 
-  viewport_width = width;
-  viewport_height = height;
-  data_set = dataset;
-  in_level_select = 1;
-
-  construct_level();
-  level.load(get_context(), &allocator);
-}
-
-static
-void
-level_cleanup_internal()
-{
-  level.unload(&allocator);
-  renderer_cleanup();
-  ensure_no_leaks();
-  in_level_select = !in_level_select;
+  level_init(_width, _height, _data_dir);
 }
 
 void
@@ -117,23 +143,8 @@ game_cleanup()
   end_periodic_timers_resolution(1);
 }
 
-static
-void
-game_update_internal(void)
-{
-  level.update(&allocator);
-
-  if (level.should_unload()) {
-    level_cleanup_internal();
-    construct_level();
-    level.load(get_context(), &allocator);
-  }
-
-  opengl_swapbuffer();
-}
-
 uint64_t
 game_update()
 {
-  return handle_message_loop_blocking(game_update_internal);
+  return handle_message_loop_blocking(level_update);
 }

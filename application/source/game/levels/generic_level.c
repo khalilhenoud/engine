@@ -83,7 +83,7 @@ load_level(
     update_projection(&pipeline);
   }
 
-  show_cursor(0);
+  show_mouse_cursor(0);
 
   initialize_controller(&controller, 60, 1u);
 
@@ -109,7 +109,7 @@ update_level(const allocator_t* allocator)
     // disable/enable input with '~' key.
     if (is_key_triggered(TILDE)) {
       disable_input = !disable_input;
-      show_cursor((int32_t)disable_input);
+      show_mouse_cursor((int32_t)disable_input);
     }
 
     if (!disable_input) {

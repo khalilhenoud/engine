@@ -88,7 +88,7 @@ load_room_select(
     update_projection(&pipeline);
   }
 
-  show_cursor(0);
+  show_mouse_cursor(0);
 
   initialize_controller(&controller, 60, 1u);
 }

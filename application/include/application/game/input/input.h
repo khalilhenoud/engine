@@ -17,6 +17,26 @@ extern "C" {
 
 #include <stdint.h>
 
+#define KEYBOARD_KEY_COUNT 256
+
+
+typedef 
+struct keyboard_state_t {
+  uint8_t state[KEYBOARD_KEY_COUNT];
+} keyboard_state_t;
+
+typedef
+enum mouse_keys {
+  MOUSE_KEY_LEFT,
+  MOUSE_KEY_MIDDLE,
+  MOUSE_KEY_RIGHT,
+  MOUSE_KEY_COUNT
+} mouse_keys;
+
+typedef 
+struct mouse_state_t {
+  int16_t state[MOUSE_KEY_COUNT];
+} mouse_state_t;
 
 ////////////////////////////////////////////////////////////////////////////////
 void
@@ -47,17 +67,21 @@ int32_t
 is_mouse_right_triggered();
 
 void
-show_cursor(int32_t show);
+show_mouse_cursor(int32_t show);
 void 
 get_position(int32_t* x, int32_t* y);
 void 
 get_window_position(int32_t* x, int32_t* y);
 void 
-set_position(int32_t x, int32_t y);
-void 
 set_window_position(int32_t x, int32_t y);
 void 
 center_cursor();
+
+void
+get_mouse_state(mouse_state_t* mouse);
+void
+input_set_client(const uintptr_t handle);
+
 
 #ifdef __cplusplus
 }

@@ -8,14 +8,13 @@
  * @copyright Copyright (c) 2025
  * 
  */
-#include <windows.h>
 #include <library/allocator/allocator.h>
-#include <library/misc/precision_timers.h>
+#include <library/os/os.h>
 #include <application/game/game.h>
 #include <application/game/levels/generic_level.h>
 #include <application/game/levels/room_select.h>
 #include <application/game/memory_tracking/memory_tracking.h>
-#include <application/game/input/platform/input_platform.h>
+#include <application/game/input/input.h>
 #include <entity/c/level/level.h>
 #include <renderer/renderer_opengl.h>
 #include <renderer/platform/opengl_platform.h>
@@ -111,7 +110,6 @@ game_init(
   int32_t _height,
   const char *_data_dir)
 {
-  input_parameters_t input_params;
   opengl_parameters_t opengl_params;
 
   window_data = create_window(
@@ -123,10 +121,9 @@ game_init(
   set_periodic_timers_resolution(1);
   track_allocator_memory(&allocator);
 
-  input_params.window_handle = (HWND*)&window_data.handle;
-  input_set_client(&input_params);
+  input_set_client(window_data.handle);
 
-  opengl_params.device_context = (HDC*)&window_data.device_context;
+  opengl_params.device_context = window_data.device_context;
   opengl_initialize(&opengl_params);
   renderer_initialize();
 
@@ -136,7 +133,7 @@ game_init(
 void
 game_cleanup()
 {
-  level_cleanup_internal();
+  level_cleanup();
 
   opengl_cleanup();
   destroy_window(&window_data);

@@ -8,9 +8,15 @@
  * @copyright Copyright (c) 2023
  * 
  */
+#include <assert.h>
 #include <string.h>
 #include <application/game/input/input.h>
-#include <application/game/input/platform/input_platform.h>
+#include <windowing/windowing.h>
+#include <library/os/os.h>
+
+#define MOUSE_LBUTTON        0x01
+#define MOUSE_RBUTTON        0x02
+#define MOUSE_MBUTTON        0x04    /* NOT contiguous with L & RBUTTON */
 
 
 typedef
@@ -26,6 +32,9 @@ key_state_t s_keyboard_keys[KEYBOARD_KEY_COUNT];
 static
 key_state_t s_mouse_keys[MOUSE_KEY_COUNT];
 
+static
+uintptr_t s_window_handle;
+
 
 ////////////////////////////////////////////////////////////////////////////////
 void
@@ -37,7 +46,7 @@ input_update(void)
     // keyboard section.
     keyboard_state_t ks;
     memset(&ks, 0, sizeof(keyboard_state_t));
-    get_keyboard_state(&ks);
+    get_keyboard_state(ks.state);
 
     for (i = 0; i < KEYBOARD_KEY_COUNT; ++i) {
       s_keyboard_keys[i].is_pressed = ks.state[i] & (1 << 7) ? 1 : 0;
@@ -94,7 +103,6 @@ is_key_triggered(int32_t key)
   return s_keyboard_keys[key].is_triggered;
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 int32_t 
 is_mouse_left_pressed()
@@ -133,29 +141,32 @@ is_mouse_right_triggered()
 }
 
 void 
-show_cursor(int32_t show)
+show_mouse_cursor(int32_t show)
 {
   if (show)
-    while (show_mouse_cursor(show) < 0);
+    while (show_cursor(show) < 0);
   else
-    while (show_mouse_cursor(show) >= 0);
+    while (show_cursor(show) >= 0);
 }
 
 void 
-get_position(int32_t* x, int32_t* y)
+get_position(int32_t *x, int32_t *y)
 {
-	input_point_t point;
+	cursor_pos_t point;
   get_cursor_position(&point);
 	*x = point.x;
 	*y = point.y;
 }
 
 void 
-get_window_position(int32_t* x, int32_t* y)
+get_window_position(int32_t *x, int32_t *y)
 {
-	input_point_t screen, client;
+	cursor_pos_t screen;
+  win_point_t client;
 	get_cursor_position(&screen);
-	screen_to_client(screen, &client);
+  client.x = screen.x;
+  client.y = screen.y;
+  screen_to_client(s_window_handle, &client);
 	*x = client.x;
 	*y = client.y;
 }
@@ -169,17 +180,33 @@ set_position(int32_t x, int32_t y)
 void 
 set_window_position(int32_t x, int32_t y)
 {
-  input_point_t screen, client;
+  win_point_t client;
   client.x = x;
   client.y = y;
-	client_to_screen(client, &screen);
-	set_position((int32_t)screen.x, (int32_t)screen.y);
+	client_to_screen(s_window_handle, &client);
+	set_cursor_position((int32_t)client.x, (int32_t)client.y);
 }
 
 void 
 center_cursor()
 {
-	input_rect_t rect;
-	get_client_rect(&rect);
-	set_position((int32_t)(rect.left + rect.right)/2, (int32_t)(rect.top + rect.bottom)/2);
+	win_rect_t rect;
+  get_window_rect(s_window_handle, &rect);
+	set_position(
+    (int32_t)(rect.left + rect.right)/2, (int32_t)(rect.top + rect.bottom)/2);
+}
+
+void
+input_set_client(const uintptr_t handle)
+{
+  s_window_handle = handle;
+}
+
+void
+get_mouse_state(mouse_state_t *mouse)
+{
+  assert(s_window_handle);
+  mouse->state[MOUSE_KEY_LEFT] = get_async_key_state(MOUSE_LBUTTON);
+  mouse->state[MOUSE_KEY_MIDDLE] = get_async_key_state(MOUSE_MBUTTON);
+  mouse->state[MOUSE_KEY_RIGHT] = get_async_key_state(MOUSE_RBUTTON);
 }

@@ -31,7 +31,7 @@
 #define KEY_EXIT_LEVEL           '0'
 
 
-static framerate_controller_t controller;
+static framerate_controller_t *controller;
 static uint32_t exit_level = 0;
 static int32_t disable_input;
 static pipeline_t pipeline;
@@ -45,7 +45,7 @@ static bvh_t* bvh;
 void
 load_level(
   const level_context_t context,
-  const allocator_t* allocator)
+  const allocator_t *allocator)
 {
   char room[256] = {0};
   sprintf(room, "rooms\\%s", context.level);
@@ -85,7 +85,7 @@ load_level(
 
   show_mouse_cursor(0);
 
-  initialize_controller(&controller, 60, 1u);
+  controller = controller_allocate(allocator, 60, 1u);
 
   player_init(
     scene->metadata.player_start, 
@@ -97,8 +97,8 @@ load_level(
 void
 update_level(const allocator_t* allocator)
 {
-  uint64_t frame_rate = (uint64_t)controller_end(&controller);
-  float dt_seconds = (float)controller_start(&controller);
+  uint64_t frame_rate = (uint64_t)controller_end(controller);
+  float dt_seconds = (float)controller_start(controller);
 
   input_update();
   clear_color_and_depth_buffers();
@@ -166,6 +166,7 @@ update_level(const allocator_t* allocator)
 void
 unload_level(const allocator_t* allocator)
 {
+  controller_free(controller, allocator);
   scene_free(scene, allocator);
   cleanup_packaged_render_data(scene_render_data, allocator);
 }

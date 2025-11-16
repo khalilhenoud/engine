@@ -28,11 +28,11 @@ endif()
 
 # CHECK ALL THE SUBMODULES
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/game/CMakeLists.txt")
-	message(FATAL_ERROR "The game submdule was not downloaded!")
+	message(FATAL_ERROR "The game submodule was not downloaded!")
 endif()
 
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/library/CMakeLists.txt")
-	message(FATAL_ERROR "The library submdule was not downloaded!")
+	message(FATAL_ERROR "The library submodule was not downloaded!")
 endif()
 
 add_subdirectory(external/library library)

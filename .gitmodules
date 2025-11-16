@@ -1,21 +1,9 @@
+[submodule "external/game"]
+	path = external/game
+	url = https://github.com/khalilhenoud/game.git
 [submodule "external/library"]
 	path = external/library
 	url = https://github.com/khalilhenoud/library.git
-[submodule "external/math"]
-	path = external/math
-	url = https://github.com/khalilhenoud/math.git
-[submodule "external/entity"]
-	path = external/entity
-	url = https://github.com/khalilhenoud/entity.git
-[submodule "external/loaders"]
-	path = external/loaders
-	url = https://github.com/khalilhenoud/loaders.git
-[submodule "external/renderer"]
-	path = external/renderer
-	url = https://github.com/khalilhenoud/renderer.git
-[submodule "external/collision"]
-	path = external/collision
-	url = https://github.com/khalilhenoud/collision.git
 [submodule "external/windowing"]
 	path = external/windowing
-	url = https://github.com/khalilhenoud/windowing.git
+	url = https://github.com/khalilhenoud/windowing

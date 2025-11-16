@@ -27,39 +27,14 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
 endif()
 
 # CHECK ALL THE SUBMODULES
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/windowing/CMakeLists.txt")
-	message(FATAL_ERROR "The windowing submdule was not downloaded!")
-endif()
-
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/math/CMakeLists.txt")
-	message(FATAL_ERROR "The math submdule was not downloaded!")
-endif()
-
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/collision/CMakeLists.txt")
-	message(FATAL_ERROR "The collision submdule was not downloaded!")
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/game/CMakeLists.txt")
+	message(FATAL_ERROR "The game submdule was not downloaded!")
 endif()
 
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/library/CMakeLists.txt")
 	message(FATAL_ERROR "The library submdule was not downloaded!")
 endif()
 
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/entity/CMakeLists.txt")
-	message(FATAL_ERROR "The entity submdule was not downloaded!")
-endif()
-
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/loaders/CMakeLists.txt")
-	message(FATAL_ERROR "The loaders submdule was not downloaded!")
-endif()
-
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/renderer/CMakeLists.txt")
-	message(FATAL_ERROR "The renderer submdule was not downloaded!")
-endif()
-
-add_subdirectory(external/windowing windowing)
 add_subdirectory(external/library library)
-add_subdirectory(external/math math)
-add_subdirectory(external/collision collision)
-add_subdirectory(external/entity entity)
-add_subdirectory(external/loaders/loaders loaders)
-add_subdirectory(external/renderer/renderer renderer)
+add_subdirectory(external/game game)
 add_subdirectory(application)

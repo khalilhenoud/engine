@@ -1,8 +1,7 @@
 Remove a Submodule
 ==================
-git rm <path-to-module>
-example:
-git rm external/serializer
+git submodule deinit -f external/library
+git rm external/library
 then commit.
 @see https://stackoverflow.com/questions/1260748/how-do-i-remove-a-submodule
 
@@ -16,10 +15,18 @@ git submodule add --force <repository-url> <submodule-path>
 To populate a fresh repo
 ========================
 git init
-git remote add origin https://github.com/khalilhenoud/discretize.git
-git add -all
-git commit -m "initial commit"
-git push origin main
+git submodule add https://github.com/khalilhenoud/library.git external/library
+git submodule add https://github.com/khalilhenoud/math.git external/math
+git submodule add https://github.com/khalilhenoud/collision.git external/collision
+git submodule add https://github.com/khalilhenoud/windowing.git external/windowing
+git submodule add https://github.com/khalilhenoud/entity.git external/entity
+git submodule add https://github.com/khalilhenoud/loaders.git external/loaders
+git submodule add https://github.com/khalilhenoud/renderer.git external/renderer
+git add .
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/khalilhenoud/game.git
+git push -u origin main
 
 Update Submodules
 ================

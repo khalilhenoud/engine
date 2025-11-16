@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <library/os/os.h>
-#include <application/game/game.h>
+#include <game/game.h>
 
 #define PERCENTAGE_WIDTH      0.75f
 #define ASPECT_RATIO          (9.f/16.f)

@@ -1,12 +1,12 @@
 /**
  * @file main.cpp
  * @author khalilhenoud@gmail.com
- * @brief 
+ * @brief
  * @version 0.1
  * @date 2023-01-20
- * 
+ *
  * @copyright Copyright (c) 2023
- * 
+ *
  */
 #include <assert.h>
 #include <stdio.h>
@@ -28,7 +28,7 @@ main(int argc, char *argv[])
     uint64_t result = 0;
     int32_t client_width = (int32_t)(get_screen_width() * PERCENTAGE_WIDTH);
     int32_t client_height = (int32_t)(client_width * ASPECT_RATIO);
-    
+
     // NOTE: this is not very secure.
     char *cmd_params = argv[1];
     char data_dir[128];

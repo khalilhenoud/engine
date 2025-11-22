@@ -6,11 +6,11 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # used to omit add subdirectory from the standalone dependencies.
 # currently used in renderer, when generating the render test project.
-set(ENGINE_BUILD True)
+set(HAS_STANDALONE_PREDECESSOR True)
 
 project(engine)
 
-# TODO: the submodules that the engine downloads should be a function of the 
+# TODO: the submodules that the engine downloads should be a function of the
 # game project and not hard coded into the engine per se. For our case that is
 # not an issue right now but should be addressed in the future. The submodules
 # should be specified externally to the game (in an xml or json file per se) and
@@ -23,7 +23,7 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
 	option(GIT_SUBMODULE "Check submodules during build" ON)
 	if(GIT_SUBMODULES)
 		message(STATUS "Submodule update")
-		execute_process(COMMAND $(GIT_EXECUTABLE) submodule update --init --recursive 
+		execute_process(COMMAND $(GIT_EXECUTABLE) submodule update --init --recursive
 		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 		RESULT_VARIABLE GIT_SUBMOD_RESULT)
 		if(NOT GIT_SUBMOD_RESULT EQUAL "0")
@@ -82,7 +82,7 @@ target_link_libraries(${PROJECT_NAME}
 						  PUBLIC library
               PRIVATE game)
 
-target_include_directories(${PROJECT_NAME} PUBLIC 
+target_include_directories(${PROJECT_NAME} PUBLIC
 							"${PROJECT_BINARY_DIR}"
 							"${PROJECT_SOURCE_DIR}/include"
 							)

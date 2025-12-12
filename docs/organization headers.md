@@ -7,7 +7,7 @@ empty lines between sections if readability requires it:
 3. Current package headers in the following order:
     1. internal headers: *internal/module.h*, etc...
     2. any other header that belongs to the current package.
-4. Any other headers, sorted alphabetically by package.
+4. Any other headers, sorted alphanumerically by package.
 
 __Notes__:
 * Leave 2 lines between preprocessor definitions (including headers) and

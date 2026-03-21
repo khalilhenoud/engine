@@ -1,74 +1,54 @@
-Assets vs Data definitions and next steps
-=========================================
-Types can be asset referencing or not. A type that has no reference to an asset
-is called a data type while types that references an asset can have its data
-loaded irrespective of wether the asset portion is loaded or not.
+Requirements:
+-------------
+- An asset is referred to in engine with a special type, e.g: asset_ref_t
+- An asset cannot be used before it is loaded. Functions such as is_loaded(),
+is_loading(), get_as_$type$(), unload() etc... are required to work with assets.
+- Every asset type corresponds to an in-engine type, assets can themselves refer
+to other assets (mesh references materials).
+- Every asset type has its own loader (wether simple or complex is irrelevant).
+- Assets are immutable in-engine (the editor is a different story).
+- No duplicate assets can exist on disk. Some form of hashing (MD5) is required
+to make sure no dupliates are saved to disk.
+- Sometimes an asset type is designed to work with a runtime type, for example a
+runtime skeletal mesh, requires a skinned mesh asset and an animation asset to
+work, as it requires them to update the bone transform at runtime.
+- A single uin64_t should be enough to locate any asset on disk.
+- We do not support generic nested folders. To elaborate, free form folder
+structures are not supported. Each asset type has a predefined folder name, that
+has a flat hierarchy, all of those folders reside in a root folder. Currently
+only a single root folder exists, that however might change, at which point we
+might have a nested structure. But the root folder structure never changes.
 
-An example of a type that is 'currently' data only is 'light_t'. Currently the
-type can be either fully loaded as part of a scene or not at all. Loading is
-part of type serialize/deserialize functions. The reason why 'currently' is
-highlighted at the beginning of the paragraph is that a type that starts as a
-data type can ultimately become an asset type, if the type requires a reference
-to an asset, for example, we might want to animate the type, but not load the
-animation track until the track becomes relevant. That part would be stored
-separately and loaded separately depending on some runtime requirements.
+Questions:
+----------
+- Are we going to support nested folders ? No.
+- Are we going to support human readable names ? At the beginning we will, but
+ultimately that might not be the case.
+- Duplicates ? At the beginning we will allow them. That will change once we
+move away from human readable names.
 
-An example of an asset type is 'texture_t'. A texture is composed of 2 parts, a
-data section which currently consists of only the path to the texture data on
-disc. The type's serialize/deserialize only loads reads the path from the
-package on disc, the data itself is not loaded. In this scenario, a runtime
-component is responsible for loading the asset in question. A texture may need
-not be loaded unless we are at a certain distance from it, or the texture might
-already be loaded because another object is already using it in the scene.
-In short, the runtime component is responsible for deserializing the data, which
-usually happen through specialized loaders (png loader, etc...).
+SCRATCHPAD:
+-----------
+What is an asset type vs a data type?
+Assets
+  Texture, mesh, animations, materials, skeletons, skinned meshes, sounds...
+Data types
+  Lights, camera...
+Is this really the difference?
+Can the difference be define in any meaningfull way?
 
-A asset can depend on several loaders types, for example the runtime font asset
-depend on the texture and the csv file. Even though that is the case, the font
-asset may not reference the image it depend on, it can only access the type
-associated with the loader defined in its package. And indeed the font data is
-not related to the image in question.
+Is it having specializing loaders ? No, since meshes are assets but do not
+require that.
+Is it having the loading/unloading controlled by a specilized system ? Like a
+load ondemand system ?
+Is it stateless data types? The type of data that is identical between one game
+and another, i.e: all games require meshes and textures. These are reusable,
+stateless, crucial to building a game without being specific to it.
 
-Restructuring
-=============
-Game
-----
-The entity module currently is acting like a centralized place where all
-dependencies are currently located. This is not ideal, instead, we are going to
-create a game module that include the dependencies on the packages that the game
-requires. For example, the game package will include the dependency on the mesh,
-collision, math and renderer modules if it requires it. These dependencies are
-on a game per game module basis.
+What about the runtime aspect of an asset, a skinned mesh requires a runtime
+component to update the bones. While the asset is immutable, the runtime part is
+not.
 
-Game will also hold composite types, for example if our Actor type is specific
-to our game and if in our game the actor holds 2 meshes and 1 texture, then we
-can define this type in our Game package and have the scene hold references to
-this type, or any custom type used in our game package.
-
-Note: The editor package necessarily depends on our game package.
-
-Entity
-------
-The entity module should be trimmed, with the mesh, font and texture material
-split into their own individual modules (other types can also have their own
-modules depending on the granularity we require). The base structure of the
-scene should be modified to be type agnostic; basically it should be a list of
-node of nodes, where each node holds a type agnostic pointer (either a 'void *'
-or a new pointer type to be introduced in the clib).
-Additionally the scene will have a repo of types, this is similar to our current
-setup where identical types are kept in arrays consecutively. This would be
-useful to index into, as opposed to hold a hard references.
-
-Note: might be smart to rename this to scene? Entity is more general though...
-
-Steps
-=====
-1. Define a pointer type that holds the type guid it refers to. The pointer type
-also caches the vtable of the type in question.
-2. Move bvh, font, mesh, material and texture to their own corresponding
-packages.
-3. Define the appropriate loaders in their respective packages.
-4. Define a Game package that references everything else. This will replace the
-application package that does that right now.
-5. Modify the converter to hold a reference to the game package.
-6. Rename converter to tool.
+An asset has an id and a loaded/unloaded state.
+An asset has to have a loaded/unloaded state. And should be identifiable with an
+id

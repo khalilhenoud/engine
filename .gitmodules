@@ -25,3 +25,6 @@
 [submodule "external/acsu"]
 	path = external/acsu
 	url = https://github.com/khalilhenoud/acsu.git
+[submodule "external/spatial"]
+	path = external/spatial
+	url = https://github.com/khalilhenoud/spatial.git

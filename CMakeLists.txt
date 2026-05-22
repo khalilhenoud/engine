@@ -69,6 +69,10 @@ if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/game/CMakeLists.txt")
 	message(FATAL_ERROR "The game submodule was not downloaded!")
 endif()
 
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/spatial/CMakeLists.txt")
+	message(FATAL_ERROR "The spatial submodule was not downloaded!")
+endif()
+
 add_subdirectory(external/library library)
 add_subdirectory(external/math math)
 add_subdirectory(external/collision collision)
@@ -78,6 +82,7 @@ add_subdirectory(external/windowing windowing)
 add_subdirectory(external/renderer renderer)
 add_subdirectory(external/acsu acsu)
 add_subdirectory(external/game game)
+add_subdirectory(external/spatial spatial)
 
 # add the executable
 add_executable(${PROJECT_NAME}

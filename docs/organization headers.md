@@ -6,7 +6,8 @@ empty lines between sections if readability requires it:
 2. Standard library (clib or std) headers, ie: *stdio.h*, *stdlib.h* etc...
 3. Current package headers in the following order:
     1. internal headers: *internal/module.h*, etc...
-    2. any other header that belongs to the current package.
+    2. header corresponding to the current cpp.
+    3. any other header that belongs to the current package.
 4. Any other headers, sorted alphanumerically by package.
 
 __Notes__:

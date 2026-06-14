@@ -61,10 +61,6 @@ if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/renderer/CMakeLists.txt")
 	message(FATAL_ERROR "The renderer submodule was not downloaded!")
 endif()
 
-if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/acsu/CMakeLists.txt")
-	message(FATAL_ERROR "The acsu submodule was not downloaded!")
-endif()
-
 if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/game/CMakeLists.txt")
 	message(FATAL_ERROR "The game submodule was not downloaded!")
 endif()
@@ -80,7 +76,6 @@ add_subdirectory(external/entity entity)
 add_subdirectory(external/loaders loaders)
 add_subdirectory(external/windowing windowing)
 add_subdirectory(external/renderer renderer)
-add_subdirectory(external/acsu acsu)
 add_subdirectory(external/game game)
 add_subdirectory(external/spatial spatial)
 

@@ -46,3 +46,10 @@ Navigate to the submodule folder:
 Afterwards commit and push in visual studio code and then you can push into the
 module like normal. Understandibly this last step would be different if you are
 doing it from the command line, the reference thread has the answer for that.
+
+To fix submodules not downloading
+=================================
+git submodule update --init
+Note: you can also do: "git submodule update --init --recursive", the problem
+with this command is that will download the submodules of the submodules, which
+creates a lot of noise.

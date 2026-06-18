@@ -69,6 +69,38 @@ if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/spatial/CMakeLists.txt")
 	message(FATAL_ERROR "The spatial submodule was not downloaded!")
 endif()
 
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/texture/CMakeLists.txt")
+  message(FATAL_ERROR "The texture submdule was not downloaded!")
+endif()
+
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/material/CMakeLists.txt")
+  message(FATAL_ERROR "The material submdule was not downloaded!")
+endif()
+
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/mesh/CMakeLists.txt")
+  message(FATAL_ERROR "The mesh submdule was not downloaded!")
+endif()
+
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/level/CMakeLists.txt")
+  message(FATAL_ERROR "The level submdule was not downloaded!")
+endif()
+
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/font/CMakeLists.txt")
+  message(FATAL_ERROR "The font submdule was not downloaded!")
+endif()
+
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/elements/CMakeLists.txt")
+  message(FATAL_ERROR "The elements submdule was not downloaded!")
+endif()
+
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/skeleton/CMakeLists.txt")
+  message(FATAL_ERROR "The skeleton submdule was not downloaded!")
+endif()
+
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/external/animation/CMakeLists.txt")
+  message(FATAL_ERROR "The animation submdule was not downloaded!")
+endif()
+
 add_subdirectory(external/library library)
 add_subdirectory(external/math math)
 add_subdirectory(external/collision collision)
@@ -78,6 +110,14 @@ add_subdirectory(external/windowing windowing)
 add_subdirectory(external/renderer renderer)
 add_subdirectory(external/game game)
 add_subdirectory(external/spatial spatial)
+add_subdirectory(external/texture texture)
+add_subdirectory(external/material material)
+add_subdirectory(external/mesh mesh)
+add_subdirectory(external/level level)
+add_subdirectory(external/font font)
+add_subdirectory(external/elements elements)
+add_subdirectory(external/skeleton skeleton)
+add_subdirectory(external/animation animation)
 
 # add the executable
 add_executable(${PROJECT_NAME}

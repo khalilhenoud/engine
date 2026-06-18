@@ -28,3 +28,27 @@
 [submodule "external/spatial"]
 	path = external/spatial
 	url = https://github.com/khalilhenoud/spatial.git
+[submodule "external/texture"]
+	path = external/texture
+	url = https://github.com/khalilhenoud/texture.git
+[submodule "external/material"]
+	path = external/material
+	url = https://github.com/khalilhenoud/material.git
+[submodule "external/mesh"]
+	path = external/mesh
+	url = https://github.com/khalilhenoud/mesh.git
+[submodule "external/level"]
+	path = external/level
+	url = https://github.com/khalilhenoud/level.git
+[submodule "external/font"]
+	path = external/font
+	url = https://github.com/khalilhenoud/font.git
+[submodule "external/elements"]
+	path = external/elements
+	url = https://github.com/khalilhenoud/elements.git
+[submodule "external/skeleton"]
+	path = external/skeleton
+	url = https://github.com/khalilhenoud/skeleton.git
+[submodule "external/animation"]
+	path = external/animation
+	url = https://github.com/khalilhenoud/animation.git

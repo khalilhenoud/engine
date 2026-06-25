@@ -34,6 +34,21 @@ Update Submodules
     git submodule update --recursive
 use the command above to update all submodules the project uses.
 
+Rename a Submodule
+==================
+Rename the submodule on github
+  git remote set-url origin https://github.com/khalilhenoud/props.git
+To check the validity
+  git remote -v
+rename the local folder (optional)
+
+For any projects using the submodule
+  git submodule set-url external/elements https://github.com/khalilhenoud/props.git
+commit and push
+  git mv external/elements external/props
+commit and push
+navigate to external/props and run: git pull
+
 Detached heads and submodules
 =============================
 Reference:

@@ -44,7 +44,7 @@
 	path = external/font
 	url = https://github.com/khalilhenoud/font.git
 [submodule "external/elements"]
-	path = external/elements
+	path = external/props
 	url = https://github.com/khalilhenoud/props.git
 [submodule "external/skeleton"]
 	path = external/skeleton

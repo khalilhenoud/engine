@@ -8,6 +8,7 @@ then commit.
 Add a Submodule
 ===============
     git submodule add <repository-url> <submodule-path>
+    git submodule add https://github.com/khalilhenoud/texture.git external/texture
 If the git directory was previously used but discarded and you want to
 re-activate it, use:
     git submodule add --force <repository-url> <submodule-path>

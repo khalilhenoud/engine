@@ -1,19 +1,64 @@
-skinned_mesh_asset_t has a lot of issues, in terms of how it is architected,
-and the question on cleaning it up is front of mind.
+Plan:
+ first being able to generate unique 64bit ints as short guids
 
-bvh_asset_t does not make sense to me, this seems to be a weird thing to make
-into an asset. Like it could be a type, but not really an asset. It seems insane
-to me to make it into an asset. It does not mesh well conceptually with that.
+vqs_t
+	vector3f v;
+	quatf q;
+	vector3f s;
 
-skinned_mesh_asset_t can be simplified and will be, but bvh_asset_t is a
-structural issue. It isn't necessarily a collision algorithm, more like spatial
-organizational algorithm, so I am not sure where it fits. Also it needs to be
-accessible in a number of places, some assets needs it, other packages might
-need it as well. So where and how to put it at? Part of the base library?
+transform_component_t				// we can specialize it in the future
+	vqs_t transform;
 
-What are some other spatial partioning algorithms: bvh, octree, bsp, kdtree,
-etc...
+mesh_component_t
+	vqs_t offset;
+	asset_ref mesh;
+	asset_ref material;
 
-What if there is spatial package: How would that work, in terms of access to
-this from an asset perspective. It would be built on top of math, like collision
-is...
+font_component_t
+	asset_ref font;
+
+sublevel_component_t
+	vqs_t transform;
+	asset_ref sublevel;
+
+level_component_t
+	vqs_t transform;
+	asset_ref level;
+
+skinned_mesh_component_t
+	vqs_t offset;
+	asset_ref mesh;
+	asset_ref skeleton;
+	asset_ref anim_graph;
+
+logic_component_t
+	unique uint64_t identifer // that can be mapped to code
+
+light_component_t
+	vqs transform;
+	light_t light;
+
+bulk_light_component_t
+	cvector_t transforms;
+	cvector_t lights;
+
+camera_component_t
+	camera_t camera;
+
+node_t/entity_t/scene_t these are all the same thing
+
+identifier {
+	union {
+		cstring_t name;
+		uint64_t id;
+	};
+};
+
+node_t
+	cvector<node_t> children;
+	identifiter_t id;
+	payload_t payload;		// pointer or not?
+
+struct payload_t {
+	cvector_t components;	// requires a { type_id, void * } pair
+};
